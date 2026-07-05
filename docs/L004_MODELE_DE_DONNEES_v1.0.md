@@ -9,58 +9,29 @@ Définir le modèle de données relationnel utilisé par TurfIA.
 - Clés techniques immuables.
 - Aucune donnée codée en dur.
 
-## Tables principales
-- courses
-- partants
-- cotes
-- analyses
-- paris
-- resultats
-- historiques
-- statistiques
-- taches_planifiees
+## Tables
+courses, partants, cotes, analyses, resultats, historiques, statistiques, paris, taches_planifiees.
 
-## Table courses
-Clé primaire : course_id
+## Table historiques
+PK : historique_id
+FK : course_id, analyse_id
+Colonnes : date_operation, version_analyse, score_confiance, mise, gains, profit, roi.
 
-## Table partants
-Clé primaire : partant_id
-Clé étrangère : course_id
+## Table statistiques
+PK : statistique_id
+Colonnes : periode, nb_courses, nb_jouees, taux_reussite, gains_cumules, pertes_cumulees, roi_global, roi_par_confiance.
 
-## Table cotes
-Clé primaire : cote_id
-Clé étrangère : partant_id
+## Table paris
+PK : pari_id
+FK : analyse_id
+Colonnes : type_pari, selection, mise, gain, resultat.
 
-Colonnes :
-- date_releve
-- source
-- cote
-- evolution
-- consensus
+## Table taches_planifiees
+PK : tache_id
+Colonnes : procedure, frequence, derniere_execution, prochaine_execution, statut.
 
-## Table analyses
-Clé primaire : analyse_id
-Clés étrangères : course_id
-
-Colonnes :
-- type_analyse
-- score_confiance
-- niveau_risque
-- roi_theorique
-- classement
-- bases
-- outsiders
-- tocard
-- recommandations
-
-## Table resultats
-Clé primaire : resultat_id
-Clé étrangère : course_id
-
-Colonnes :
-- arrivee_officielle
-- rapports_pmu
-- gains
-- profit
-- roi
-- date_controle
+## Contraintes
+- Historisation sans suppression des analyses.
+- Intégrité référentielle sur toutes les clés étrangères.
+- Horodatage systématique des enregistrements.
+- Index sur course_id, partant_id, date_course et score_confiance.
