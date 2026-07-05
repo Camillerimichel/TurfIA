@@ -19,20 +19,18 @@ Définir les interfaces entre les différents modules de TurfIA.
 - GET /api/v1/statistiques
 
 ## Contrats d'échange
-### POST /collecte
-Entrée : date_course, reunion.
-Sortie : identifiant de collecte, statut, nombre de partants.
+Chaque réponse contient : request_id, timestamp, version_api et statut.
 
-### POST /preanalyse
-Entrée : course_id.
-Sortie : score_confiance, classement, bases, outsiders, tocard.
+## Authentification
+- Jeton JWT interne.
+- HTTPS obligatoire.
+- Contrôle des rôles par service.
 
-### POST /analyse-finale
-Entrée : course_id.
-Sortie : sélection définitive, paris recommandés, budget.
+## Traçabilité
+- Journalisation de tous les appels.
+- Conservation des requêtes et réponses.
+- Corrélation par request_id.
+- Horodatage UTC.
 
-### Codes de retour
-- 200 : succès
-- 400 : requête invalide
-- 404 : ressource absente
-- 500 : erreur interne
+## Codes de retour
+200, 400, 401, 403, 404, 409, 500.
