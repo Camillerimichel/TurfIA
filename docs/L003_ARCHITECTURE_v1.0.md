@@ -47,3 +47,13 @@ Sources de données
 - Suivi des résultats.
 - Calcul des statistiques.
 - Amélioration continue.
+
+## Architecture technique
+
+- Base de données SQL.
+- API REST interne.
+- Moteur de règles métier.
+- Moteur de scoring TurfIA.
+- Service d'automatisation des procédures quotidiennes.
+- Journalisation et traçabilité des traitements.
+- Interfaces d'export (JSON, CSV, PDF).
