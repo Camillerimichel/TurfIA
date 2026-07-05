@@ -38,6 +38,16 @@ H --> E
 - API
 - Automatisation
 
+### Architecture fonctionnelle détaillée
+1. Collecte des données.
+2. Validation et normalisation.
+3. Stockage SQL historisé.
+4. Calcul des indicateurs et du score TurfIA.
+5. Génération des pré-analyses et analyses finales.
+6. Contrôle des résultats et calcul du ROI.
+7. Mise à jour des historiques et statistiques.
+8. Exposition des données via API et exports.
+
 ## Architecture technique
 
 - Base de données SQL.
