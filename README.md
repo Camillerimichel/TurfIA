@@ -2,4 +2,4 @@
 
 Système d'analyse quantitative des courses hippiques.
 
-Le projet est documenté dans le dossier **docs**.
+La documentation officielle du projet est située dans le dossier /docs.
