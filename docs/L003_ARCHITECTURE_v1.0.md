@@ -23,3 +23,27 @@ Sources de données
 → Moteur IA / Règles métier / Historique
 → Génération des analyses
 → API / Exports / Interface
+
+## Architecture fonctionnelle
+
+### Module Collecte
+- Acquisition des données hippiques.
+- Actualisation des cotes.
+- Contrôle de cohérence.
+
+### Module Normalisation
+- Validation des données.
+- Uniformisation des formats.
+- Gestion des données manquantes.
+
+### Module Analyse
+- Calcul des scores TurfIA.
+- Évaluation du risque.
+- Calcul du ROI théorique.
+- Classement des partants.
+
+### Module Historique
+- Archivage des analyses.
+- Suivi des résultats.
+- Calcul des statistiques.
+- Amélioration continue.
