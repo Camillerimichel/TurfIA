@@ -23,47 +23,44 @@ Définir le modèle de données relationnel utilisé par TurfIA.
 ## Table courses
 Clé primaire : course_id
 
-Colonnes principales :
-- course_id
-- date_course
-- hippodrome
-- reunion
-- numero_course
-- nom_course
-- discipline
-- distance
-- corde
-- surface
-- terrain
-- allocation
-- heure_depart
-- statut
-
 ## Table partants
 Clé primaire : partant_id
+Clé étrangère : course_id
 
-Clés étrangères :
-- course_id -> courses.course_id
+## Table cotes
+Clé primaire : cote_id
+Clé étrangère : partant_id
 
-Colonnes principales :
-- partant_id
-- course_id
-- numero
-- cheval
-- age
-- sexe
-- entraineur
-- jockey_driver
-- musique
-- valeur
-- corde
-- poids
-- ferrure
-- score_turfia
+Colonnes :
+- date_releve
+- source
+- cote
+- evolution
+- consensus
 
-## Relations
-- Une course possède plusieurs partants.
-- Un partant possède plusieurs relevés de cotes.
-- Une analyse est rattachée à une course.
-- Une course possède un résultat officiel.
-- Les statistiques sont calculées à partir des historiques.
+## Table analyses
+Clé primaire : analyse_id
+Clés étrangères : course_id
+
+Colonnes :
+- type_analyse
+- score_confiance
+- niveau_risque
+- roi_theorique
+- classement
+- bases
+- outsiders
+- tocard
+- recommandations
+
+## Table resultats
+Clé primaire : resultat_id
+Clé étrangère : course_id
+
+Colonnes :
+- arrivee_officielle
+- rapports_pmu
+- gains
+- profit
+- roi
+- date_controle
