@@ -16,37 +16,27 @@ Décrire l'architecture fonctionnelle et technique de TurfIA.
 
 ## Vue d'ensemble
 
-Sources de données
-→ Collecte
-→ Normalisation / Validation
-→ Base SQL
-→ Moteur IA / Règles métier / Historique
-→ Génération des analyses
-→ API / Exports / Interface
+```mermaid
+flowchart LR
+A[Sources de données] --> B[Collecte]
+B --> C[Normalisation]
+C --> D[(Base SQL)]
+D --> E[Moteur TurfIA]
+E --> F[Analyses]
+F --> G[API / Exports]
+E --> H[Historique]
+H --> E
+```
 
 ## Architecture fonctionnelle
 
-### Module Collecte
-- Acquisition des données hippiques.
-- Actualisation des cotes.
-- Contrôle de cohérence.
-
-### Module Normalisation
-- Validation des données.
-- Uniformisation des formats.
-- Gestion des données manquantes.
-
-### Module Analyse
-- Calcul des scores TurfIA.
-- Évaluation du risque.
-- Calcul du ROI théorique.
-- Classement des partants.
-
-### Module Historique
-- Archivage des analyses.
-- Suivi des résultats.
-- Calcul des statistiques.
-- Amélioration continue.
+### Modules
+- Collecte
+- Normalisation
+- Analyse
+- Historique
+- API
+- Automatisation
 
 ## Architecture technique
 
