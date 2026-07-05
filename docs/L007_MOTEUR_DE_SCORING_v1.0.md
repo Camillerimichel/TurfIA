@@ -15,13 +15,21 @@ Définir les règles de calcul du score TurfIA et de la confiance associée.
 - Statistiques jockey/driver
 - Historique hippodrome
 
-## Score de confiance
-- 0 à 59 : ne pas jouer
-- 60 à 74 : jouer prudemment
-- 75 à 84 : jouer normalement
-- 85 à 100 : opportunité forte
+## Normalisation
+Chaque critère est converti sur une échelle de 0 à 100 avant pondération.
+Les données absentes sont neutralisées sans pénaliser artificiellement le score.
+
+## Calcul
+Score final = somme des critères pondérés.
+Les pondérations sont stockées en configuration et versionnées.
+
+## Décision
+0-59 : aucune mise.
+60-74 : budget réduit.
+75-84 : budget nominal.
+85-100 : budget renforcé.
 
 ## Principes
-- Pondérations paramétrables.
 - Validation statistique avant toute modification.
+- Historisation des versions du modèle.
 - Aucune modification rétroactive des résultats historiques.
