@@ -1,5 +1,14 @@
 # L028 — Gouvernance du projet
 
+## 0. Métadonnées du document
+
+| Champ | Valeur |
+| --- | --- |
+| Identifiant | L028 |
+| Niveau documentaire | Spécification technique (cf. L001 §3) |
+| Version | 1.0 |
+| Documents liés | L001 (gouvernance documentaire), L003 (RACI d'architecture), L027 (gestion des versions Git) |
+
 ## 1. Objectif
 
 ### 1.1 Finalité
@@ -35,6 +44,15 @@ Toute évolution importante est accompagnée :
 - d'une traçabilité Git.
 
 Le code et la documentation évoluent simultanément.
+
+### 2.3 Rôles de gouvernance
+
+| Rôle                  | Responsabilité principale                              |
+| ----------------------- | ---------------------------------------------------------- |
+| Propriétaire du SAD       | Approbation des évolutions architecturales majeures (cf. L001 §9.1) |
+| Architecte logiciel       | Analyse d'impact, cohérence documentaire (cf. L003 §10.1)  |
+| Développeur                | Implémentation, revue de code (cf. L019 §10)               |
+| Exploitant                  | Validation opérationnelle, suivi post-déploiement (cf. L025) |
 
 ---
 
@@ -175,58 +193,11 @@ La gouvernance garantit la stabilité, la qualité et la pérennité de TurfIA e
 
 ---
 
-# L029 — Glossaire
+## Historique
 
-## 1. Objectif
+| Version | Description |
+| --- | --- |
+| 1.0 | Version initiale |
+| 1.1 | Enrichissement industriel : métadonnées du document, rôles de gouvernance. Correction de structure : le glossaire précédemment dupliqué en fin de ce fichier sous un en-tête « L029 » a été fusionné dans le document dédié [L029_GLOSSAIRE_v1.0.md](L029_GLOSSAIRE_v1.0.md) auquel il appartient, sans perte d'information |
 
-Le présent glossaire définit les principaux termes utilisés dans la documentation officielle de TurfIA.
-
-Les définitions s'appliquent à l'ensemble du projet.
-
----
-
-## 2. Définitions
-
-| Terme          | Définition                                                   |
-| -------------- | ------------------------------------------------------------ |
-| Analyse        | Calcul réalisé par TurfIA sur une course                     |
-| Analyse finale | Analyse recalculée avant le départ officiel                  |
-| API            | Interface de programmation de TurfIA                         |
-| Base           | Cheval présentant la meilleure probabilité de réussite       |
-| Cote           | Valeur fournie par un opérateur de paris                     |
-| Discipline     | Plat, Trot, Obstacle…                                        |
-| Historique     | Ensemble des analyses conservées                             |
-| Hippodrome     | Lieu où se déroule une réunion                               |
-| Outsider       | Cheval peu joué mais jugé compétitif                         |
-| Pari           | Recommandation produite par TurfIA                           |
-| Partant        | Cheval officiellement déclaré au départ                      |
-| Pré-analyse    | Première analyse réalisée avant la course                    |
-| Quinté+        | Course support principale analysée par TurfIA                |
-| Réunion        | Ensemble des courses d'un même hippodrome                    |
-| ROI            | Retour sur investissement                                    |
-| Score TurfIA   | Indicateur synthétique de confiance                          |
-| Sélection      | Liste des chevaux retenus                                    |
-| Tocard         | Cheval spéculatif à forte cote                               |
-| Value Bet      | Cheval dont la probabilité estimée est supérieure à celle implicite de la cote |
-
----
-
-## 3. Abréviations
-
-| Abréviation | Signification                                  |
-| ----------- | ---------------------------------------------- |
-| API         | Application Programming Interface              |
-| CI/CD       | Continuous Integration / Continuous Deployment |
-| CRUD        | Create Read Update Delete                      |
-| JSON        | JavaScript Object Notation                     |
-| REST        | Representational State Transfer                |
-| ROI         | Return On Investment                           |
-| SQL         | Structured Query Language                      |
-| TLS         | Transport Layer Security                       |
-| VPS         | Virtual Private Server                         |
-
----
-
-## 4. Conclusion
-
-Le glossaire constitue la terminologie officielle utilisée dans l'ensemble de la documentation TurfIA.
+*Fin du document L028.*
