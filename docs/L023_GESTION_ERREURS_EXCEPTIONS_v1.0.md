@@ -1,5 +1,14 @@
 # L023 — Gestion des erreurs et exceptions
 
+## 0. Métadonnées du document
+
+| Champ | Valeur |
+| --- | --- |
+| Identifiant | L023 |
+| Niveau documentaire | Spécification technique (cf. L001 §3) |
+| Version | 1.0 |
+| Documents liés | L007/L016 (traduction en réponse HTTP), L019 (interdiction des captures silencieuses), L022 (journalisation) |
+
 ## 1. Objectif
 
 ### 1.1 Finalité
@@ -127,6 +136,20 @@ ApplicationError
 
 Cette organisation facilite les traitements spécifiques.
 
+### 4.1 Correspondance avec les codes HTTP (couche API)
+
+| Exception                | Code HTTP retourné (cf. L007, L032.1) |
+| --------------------------- | ---------------------------------------- |
+| `ValidationError`             | 400 (données invalides) ou 422 (validation métier) |
+| `SecurityError`                | 401 (non authentifié) ou 403 (accès refusé) |
+| `BusinessRuleError` (ressource absente) | 404 |
+| `BusinessRuleError` (conflit)   | 409 |
+| `DatabaseError`, `ConfigurationError` | 500 (message générique, détail en journal uniquement) |
+
+Cette correspondance est appliquée exclusivement par le gestionnaire
+d'erreurs centralisé de la couche API (cf. L007 §5.1), jamais route par
+route.
+
 ---
 
 ## 5. Gestion des traitements
@@ -217,6 +240,15 @@ Lorsque cela est possible, TurfIA tente automatiquement :
 
 Le nombre de tentatives est limité afin d'éviter les boucles infinies.
 
+### 10.1 Politique de nouvelle tentative (retry)
+
+Seules les erreurs identifiées comme transitoires (cf. L005 §7.1 :
+timeout réseau, verrou momentané) déclenchent une nouvelle tentative,
+avec un délai croissant borné (backoff exponentiel plafonné) et un
+nombre maximal de tentatives explicite. Les erreurs de validation ou de
+règle métier ne sont jamais rejouées automatiquement : elles nécessitent
+une correction de la donnée ou de la configuration en cause.
+
 ---
 
 ## 11. Tests
@@ -246,3 +278,14 @@ Les actions possibles comprennent notamment :
 - évolution des procédures d'exploitation.
 
 La gestion des erreurs participe directement à l'amélioration continue de TurfIA et à l'augmentation progressive de sa fiabilité.
+
+---
+
+## Historique
+
+| Version | Description |
+| --- | --- |
+| 1.0 | Version initiale |
+| 1.1 | Enrichissement industriel : métadonnées du document, correspondance exceptions/codes HTTP, politique de nouvelle tentative (retry) distinguant erreurs transitoires et erreurs de validation |
+
+*Fin du document L023.*
