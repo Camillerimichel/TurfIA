@@ -1,5 +1,14 @@
 # L014 — Arborescence du projet
 
+## 0. Métadonnées du document
+
+| Champ | Valeur |
+| --- | --- |
+| Identifiant | L014 |
+| Niveau documentaire | Spécification technique (cf. L001 §3) |
+| Version | 1.0 |
+| Documents liés | L015 (architecture du code source), L019 (standards de développement), L027 (gestion des versions Git) |
+
 ## 1. Objectif
 
 ### 1.1 Finalité
@@ -39,6 +48,20 @@ Le code métier ne doit jamais être mélangé avec :
 Chaque module doit pouvoir évoluer indépendamment.
 
 Une modification dans un composant ne doit pas entraîner de modification importante des autres composants.
+
+---
+
+### 2.3 Ce qui n'est jamais versionné dans Git
+
+Les répertoires et fichiers suivants sont exclus du dépôt via
+`.gitignore`, conformément à L021 (Sécurité) et L027 (Gestion des
+versions Git) :
+
+- `data/` (contenu non versionné, cf. §11) ;
+- `logs/` (journaux applicatifs, cf. §12) ;
+- tout fichier contenant des secrets réels (les seuls fichiers
+  d'exemple, comme `.env.example`, sont versionnés) ;
+- les environnements virtuels et dépendances installées localement.
 
 ---
 
@@ -332,3 +355,34 @@ Cette organisation permet :
 - la montée en charge de TurfIA.
 
 Elle constitue l'organisation officielle du dépôt GitHub.
+
+### 14.1 Propriétaire par répertoire
+
+| Répertoire     | Propriétaire fonctionnel                  |
+| ---------------- | -------------------------------------------- |
+| `src/`             | Développeurs (code métier)                    |
+| `sql/`             | Architecte logiciel + développeurs (cf. L011-L013) |
+| `api/`             | Développeurs API (cf. L007, L016)             |
+| `automations/`      | Exploitation (cf. L017, L033)                 |
+| `html/`             | Développeurs interface (cf. L018)             |
+| `config/`           | Exploitation (cf. L026)                       |
+| `tests/`            | Développeurs, revue croisée obligatoire (cf. L020) |
+| `docs/`             | Architecte logiciel (gouvernance documentaire, cf. L028) |
+
+### 14.2 Règle de non-régression de l'arborescence
+
+Tout déplacement ou renommage d'un répertoire de premier niveau
+constitue une décision d'architecture et suit le processus de
+gouvernance défini en L003 §10 (analyse d'impact, mise à jour des ADR,
+mise à jour de ce document) avant sa mise en œuvre.
+
+---
+
+## Historique
+
+| Version | Description |
+| --- | --- |
+| 1.0 | Version initiale |
+| 1.1 | Enrichissement industriel : métadonnées du document, éléments exclus du versionnement Git, propriétaire fonctionnel par répertoire, règle de non-régression de l'arborescence |
+
+*Fin du document L014.*
