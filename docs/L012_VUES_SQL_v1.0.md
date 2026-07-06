@@ -1,5 +1,15 @@
 # L012 — Vues SQL
 
+## 0. Métadonnées du document
+
+| Champ | Valeur |
+| --- | --- |
+| Identifiant | L012 |
+| Niveau documentaire | Spécification technique (cf. L001 §3) |
+| Version | 1.0 |
+| Dépend de | L011 (Schéma SQL) |
+| Consommé par | L007/L032.x (API), L018 (Interface HTML), L024/L036 (Performances) |
+
 ## 1. Objectif
 
 ### 1.1 Finalité
@@ -88,6 +98,21 @@ Cette architecture permet :
 - maintenance simplifiée ;
 - homogénéité des calculs ;
 - optimisation des performances.
+
+### 2.3 Sécurité et droits d'accès
+
+Les vues sont le point d'accès privilégié du rôle applicatif
+`turfia_readonly` (cf. L011 §16.5) : ce rôle dispose de droits `SELECT`
+sur les vues mais d'aucun droit direct sur les tables sous-jacentes,
+ce qui garantit qu'aucun consommateur en lecture ne dépend d'un détail
+d'implémentation du schéma physique.
+
+### 2.4 Contrat de stabilité
+
+Une vue constitue un contrat vis-à-vis de ses consommateurs (API,
+rapports) : la suppression ou le renommage d'une colonne exposée par une
+vue est traité comme un changement cassant, soumis à la même politique
+de compatibilité ascendante que l'API elle-même (cf. L007 §7.1).
 
 ---
 
@@ -355,6 +380,16 @@ Les vues doivent :
 
 Les vues les plus coûteuses pourront être matérialisées ultérieurement.
 
+### 9.1 Critères de matérialisation
+
+Une vue est candidate à la matérialisation (`MATERIALIZED VIEW`)
+uniquement si les trois conditions suivantes sont réunies : elle est
+consultée fréquemment, son calcul sous-jacent est coûteux (mesuré, cf.
+L024/L036), et une latence de rafraîchissement (ex. horaire ou
+quotidienne) est fonctionnellement acceptable — ce qui exclut par
+construction les vues utilisées en décision temps réel (ex.
+`vw_cote`).
+
 ---
 
 ## 10. Évolutivité
@@ -364,3 +399,14 @@ Les vues constituent l'interface SQL officielle de TurfIA.
 L'API, les rapports HTML et les outils statistiques doivent privilégier ces vues plutôt que les tables brutes.
 
 Cette organisation permet de faire évoluer le modèle relationnel sans remettre en cause les couches supérieures de l'application.
+
+---
+
+## Historique
+
+| Version | Description |
+| --- | --- |
+| 1.0 | Version initiale |
+| 1.1 | Enrichissement industriel : métadonnées du document, sécurité et droits d'accès par rôle, contrat de stabilité des vues, critères de matérialisation |
+
+*Fin du document L012.*
