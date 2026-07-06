@@ -1,5 +1,14 @@
 # L020 — Stratégie de tests
 
+## 0. Métadonnées du document
+
+| Champ | Valeur |
+| --- | --- |
+| Identifiant | L020 |
+| Niveau documentaire | Spécification technique (cf. L001 §3) |
+| Version | 1.0 |
+| Documents liés | L015 (architecture du code), L019 (standards de développement), L006/L031.x (algorithmes) |
+
 ## 1. Objectif
 
 ### 1.1 Finalité
@@ -40,6 +49,15 @@ Les environnements de test sont isolés des environnements de production.
 Chaque test doit pouvoir être exécuté indépendamment.
 
 L'échec d'un test ne doit pas empêcher les autres de s'exécuter.
+
+### 2.4 Pyramide de tests
+
+La stratégie suit le principe de la pyramide de tests : une large base
+de tests unitaires rapides (§4), un nombre plus restreint de tests
+d'intégration (§5, §7), et un nombre limité de tests fonctionnels de
+bout en bout (§8), plus lents et plus coûteux à maintenir. Cette
+répartition garantit une rétroaction rapide en développement tout en
+conservant une couverture de bout en bout des scénarios critiques.
 
 ---
 
@@ -193,6 +211,16 @@ Les résultats obtenus sont comparés aux résultats attendus.
 
 Toute divergence est considérée comme une anomalie.
 
+### 8.3 Tests de non-régression sur historique (déterminisme)
+
+Conformément au principe de déterminisme (cf. L006 ADR-001), une suite
+de tests dédiée rejoue un ensemble figé de courses historiques à
+travers l'intégralité du moteur d'analyse et compare les résultats
+produits aux résultats de référence enregistrés. Tout écart, même
+minime, doit être expliqué et validé explicitement avant d'être accepté
+comme changement intentionnel (nouvelle version de règles, cf. L009
+§5.1), jamais accepté silencieusement comme un bruit de mesure.
+
 ---
 
 ## 9. Tests de performance
@@ -294,6 +322,17 @@ Une version est considérée comme valide lorsque :
 - les performances restent conformes ;
 - les exigences de sécurité sont satisfaites.
 
+### 14.1 Cibles de couverture indicatives
+
+| Catégorie de code            | Couverture cible |
+| ------------------------------- | ------------------- |
+| Algorithmes et règles métier (`algorithms`, `services`, cf. L015) | ≥ 80 % (cf. L001 §4.1) |
+| Repositories et accès base         | Couverture par les tests d'intégration (§5, §7), pas nécessairement unitaire |
+| Code d'infrastructure (config, démarrage) | Couverture fonctionnelle, non exhaustive |
+
+Une couverture élevée n'est pas une fin en soi : elle est un indicateur
+parmi d'autres, subordonné à la pertinence réelle des scénarios testés.
+
 ---
 
 ## 15. Amélioration continue
@@ -303,3 +342,14 @@ Chaque anomalie corrigée donne lieu à un nouveau test.
 Ainsi, la couverture fonctionnelle augmente progressivement avec les évolutions de TurfIA.
 
 La stratégie de tests constitue un élément essentiel de la qualité et de la fiabilité du projet.
+
+---
+
+## Historique
+
+| Version | Description |
+| --- | --- |
+| 1.0 | Version initiale |
+| 1.1 | Enrichissement industriel : métadonnées du document, pyramide de tests, tests de non-régression sur historique (déterminisme), cibles de couverture indicatives |
+
+*Fin du document L020.*
