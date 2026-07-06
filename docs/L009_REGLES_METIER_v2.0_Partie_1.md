@@ -21,6 +21,15 @@ Les principes retenus sont :
 -   traçabilité ;
 -   reproductibilité.
 
+## 2.1 Nature d'une règle métier chez TurfIA
+
+Une règle métier est une fonction déterministe prenant en entrée des
+données validées et produisant en sortie une décision ou une valeur,
+accompagnée de sa justification. Une règle métier ne réalise jamais
+d'entrée-sortie (I/O) directe : elle ne lit ni n'écrit en base, ne fait
+aucun appel réseau. Cette propriété est ce qui rend les règles
+testables unitairement et rejouables (cf. L020).
+
 # 3. Organisation
 
 ``` mermaid
@@ -40,5 +49,19 @@ Decision --> History[Historisation]
   Scoring          Calcul des scores
   Recommandation   Sélection des paris
   Contrôle         Calcul du ROI
+
+## 4.1 Exemples de règles par domaine (illustratif)
+
+  Domaine           Exemple de règle                                        Type de sortie
+  ------------------ --------------------------------------------------------- ------------------
+  Validation          Un partant sans cote connue à la clôture est-il exclu ?   Booléen + motif
+  Qualification        La course dispose-t-elle d'un historique suffisant ?      Score de confiance
+  Scoring              Quel poids relatif accorder à la forme récente ?           Valeur numérique (cf. L031.2)
+  Recommandation        La combinaison risque/ROI théorique justifie-t-elle une proposition ?  Décision + justification
+  Contrôle              Le résultat réel correspond-il à la recommandation ?      Écart mesuré
+
+Le détail exhaustif des règles (paramètres, seuils, formules) est
+spécifié dans la série L031.x ; ce document ne fixe que leur
+organisation architecturale.
 
 *Fin de la partie 1/2.*
