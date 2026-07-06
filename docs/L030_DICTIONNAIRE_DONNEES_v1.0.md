@@ -1,5 +1,19 @@
 # L030 --- Dictionnaire de données
 
+## 0. Métadonnées du document
+
+| Champ | Valeur |
+| --- | --- |
+| Identifiant | L030 (index) |
+| Niveau documentaire | Spécification technique (cf. L001 §3) |
+| Version | 1.0 |
+| Sous-documents | L030.1 (référentiels), L030.2 (tables métier), L030.3 (analyse), L030.4 (statistiques), L030.5 (techniques), L030.6 (relations/index) |
+| Document parent | L011 (Schéma SQL), L004 (Modèle de données) |
+
+Ce document sert de table des matières et de conventions communes ; le
+détail exhaustif de chaque table est réparti dans les sous-documents
+L030.1 à L030.6 afin de garder chaque livrable à une taille lisible.
+
 ## 1. Objectif
 
 Le présent document constitue la spécification détaillée du dictionnaire
@@ -75,3 +89,32 @@ tables du modèle :
 
 Chaque table sera décrite avec : - définition fonctionnelle ; - colonnes
 ; - contraintes ; - index ; - relations ; - règles métier.
+
+## 7. Table de correspondance des sous-documents
+
+| Sous-document | Contenu                                            |
+| --------------- | ----------------------------------------------------- |
+| L030.1           | Référentiels (hippodrome, discipline, surface...)      |
+| L030.2           | Tables métier (réunion, course, cheval, partant...)    |
+| L030.3           | Tables d'analyse (analyse, sélection, pari...)          |
+| L030.4           | Tables statistiques                                     |
+| L030.5           | Tables techniques (configuration, migration, journal...) |
+| L030.6           | Relations et index transverses                          |
+
+## 8. Gouvernance du dictionnaire
+
+Toute création ou modification de table est reflétée simultanément
+dans le sous-document L030.x concerné, dans le schéma physique (L011)
+et dans les migrations (L013). Une divergence entre le dictionnaire et
+le schéma réel est un défaut de gouvernance documentaire (cf. L001 §9).
+
+---
+
+## Historique
+
+| Version | Description |
+| --- | --- |
+| 1.0 | Version initiale |
+| 1.1 | Enrichissement industriel : métadonnées du document, table de correspondance des sous-documents, règle de gouvernance du dictionnaire |
+
+*Fin du document L030 (index).*
