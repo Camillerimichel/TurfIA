@@ -17,6 +17,15 @@ Le déploiement repose sur les principes suivants :
 -   reproductibilité ;
 -   sécurité des secrets.
 
+## 2.1 Style de déploiement retenu
+
+Le déploiement s'appuie sur un processus reproductible fondé sur des
+scripts et fichiers de configuration versionnés (« infrastructure as
+code » au sens large), sans imposer un orchestrateur de conteneurs
+complet tant que l'échelle de l'infrastructure ne le justifie pas (cf.
+L001 §2.1). Ce choix privilégie la simplicité opérationnelle pour une
+équipe restreinte plutôt que l'exhaustivité d'outillage.
+
 # 3. Vue d'ensemble
 
 ``` mermaid
@@ -36,5 +45,19 @@ Services --> Scheduler[Tâches planifiées]
   Intégration     Validation technique
   Recette         Validation fonctionnelle
   Production      Exploitation
+
+## 4.1 Règles de progression entre environnements
+
+Aucune version applicative n'accède à la production sans avoir
+préalablement franchi, dans l'ordre, les environnements de
+développement, intégration et recette. Chaque passage d'environnement
+est conditionné par la réussite des contrôles définis en L020 (stratégie
+de tests) et documenté dans l'historique de déploiement (cf. L025).
+
+## 4.2 Isolation des environnements
+
+Les environnements ne partagent ni base de données, ni secrets, ni
+configuration. Un incident ou une erreur de manipulation en recette ne
+peut donc pas affecter la production.
 
 *Fin de la partie 1/3.*
