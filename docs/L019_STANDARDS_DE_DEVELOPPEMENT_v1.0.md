@@ -1,5 +1,14 @@
 # L019 — Standards de développement
 
+## 0. Métadonnées du document
+
+| Champ | Valeur |
+| --- | --- |
+| Identifiant | L019 |
+| Niveau documentaire | Spécification technique (cf. L001 §3) |
+| Version | 1.0 |
+| Documents liés | L015 (architecture du code source), L020 (stratégie de tests), L023 (gestion des erreurs) |
+
 ## 1. Objectif
 
 ### 1.1 Finalité
@@ -55,6 +64,15 @@ Le projet est composé de modules indépendants.
 Les dépendances entre modules doivent rester limitées.
 
 Les dépendances circulaires sont interdites.
+
+### 2.4 Outillage de vérification automatique
+
+Les règles de style et de qualité décrites ici sont vérifiées, autant
+que possible, par des outils automatiques (linter, formateur, analyseur
+statique) exécutés avant intégration, plutôt que par une relecture
+manuelle exhaustive à chaque revue. L'objectif est de réserver la
+revue humaine (cf. §10) aux aspects non automatisables (pertinence
+métier, lisibilité réelle, choix de conception).
 
 ---
 
@@ -183,6 +201,13 @@ Les erreurs sont systématiquement :
 
 Les exceptions ne doivent jamais être ignorées.
 
+### 6.1 Interdiction des captures silencieuses
+
+Un bloc `except` générique qui absorbe l'erreur sans la journaliser ni
+la propager (« exception avalée ») est interdit. Toute exception
+capturée est soit journalisée avec son contexte, soit retraduite en
+exception métier explicite (cf. L023), jamais simplement ignorée.
+
 ---
 
 ## 7. Journalisation
@@ -236,6 +261,14 @@ Avant toute intégration, une revue vérifie notamment :
 - impact sur les performances ;
 - sécurité ;
 - documentation.
+
+### 10.1 Critères de blocage d'une revue
+
+Une revue de code bloque l'intégration si : un test manque pour un
+changement de comportement, une exception est capturée silencieusement
+(cf. §6.1), une règle métier est dupliquée entre couches (cf. L009
+§6.2), ou une donnée sensible apparaît en clair dans le code ou les
+journaux (cf. L021).
 
 ---
 
@@ -297,3 +330,14 @@ Les évolutions ne doivent pas remettre en cause les composants existants.
 Ces standards constituent le référentiel de développement de TurfIA.
 
 Ils garantissent une base logicielle homogène, robuste, maintenable et évolutive, adaptée à un projet destiné à évoluer sur plusieurs années.
+
+---
+
+## Historique
+
+| Version | Description |
+| --- | --- |
+| 1.0 | Version initiale |
+| 1.1 | Enrichissement industriel : métadonnées du document, outillage de vérification automatique, interdiction des captures d'exception silencieuses, critères de blocage d'une revue de code |
+
+*Fin du document L019.*
