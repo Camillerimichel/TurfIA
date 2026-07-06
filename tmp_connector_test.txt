@@ -1,2 +1,0 @@
-Test temporaire du connecteur GitHub ChatGPT.
-Ce fichier doit être supprimé immédiatement après validation de l'écriture.
