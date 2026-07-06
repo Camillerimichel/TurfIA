@@ -1,5 +1,15 @@
 # L013 — Migrations SQL
 
+## 0. Métadonnées du document
+
+| Champ | Valeur |
+| --- | --- |
+| Identifiant | L013 |
+| Niveau documentaire | Spécification technique (cf. L001 §3) |
+| Version | 1.0 |
+| Dépend de | L011 (Schéma SQL) |
+| Consommé par | L010 (Déploiement), L025 (Exploitation) |
+
 ## 1. Objectif
 
 ### 1.1 Finalité
@@ -62,6 +72,17 @@ Exemples :
 ```
 
 Le classement chronologique garantit un ordre d'exécution unique.
+
+---
+
+### 2.3 Responsable et revue
+
+Toute migration est proposée par un développeur et revue par
+l'architecte logiciel avant intégration (cf. RACI de gouvernance
+d'architecture, L003 §10.1), au même titre qu'une évolution de code
+applicatif. Une migration n'est jamais appliquée directement en
+production sans avoir été exécutée préalablement en environnement de
+recette (cf. L010 §4.1).
 
 ---
 
@@ -224,6 +245,15 @@ Elle permet notamment :
 
 Les migrations destructrices doivent rester exceptionnelles.
 
+### 9.1 Stratégie pour les migrations non instantanément réversibles
+
+Certaines migrations (ex. changement de type d'une colonne volumineuse)
+ne peuvent pas être annulées instantanément. Dans ce cas, la migration
+est conçue en plusieurs étapes rétro-compatibles (ex. ajout d'une
+nouvelle colonne, double écriture temporaire, bascule, puis suppression
+de l'ancienne colonne dans une migration ultérieure distincte) plutôt
+que par un changement en place risqué.
+
 ---
 
 ## 10. Évolutivité
@@ -236,3 +266,22 @@ La stratégie de migration retenue permet :
 - une parfaite traçabilité de l'évolution du schéma SQL.
 
 Elle constitue le mécanisme officiel d'évolution de la base de données de TurfIA.
+
+### 10.1 Risques et hypothèses
+
+| Risque                                              | Mitigation |
+| ------------------------------------------------------ | ------------ |
+| Migration longue verrouillant une table en production    | Exécution en heure creuse, migration en plusieurs étapes (§9.1) |
+| Divergence entre schéma réel et migrations enregistrées   | Contrôle de checksum systématique (§4.2), interdiction de modifier une migration déjà exécutée |
+| Perte de la table de suivi des migrations                 | Table de suivi incluse dans le périmètre de sauvegarde (cf. L038) |
+
+---
+
+## Historique
+
+| Version | Description |
+| --- | --- |
+| 1.0 | Version initiale |
+| 1.1 | Enrichissement industriel : métadonnées du document, responsable et revue des migrations, stratégie pour les migrations non instantanément réversibles, risques et hypothèses |
+
+*Fin du document L013.*
