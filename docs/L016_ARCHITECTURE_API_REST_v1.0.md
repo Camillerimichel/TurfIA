@@ -1,5 +1,14 @@
 # L016 — Architecture de l'API REST
 
+## 0. Métadonnées du document
+
+| Champ | Valeur |
+| --- | --- |
+| Identifiant | L016 |
+| Niveau documentaire | Spécification technique (cf. L001 §3) |
+| Version | 1.0 |
+| Documents liés | L007/L032.x (architecture API du SAD), L021 (sécurité), L034 (architecture sécurité) |
+
 ## 1. Objectif
 
 ### 1.1 Finalité
@@ -254,6 +263,14 @@ Les contrôles portent notamment sur :
 
 Une requête invalide est rejetée avant toute écriture en base.
 
+### 7.1 Emplacement de la validation
+
+La validation de forme (types, formats, longueurs) est réalisée par les
+schémas d'entrée au niveau des routes (module `schemas`). La validation
+de cohérence métier (ex. une course référencée existe réellement) est
+déléguée aux services (cf. L015 §7.2) et non dupliquée dans la couche
+API.
+
 ---
 
 ## 8. Authentification
@@ -283,6 +300,13 @@ Exemples :
 | Automatisation | Services internes        |
 
 Les droits sont vérifiés avant chaque traitement.
+
+### 9.1 Principe du moindre privilège
+
+Le rôle `Automatisation`, utilisé par les traitements planifiés (cf.
+L017, L033), ne dispose que des droits strictement nécessaires à
+l'exécution du workflow (cf. L005) : il ne dispose d'aucun droit
+d'administration ni de suppression, même technique.
 
 ---
 
@@ -353,6 +377,13 @@ Les mesures suivantes sont appliquées :
 
 La sécurité est appliquée de manière uniforme sur l'ensemble des ressources.
 
+### 14.1 Renvoi vers les documents transverses de sécurité
+
+Le détail des mécanismes d'authentification, de gestion des jetons, de
+limitation de débit et de contrôles OWASP est spécifié en L021
+(Sécurité) et L034 (Architecture sécurité) afin d'éviter toute
+duplication de contenu susceptible de diverger.
+
 ---
 
 ## 15. Évolutivité
@@ -362,3 +393,14 @@ L'architecture permet l'ajout de nouvelles ressources REST sans remettre en caus
 Chaque nouveau module respecte les mêmes conventions de développement, de validation, de sécurité et de documentation.
 
 Cette architecture constitue la référence officielle pour le développement de l'API REST de TurfIA.
+
+---
+
+## Historique
+
+| Version | Description |
+| --- | --- |
+| 1.0 | Version initiale |
+| 1.1 | Enrichissement industriel : métadonnées du document, emplacement de la validation (forme vs métier), principe du moindre privilège pour le rôle Automatisation, renvoi vers les documents transverses de sécurité |
+
+*Fin du document L016.*
