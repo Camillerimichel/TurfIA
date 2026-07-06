@@ -1,5 +1,14 @@
 # L018 — Architecture de l'interface HTML
 
+## 0. Métadonnées du document
+
+| Champ | Valeur |
+| --- | --- |
+| Identifiant | L018 |
+| Niveau documentaire | Spécification technique (cf. L001 §3) |
+| Version | 1.0 |
+| Documents liés | L007/L016 (API), L021/L034 (sécurité), L024/L036 (performances) |
+
 ## 1. Objectif
 
 ### 1.1 Finalité
@@ -120,6 +129,14 @@ Le code JavaScript assure uniquement :
 - graphiques.
 
 Les traitements métier restent dans l'API.
+
+### 3.4 Principe de non-duplication des règles
+
+Aucune règle de validation métier n'est réimplémentée en JavaScript
+au-delà d'un confort d'expérience utilisateur immédiat (ex. désactiver
+un bouton) : la validation faisant foi reste celle de l'API (cf. L016
+§7.1). Toute règle dupliquée côté client doit rester strictement
+équivalente à la règle serveur, afin d'éviter une divergence silencieuse.
 
 ---
 
@@ -272,6 +289,13 @@ L'administration permet :
 
 Les fonctions sensibles sont réservées aux administrateurs.
 
+### 10.1 Actions destructives ou sensibles
+
+Toute action irréversible ou sensible (relance manuelle d'une
+automatisation, modification d'un paramètre de production) déclenchée
+depuis l'interface d'administration exige une confirmation explicite
+et est journalisée avec l'identité de l'opérateur (cf. L022).
+
 ---
 
 ## 11. Composants graphiques
@@ -337,6 +361,12 @@ Les mesures suivantes sont appliquées :
 - expiration des sessions ;
 - journalisation des actions sensibles.
 
+### 15.1 Renvoi vers les documents transverses
+
+Le détail des mécanismes d'authentification et de protection est
+spécifié en L021 (Sécurité) et L034 (Architecture sécurité), afin
+d'éviter toute duplication de contenu susceptible de diverger.
+
 ---
 
 ## 16. Évolutivité
@@ -350,3 +380,14 @@ L'architecture retenue permet d'ajouter facilement :
 - un espace utilisateur personnalisé.
 
 Cette architecture constitue la référence pour le développement de l'ensemble des interfaces HTML de TurfIA.
+
+---
+
+## Historique
+
+| Version | Description |
+| --- | --- |
+| 1.0 | Version initiale |
+| 1.1 | Enrichissement industriel : métadonnées du document, principe de non-duplication des règles métier côté client, confirmation et traçabilité des actions destructives, renvoi vers les documents transverses de sécurité |
+
+*Fin du document L018.*
