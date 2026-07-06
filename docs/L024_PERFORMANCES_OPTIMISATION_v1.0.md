@@ -1,5 +1,14 @@
 # L024 — Performance et optimisation
 
+## 0. Métadonnées du document
+
+| Champ | Valeur |
+| --- | --- |
+| Identifiant | L024 |
+| Niveau documentaire | Spécification technique (cf. L001 §3) |
+| Version | 1.0 |
+| Documents liés | L008/L011/L012 (base SQL, vues), L036 (architecture performances, niveau SAD), L020 (tests de performance) |
+
 ## 1. Objectif
 
 ### 1.1 Finalité
@@ -32,6 +41,13 @@ Les décisions sont fondées sur :
 - les indicateurs de supervision.
 
 Aucune optimisation ne doit être réalisée sur une simple intuition.
+
+### 2.1.1 Cibles de référence
+
+Les cibles chiffrées de performance (temps de réponse API, durée du
+batch quotidien) sont définies une seule fois, en L001 §4.1 et L036,
+et reprises par référence dans les documents techniques concernés,
+afin d'éviter toute divergence entre plusieurs jeux de chiffres.
 
 ---
 
@@ -146,6 +162,14 @@ Lorsque cela est pertinent, certains traitements peuvent être parallélisés.
 
 Les traitements indépendants sont privilégiés afin de limiter les risques de contention.
 
+### 6.3 Garde-fou sur le déterminisme
+
+Toute parallélisation ou mise en cache est conçue pour ne jamais
+altérer le résultat déterministe d'une analyse (cf. L006 ADR-001) : une
+optimisation qui introduirait une dépendance à l'ordre d'exécution ou à
+un état de cache non versionné est rejetée, quel que soit son gain de
+performance mesuré.
+
 ---
 
 ## 7. Interface utilisateur
@@ -256,6 +280,13 @@ Toute optimisation fait l'objet :
 
 Une optimisation n'est retenue que si elle apporte un bénéfice mesurable sans dégrader la qualité du code.
 
+### 11.1 Critères de rejet d'une optimisation
+
+Une optimisation proposée est rejetée si elle : dégrade la lisibilité
+du code sans gain mesuré significatif, introduit une dépendance à
+l'ordre d'exécution (cf. §6.3), ou n'a pas été validée par les tests de
+non-régression sur historique (cf. L020 §8.3).
+
 ---
 
 ## 12. Amélioration continue
@@ -263,3 +294,14 @@ Une optimisation n'est retenue que si elle apporte un bénéfice mesurable sans 
 Les performances de TurfIA sont évaluées en permanence.
 
 Les résultats de la supervision, des statistiques d'exploitation et des retours utilisateurs alimentent un processus d'amélioration continue destiné à maintenir un niveau élevé de performance tout au long de la vie du projet.
+
+---
+
+## Historique
+
+| Version | Description |
+| --- | --- |
+| 1.0 | Version initiale |
+| 1.1 | Enrichissement industriel : métadonnées du document, renvoi vers les cibles de référence uniques, garde-fou sur le déterminisme pour toute parallélisation/cache, critères de rejet d'une optimisation |
+
+*Fin du document L024.*
