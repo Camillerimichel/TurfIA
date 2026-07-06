@@ -1,5 +1,16 @@
 # L011 — Schéma SQL
 
+## 0. Métadonnées du document
+
+| Champ | Valeur |
+| --- | --- |
+| Identifiant | L011 |
+| Niveau documentaire | Spécification technique (cf. L001 §3) |
+| Version | 1.0 |
+| SGBD cible | PostgreSQL (cf. L008 §1.2) |
+| Encodage | UTF-8, collation `fr_FR.UTF-8` pour le tri des libellés |
+| Documents liés | L004 (modèle logique), L008 (architecture SQL), L012 (vues), L013 (migrations), L030.x (dictionnaire de données) |
+
 ## 1. Objectif
 
 ### 1.1 Finalité
@@ -110,6 +121,45 @@ Les règles suivantes s'appliquent :
 - durée → INTERVAL ou entier selon le besoin.
 
 Toutes les dates sont enregistrées dans le même fuseau horaire.
+
+---
+
+### 2.6 Colonnes d'audit
+
+Toute table métier mutable comporte, en complément des colonnes
+fonctionnelles, deux colonnes d'audit techniques :
+
+```
+cree_le      TIMESTAMP NOT NULL DEFAULT now()
+modifie_le   TIMESTAMP
+```
+
+Ces colonnes ne remplacent pas l'historisation fonctionnelle (§15) :
+elles permettent uniquement de diagnostiquer techniquement une
+anomalie d'exploitation.
+
+---
+
+### 2.7 Contraintes NOT NULL
+
+Toute colonne dont l'absence rendrait l'enregistrement inexploitable
+par les traitements (ex. `course.reunion_id`, `partant.cheval_id`) est
+déclarée `NOT NULL`. L'absence de valeur constitue une anomalie de
+collecte et doit être détectée avant l'insertion (cf. L009, L023),
+non tolérée silencieusement par une valeur nulle en base.
+
+---
+
+### 2.8 Actions référentielles (ON DELETE / ON UPDATE)
+
+| Cas                                             | Action                     |
+| ------------------------------------------------ | -------------------------- |
+| Référentiel utilisé par une donnée métier          | `ON DELETE RESTRICT`       |
+| Table de détail d'une entité métier (ex. `analyse_partant` → `analyse`) | `ON DELETE CASCADE` limité aux tables techniques/de détail non historisées |
+| Donnée historisée (`analyse`, `resultat`, `controle_roi`) | `ON DELETE RESTRICT` (suppression interdite, cf. §15) |
+
+Aucune suppression en cascade n'affecte une donnée historisée, conformément
+au principe d'historisation immuable (cf. ADR-001 de L008).
 
 ---
 
@@ -1479,7 +1529,24 @@ L'architecture relationnelle reste compatible avec une évolution vers une infra
 
 ---
 
-### 16.5 Conclusion
+### 16.5 Sécurité et contrôle d'accès
+
+L'accès à la base est cloisonné par des rôles applicatifs distincts,
+conformément à L021 et L034 :
+
+| Rôle applicatif        | Droits                                   | Usage                        |
+| ------------------------ | ------------------------------------------ | ------------------------------ |
+| `turfia_app`              | Lecture/écriture sur métier et analyses    | Services applicatifs           |
+| `turfia_readonly`         | Lecture seule sur toutes les tables         | Tableaux de bord, exports      |
+| `turfia_migration`        | DDL complet (création/altération de schéma) | Exécution des migrations (L013) uniquement |
+
+Aucun compte applicatif ne dispose de droits `SUPERUSER`. L'accès direct
+à la base en dehors de ces rôles est réservé aux opérations
+d'administration exceptionnelles, journalisées (cf. L025).
+
+---
+
+### 16.6 Conclusion
 
 Le schéma SQL constitue le socle de l'ensemble de TurfIA.
 
@@ -1491,3 +1558,14 @@ Son organisation, sa normalisation et son historisation garantissent :
 - la capacité d'évolution du projet.
 
 Il constitue la référence unique pour le développement des scripts SQL, des migrations, des vues, de l'API et des traitements automatiques.
+
+---
+
+## Historique
+
+| Version | Description |
+| --- | --- |
+| 1.0 | Version initiale |
+| 1.1 | Enrichissement industriel : métadonnées du document, colonnes d'audit, contraintes NOT NULL, actions référentielles ON DELETE/ON UPDATE, sécurité et contrôle d'accès par rôles applicatifs |
+
+*Fin du document L011.*
