@@ -1,5 +1,19 @@
 # L033_ARCHITECTURE_TRAITEMENTS_PLANIFIES_v2.0 --- Partie 1/2
 
+## 0. Métadonnées du document
+
+| Champ | Valeur |
+| --- | --- |
+| Identifiant | L033 |
+| Niveau documentaire | SAD --- Architecture transverse (cf. L001 §3) |
+| Version | 2.0 |
+| Document technique associé | L017 (Architecture des automatisations) |
+
+Ce document constitue la vue architecturale (pourquoi/quels principes)
+des traitements planifiés ; le détail opérationnel de chaque tâche
+(déclencheurs, tolérance aux pannes, seuils d'alerte) est spécifié en
+L017.
+
 ## 1. Objet
 
 Ce document décrit l'architecture logicielle des traitements planifiés
@@ -76,3 +90,24 @@ En cas d'échec :
 2.  conservation du contexte ;
 3.  nouvelle tentative selon la politique définie ;
 4.  alerte si le seuil maximal est atteint.
+
+## 7. ADR
+
+### ADR-001 --- Verrouillage applicatif par tâche
+
+**Contexte** : deux exécutions concurrentes de la même tâche (ex.
+double déclenchement du scheduler) pourraient produire des résultats
+incohérents.
+**Décision** : chaque tâche planifiée acquiert un verrou applicatif
+nominatif avant exécution (détail en L017 §2.1).
+**Conséquences** : une exécution concurrente est rejetée et journalisée
+plutôt que mise en file d'attente silencieuse.
+
+### ADR-002 --- Mêmes services que le mode interactif
+
+**Contexte** : garantir un comportement identique entre une analyse
+déclenchée via l'API et une analyse déclenchée par le scheduler.
+**Décision** : les traitements planifiés invoquent exclusivement les
+services métier également utilisés par l'API (cf. L003 ADR-004).
+**Conséquences** : aucune logique métier n'est dupliquée dans la couche
+d'ordonnancement.

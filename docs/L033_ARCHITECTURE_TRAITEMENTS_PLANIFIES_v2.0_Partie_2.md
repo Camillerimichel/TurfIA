@@ -56,6 +56,9 @@ Les traitements utilisent exclusivement les droits nécessaires à leur
 exécution. Les accès sont tracés et les données sensibles sont protégées
 durant toutes les phases de traitement.
 
+Le rôle applicatif dédié `Automatisation` et son périmètre de droits
+minimal sont définis en L016 §9.1 (principe du moindre privilège).
+
 ## 12. Évolutivité
 
 L'architecture permet l'ajout de nouveaux traitements sans remise en
@@ -67,3 +70,14 @@ dépendances et des planifications.
 Cette architecture garantit l'automatisation fiable des traitements
 planifiés de TurfIA, leur traçabilité, leur résilience et leur
 évolutivité dans le cadre du Software Architecture Document.
+
+---
+
+## Historique
+
+| Version | Description |
+| --- | --- |
+| 2.0 | Version initiale (Software Architecture Document) |
+| 2.1 | Enrichissement industriel : métadonnées du document, ADR (verrouillage applicatif, alignement sur les services du mode interactif), renvoi vers le rôle applicatif Automatisation |
+
+*Fin du document L033.*
