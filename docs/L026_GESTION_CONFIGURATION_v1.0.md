@@ -1,5 +1,14 @@
 # L026 — Gestion de la configuration
 
+## 0. Métadonnées du document
+
+| Champ | Valeur |
+| --- | --- |
+| Identifiant | L026 |
+| Niveau documentaire | Spécification technique (cf. L001 §3) |
+| Version | 1.0 |
+| Documents liés | L010 (déploiement), L021 (sécurité), L027 (gestion des versions Git) |
+
 ## 1. Objectif
 
 ### 1.1 Finalité
@@ -38,6 +47,13 @@ Cette séparation permet de déployer une même version logicielle sur plusieurs
 L'ensemble des paramètres est regroupé dans un mécanisme unique de configuration.
 
 Les modules applicatifs ne lisent jamais directement les variables d'environnement.
+
+### 2.3 Validation au démarrage (fail-fast)
+
+Conformément à l'ADR-001 de L010, une configuration incomplète ou
+invalide empêche le démarrage de l'application plutôt que de produire
+un comportement dégradé silencieux. Cette règle est reprise en détail
+au §6.
 
 ---
 
@@ -79,6 +95,16 @@ Exemples :
 - budget par niveau de confiance ;
 - pondération des critères ;
 - paramètres des algorithmes.
+
+### 3.4 Distinction avec le registre des règles métier
+
+Un paramètre de configuration métier (ex. un seuil) diffère d'une règle
+métier (ex. la logique d'application de ce seuil, cf. L009 §5.2) : le
+paramètre est une valeur modifiable sans revue de code, la règle est un
+comportement qui suit le cycle de vie et la revue définis en L009.
+Toute modification d'un paramètre de configuration métier reste
+néanmoins historisée (cf. §8) afin de préserver la comparabilité des
+analyses (cf. ADR-002 de L001).
 
 ---
 
@@ -215,187 +241,11 @@ Cette architecture garantit une configuration homogène et facilement maintenabl
 
 ---
 
-# L027 — Conventions Git et gestion des versions
+## Historique
 
-## 1. Objectif
+| Version | Description |
+| --- | --- |
+| 1.0 | Version initiale |
+| 1.1 | Enrichissement industriel : métadonnées du document, validation fail-fast au démarrage, distinction entre paramètre de configuration métier et règle métier (renvoi vers L009). Correction de structure : le contenu relatif à la gestion des versions Git, précédemment dupliqué en fin de ce fichier sous un en-tête « L027 », a été fusionné dans le document dédié [L027_GESTION_VERSIONS_GIT_v1.0.md](L027_GESTION_VERSIONS_GIT_v1.0.md) auquel il appartient, sans perte d'information |
 
-### 1.1 Finalité
-
-Ce document définit les règles de gestion du dépôt GitHub de TurfIA.
-
-Il garantit :
-
-- un historique clair ;
-- des évolutions traçables ;
-- des livraisons reproductibles ;
-- une collaboration simplifiée.
-
-Le dépôt GitHub constitue la référence unique du projet.
-
----
-
-## 2. Organisation des branches
-
-### 2.1 Branche principale
-
-```text
-main
-```
-
-Contient uniquement des versions validées et stables.
-
-Aucun développement direct n'y est réalisé.
-
----
-
-### 2.2 Branche de développement
-
-```text
-develop
-```
-
-Constitue la branche principale de travail.
-
-Toutes les nouvelles fonctionnalités y sont intégrées après validation.
-
----
-
-### 2.3 Branches de fonctionnalité
-
-Les développements importants utilisent une branche dédiée.
-
-Convention :
-
-```text
-feature/nom-fonctionnalite
-```
-
-Exemple :
-
-```text
-feature/api-statistiques
-
-feature/dashboard
-
-feature/import-pmu
-```
-
----
-
-## 3. Commits
-
-### 3.1 Principes
-
-Chaque commit est :
-
-- atomique ;
-- documenté ;
-- facilement compréhensible.
-
-Un commit ne traite qu'une seule évolution.
-
----
-
-### 3.2 Format
-
-Les messages utilisent la structure suivante :
-
-```text
-Type : Description
-```
-
-Exemples :
-
-```text
-feat : ajout du calcul TurfIA
-
-fix : correction du calcul ROI
-
-docs : ajout du livrable L021
-
-refactor : simplification des services
-
-test : ajout des tests API
-```
-
----
-
-## 4. Gestion des versions
-
-Le projet adopte une numérotation de type :
-
-```text
-MAJEURE.MINEURE.CORRECTIF
-```
-
-Exemple :
-
-```text
-1.0.0
-
-1.1.0
-
-1.1.1
-```
-
-Les versions majeures correspondent à des évolutions incompatibles.
-
----
-
-## 5. Tags Git
-
-Chaque version publiée reçoit un tag.
-
-Exemple :
-
-```text
-v1.0.0
-
-v1.1.0
-
-v2.0.0
-```
-
-Les tags correspondent à des versions livrables.
-
----
-
-## 6. Documentation des versions
-
-Chaque version est accompagnée d'une note de publication précisant :
-
-- nouveautés ;
-- corrections ;
-- évolutions techniques ;
-- migrations éventuelles.
-
----
-
-## 7. Historique
-
-L'historique Git constitue une source d'information essentielle.
-
-Il permet :
-
-- d'identifier l'origine d'une évolution ;
-- de retrouver une version ;
-- de comparer deux états du projet ;
-- de faciliter les audits.
-
----
-
-## 8. Bonnes pratiques
-
-Les règles suivantes s'appliquent :
-
-- commits fréquents ;
-- messages explicites ;
-- historique propre ;
-- suppression des branches fusionnées ;
-- documentation des évolutions importantes.
-
----
-
-## 9. Évolutivité
-
-Cette stratégie Git permet de faire évoluer TurfIA sur plusieurs années tout en conservant un historique lisible, documenté et parfaitement traçable.
+*Fin du document L026.*
