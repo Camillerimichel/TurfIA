@@ -1,5 +1,15 @@
 # L022 — Journalisation et traçabilité
 
+## 0. Métadonnées du document
+
+| Champ | Valeur |
+| --- | --- |
+| Identifiant | L022 |
+| Niveau documentaire | Spécification technique (cf. L001 §3) |
+| Version | 1.0 |
+| Format recommandé | Journalisation structurée (JSON), un événement par ligne |
+| Documents liés | L021 (sécurité), L023 (gestion des erreurs), L037 (architecture journalisation, niveau SAD) |
+
 ## 1. Objectif
 
 ### 1.1 Finalité
@@ -59,6 +69,13 @@ Les niveaux suivants sont utilisés.
 | CRITICAL | Incident majeur                |
 
 Le niveau DEBUG n'est activé qu'en développement.
+
+### 2.4 Format structuré
+
+Chaque entrée de journal est produite dans un format structuré
+(ex. JSON) plutôt qu'en texte libre, afin de permettre son exploitation
+automatisée (recherche, agrégation, alerting, cf. L035) sans dépendre
+d'un analyseur de texte fragile.
 
 ---
 
@@ -196,6 +213,15 @@ La durée de conservation dépend de la nature des journaux.
 
 Les durées exactes sont définies dans la politique d'exploitation.
 
+### 7.1 Traçabilité longue durée des décisions métier
+
+Par dérogation aux durées de rétention techniques ci-dessus, les
+journaux fonctionnels rattachés à une analyse historisée (§3.6, §5)
+suivent la même politique de conservation que l'analyse elle-même (cf.
+ADR-002 de L001) : ils ne sont jamais purgés tant que l'analyse
+correspondante reste accessible, afin de garantir l'auditabilité
+complète d'une décision plusieurs années après son émission.
+
 ---
 
 ## 8. Recherche
@@ -263,3 +289,14 @@ Toute nouvelle fonctionnalité doit définir :
 - leur durée de conservation.
 
 La journalisation reste ainsi homogène sur l'ensemble du projet.
+
+---
+
+## Historique
+
+| Version | Description |
+| --- | --- |
+| 1.0 | Version initiale |
+| 1.1 | Enrichissement industriel : métadonnées du document, format structuré recommandé, traçabilité longue durée des décisions métier alignée sur l'immuabilité des analyses historisées |
+
+*Fin du document L022.*
