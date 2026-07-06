@@ -1,5 +1,15 @@
 # L021 — Sécurité
 
+## 0. Métadonnées du document
+
+| Champ | Valeur |
+| --- | --- |
+| Identifiant | L021 |
+| Niveau documentaire | Spécification technique (cf. L001 §3) |
+| Version | 1.0 |
+| Référentiel externe | OWASP Top 10, OWASP API Security Top 10 |
+| Documents liés | L016 (architecture API REST), L034 (architecture sécurité, niveau SAD), L022 (journalisation) |
+
 ## 1. Objectif
 
 ### 1.1 Finalité
@@ -63,6 +73,19 @@ La compromission d'une couche ne doit pas compromettre l'ensemble de la platefor
 Chaque utilisateur, processus ou service dispose uniquement des droits nécessaires à son fonctionnement.
 
 Les privilèges excessifs sont interdits.
+
+### 2.4 Correspondance avec OWASP Top 10
+
+| Risque OWASP                              | Mesure TurfIA correspondante                  |
+| -------------------------------------------- | -------------------------------------------------- |
+| Contrôle d'accès défaillant                   | RBAC (§4), vérification systématique par requête (§4.2) |
+| Défaillance cryptographique                    | Chiffrement des données sensibles (§5.2), HTTPS obligatoire (§6) |
+| Injection                                        | Paramètres préparés systématiques (§7.2) |
+| Conception non sécurisée                          | Security by Design (§2.1), analyse de sécurité avant intégration (§15) |
+| Mauvaise configuration de sécurité                 | Configuration externalisée et revue (cf. L010, L026) |
+| Composants vulnérables et obsolètes                 | Gestion des vulnérabilités et mises à jour (§12) |
+| Identification et authentification défaillantes      | Politique de mots de passe et sessions (§3) |
+| Journalisation et surveillance insuffisantes          | Journalisation systématique des événements de sécurité (§8), supervision (§11) |
 
 ---
 
@@ -189,6 +212,14 @@ L'application protège contre :
 
 Toutes les requêtes SQL utilisent des paramètres préparés.
 
+### 7.2.1 Limitation de débit (rate limiting)
+
+Les endpoints sensibles (authentification, écriture) appliquent une
+limitation de débit par compte et par adresse IP source, afin de
+limiter les attaques par force brute et les abus applicatifs. Les
+seuils précis et leur ajustement relèvent de L034 (Architecture
+sécurité, niveau SAD) afin d'éviter toute duplication de contenu.
+
 ---
 
 ### 7.3 Téléversements
@@ -311,6 +342,14 @@ En cas d'incident de sécurité, la procédure comprend notamment :
 5. validation du système ;
 6. rédaction d'un rapport d'incident.
 
+### 14.1 Niveaux de sévérité d'incident
+
+| Sévérité | Exemple                                              | Délai de réaction attendu |
+| ---------- | ------------------------------------------------------- | ---------------------------- |
+| Critique   | Compromission d'un compte administrateur, fuite de secrets | Immédiat (isolement sous quelques minutes) |
+| Élevée     | Tentative d'intrusion détectée sans compromission avérée   | Sous quelques heures |
+| Modérée    | Vulnérabilité identifiée sans exploitation constatée        | Selon criticité (§12) |
+
 ---
 
 ## 15. Évolutivité
@@ -320,3 +359,14 @@ La politique de sécurité est révisée à chaque évolution majeure de TurfIA.
 Toute nouvelle fonctionnalité est soumise à une analyse de sécurité avant son intégration.
 
 Cette politique constitue le référentiel de sécurité applicable à l'ensemble du projet.
+
+---
+
+## Historique
+
+| Version | Description |
+| --- | --- |
+| 1.0 | Version initiale |
+| 1.1 | Enrichissement industriel : métadonnées du document, correspondance avec OWASP Top 10, limitation de débit sur endpoints sensibles, niveaux de sévérité d'incident |
+
+*Fin du document L021.*
