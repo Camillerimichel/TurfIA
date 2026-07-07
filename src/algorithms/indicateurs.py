@@ -89,3 +89,12 @@ def calculer_indicateurs_marche(cotes: list[float | None]) -> list[float]:
         else:
             resultats.append(normaliser(next(it), minimum, maximum) if maximum != minimum else SCORE_MAX / 2)
     return resultats
+
+
+def calculer_indicateur_risque_taille_champ(nb_partants: int, minimum: int = 4, maximum: int = 20) -> float:
+    """Approximation partielle du risque de la course (cf. L031.3 §3, famille
+    Course) : un champ nombreux est associé à une incertitude plus élevée. Les
+    autres facteurs documentés (volatilité du marché, désaccord presse, changement
+    de terrain) ne sont pas calculés dans cette tranche (cf. PROJECT_STATE.md).
+    """
+    return normaliser(nb_partants, minimum, maximum)
