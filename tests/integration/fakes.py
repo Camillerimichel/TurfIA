@@ -46,6 +46,12 @@ class FakeCourseRepository:
         self.entraineurs: dict[int, object] = {}
         self.partants: dict[int, object] = {}
         self.cotes: dict[int, float] = {}  # dernière cote par partant_id (simplifié pour les tests)
+        # (victoires, courses) configurables par les tests ; absent = (0, 0) (échantillon nul -> score neutre).
+        self.performances_jockey: dict[int, tuple[int, int]] = {}
+        self.performances_entraineur: dict[int, tuple[int, int]] = {}
+        self.performances_couple: dict[tuple[int, int], tuple[int, int]] = {}
+        self.performances_hippodrome: dict[tuple[int, int], tuple[int, int]] = {}
+        self.performances_conditions: dict[tuple[int, int, int, int], tuple[int, int]] = {}
 
     def create_reunion(self, reunion):
         reunion = dataclasses.replace(reunion, id=self._ids.next())
@@ -104,6 +110,25 @@ class FakeCourseRepository:
 
     def get_dernieres_cotes_par_course(self, course_id: int) -> dict[int, float]:
         return {p.id: self.cotes[p.id] for p in self.list_partants_by_course(course_id) if p.id in self.cotes}
+
+    def compter_performances_jockey(self, jockey_id: int, exclure_course_id: int) -> tuple[int, int]:
+        return self.performances_jockey.get(jockey_id, (0, 0))
+
+    def compter_performances_entraineur(self, entraineur_id: int, exclure_course_id: int) -> tuple[int, int]:
+        return self.performances_entraineur.get(entraineur_id, (0, 0))
+
+    def compter_performances_couple(self, jockey_id: int, entraineur_id: int, exclure_course_id: int) -> tuple[int, int]:
+        return self.performances_couple.get((jockey_id, entraineur_id), (0, 0))
+
+    def compter_performances_cheval_hippodrome(
+        self, cheval_id: int, hippodrome_id: int, exclure_course_id: int
+    ) -> tuple[int, int]:
+        return self.performances_hippodrome.get((cheval_id, hippodrome_id), (0, 0))
+
+    def compter_performances_cheval_conditions(
+        self, cheval_id: int, distance_id: int, surface_id: int, etat_piste_id: int, exclure_course_id: int
+    ) -> tuple[int, int]:
+        return self.performances_conditions.get((cheval_id, distance_id, surface_id, etat_piste_id), (0, 0))
 
 
 class FakeAnalyseRepository:

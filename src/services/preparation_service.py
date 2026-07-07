@@ -9,8 +9,11 @@ de l'analyse plutôt que de recevoir une valeur fabriquée (cf. L009 §2.1).
 from __future__ import annotations
 
 from src.algorithms.indicateurs import (
+    SCORE_NEUTRE_PAR_DEFAUT,
     calculer_indicateur_forme,
     calculer_indicateur_presse,
+    calculer_indicateur_professionnels,
+    calculer_indicateur_reussite,
     calculer_indicateur_risque_taille_champ,
     calculer_indicateurs_marche,
 )
@@ -52,10 +55,11 @@ class PreparationDonneesService:
         cotes_ordonnees = [cotes_par_partant[p.id] for p in partants_exploitables]
         scores_marche = calculer_indicateurs_marche(cotes_ordonnees)
 
+        course = self._courses.get_course(course_id)
+        reunion = self._courses.get_reunion(course.reunion_id)
+
         classement_presse: list[int] | None = None
         if self._presse is not None:
-            course = self._courses.get_course(course_id)
-            reunion = self._courses.get_reunion(course.reunion_id)
             try:
                 classement_presse = self._presse.recuperer_classement_presse(reunion.numero, course.numero)
             except ImportationError as exc:
@@ -64,6 +68,10 @@ class PreparationDonneesService:
                     extra={"context": {"course_id": course_id}},
                 )
 
+        conditions_connues = (
+            course.distance_id is not None and course.surface_id is not None and course.etat_piste_id is not None
+        )
+
         donnees_partants: list[DonneesPartant] = []
         for partant, cote, score_marche in zip(partants_exploitables, cotes_ordonnees, scores_marche):
             cheval = self._courses.get_cheval(partant.cheval_id)
@@ -71,6 +79,42 @@ class PreparationDonneesService:
             sous_scores = {"marche": score_marche, "forme": score_forme}
             if classement_presse is not None:
                 sous_scores["presse"] = calculer_indicateur_presse(classement_presse, partant.numero)
+
+            if partant.jockey_id is not None or partant.entraineur_id is not None:
+                score_jockey = (
+                    calculer_indicateur_reussite(*self._courses.compter_performances_jockey(partant.jockey_id, course_id))
+                    if partant.jockey_id is not None
+                    else SCORE_NEUTRE_PAR_DEFAUT
+                )
+                score_entraineur = (
+                    calculer_indicateur_reussite(
+                        *self._courses.compter_performances_entraineur(partant.entraineur_id, course_id)
+                    )
+                    if partant.entraineur_id is not None
+                    else SCORE_NEUTRE_PAR_DEFAUT
+                )
+                score_couple = (
+                    calculer_indicateur_reussite(
+                        *self._courses.compter_performances_couple(partant.jockey_id, partant.entraineur_id, course_id)
+                    )
+                    if partant.jockey_id is not None and partant.entraineur_id is not None
+                    else SCORE_NEUTRE_PAR_DEFAUT
+                )
+                sous_scores["professionnels"] = calculer_indicateur_professionnels(
+                    score_jockey, score_entraineur, score_couple
+                )
+
+            sous_scores["historique"] = calculer_indicateur_reussite(
+                *self._courses.compter_performances_cheval_hippodrome(partant.cheval_id, reunion.hippodrome_id, course_id)
+            )
+
+            if conditions_connues:
+                sous_scores["aptitude"] = calculer_indicateur_reussite(
+                    *self._courses.compter_performances_cheval_conditions(
+                        partant.cheval_id, course.distance_id, course.surface_id, course.etat_piste_id, course_id
+                    )
+                )
+
             donnees_partants.append(
                 DonneesPartant(partant_id=partant.id, sous_scores=sous_scores, cote=cote)
             )
