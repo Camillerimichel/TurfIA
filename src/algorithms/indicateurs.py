@@ -1,12 +1,12 @@
 """Calcul d'indicateurs réels à partir des données collectées — cf. L031.2 §3
-(familles de critères Marché et Forme), fonctions pures (cf. L006 §4.2).
+(familles de critères Marché, Forme et Presse), fonctions pures (cf. L006 §4.2).
 
 Périmètre volontaire de cette tranche : uniquement les indicateurs calculables avec
-confiance à partir des données déjà collectées (cotes, musique). Les familles
-Professionnels et Historique (statistiques agrégées jockey/entraineur/hippodrome) et
-Aptitude (distance/terrain) nécessitent des requêtes d'agrégation supplémentaires,
-non construites dans cette tranche (cf. PROJECT_STATE.md). La famille Presse dépend
-du niveau 3 de collecte (non implémenté, cf. src/collecte/registre.py).
+confiance à partir des données déjà collectées (cotes, musique, consensus presse
+Canalturf). Les familles Professionnels et Historique (statistiques agrégées
+jockey/entraineur/hippodrome) et Aptitude (distance/terrain) nécessitent des
+requêtes d'agrégation supplémentaires, non construites dans cette tranche (cf.
+PROJECT_STATE.md).
 """
 
 from __future__ import annotations
@@ -89,6 +89,25 @@ def calculer_indicateurs_marche(cotes: list[float | None]) -> list[float]:
         else:
             resultats.append(normaliser(next(it), minimum, maximum) if maximum != minimum else SCORE_MAX / 2)
     return resultats
+
+
+def calculer_indicateur_presse(classement_numeros: list[int], numero_partant: int) -> float:
+    """Sous-score « Presse » (cf. L031.2 §Presse, consensus multi-journaux) : rang du
+    partant dans le classement consensus Canalturf (1er cité -> proche de 100),
+    normalisé sur le nombre de chevaux cités. Un partant non cité par la presse
+    reçoit le rang « pire que le dernier cité » (`len(classement_numeros) + 1`) :
+    approximation faute de disposer d'un nombre de citations par cheval (cf.
+    src/collecte/canalturf/mappers.py, `extraire_consensus_presse`).
+
+    Précondition : `classement_numeros` non vide (l'appelant ne doit invoquer cette
+    fonction que lorsqu'un classement a effectivement été obtenu).
+    """
+    pire_rang = len(classement_numeros) + 1
+    try:
+        rang = classement_numeros.index(numero_partant) + 1
+    except ValueError:
+        rang = pire_rang
+    return normaliser(rang, minimum=1, maximum=pire_rang, inverse=True)
 
 
 def calculer_indicateur_risque_taille_champ(nb_partants: int, minimum: int = 4, maximum: int = 20) -> float:

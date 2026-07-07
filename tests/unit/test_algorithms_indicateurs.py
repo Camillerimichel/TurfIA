@@ -3,6 +3,7 @@ import pytest
 from src.algorithms.indicateurs import (
     SCORE_NEUTRE_PAR_DEFAUT,
     calculer_indicateur_forme,
+    calculer_indicateur_presse,
     calculer_indicateur_risque_taille_champ,
     calculer_indicateurs_marche,
     parser_musique,
@@ -54,6 +55,22 @@ def test_calculer_indicateurs_marche_cote_absente_recoit_score_neutre():
 
 def test_calculer_indicateurs_marche_toutes_cotes_absentes():
     assert calculer_indicateurs_marche([None, None]) == [SCORE_NEUTRE_PAR_DEFAUT, SCORE_NEUTRE_PAR_DEFAUT]
+
+
+def test_calculer_indicateur_presse_premier_cite():
+    assert calculer_indicateur_presse([15, 7, 4], numero_partant=15) == 100.0
+
+
+def test_calculer_indicateur_presse_dernier_cite():
+    # 3 chevaux cités, rang 3 (pire rang possible = 4, le non-cité) : 100*(3-1)/(4-1) inversé.
+    assert calculer_indicateur_presse([15, 7, 4], numero_partant=4) == pytest.approx(33.333, abs=0.01)
+
+
+def test_calculer_indicateur_presse_non_cite_recoit_le_pire_score():
+    score_dernier_cite = calculer_indicateur_presse([15, 7, 4], numero_partant=4)
+    score_non_cite = calculer_indicateur_presse([15, 7, 4], numero_partant=99)
+    assert score_non_cite < score_dernier_cite
+    assert score_non_cite == 0.0
 
 
 def test_calculer_indicateur_risque_taille_champ_petit_champ():
