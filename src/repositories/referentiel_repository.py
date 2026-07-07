@@ -9,7 +9,7 @@ from __future__ import annotations
 import psycopg
 from psycopg.rows import class_row
 
-from src.models.referentiels import Discipline, EtatPiste, Hippodrome, Surface, TypeCourse
+from src.models.referentiels import Discipline, Distance, EtatPiste, Hippodrome, Surface, TypeCourse
 
 
 class ReferentielRepository:
@@ -58,3 +58,91 @@ class ReferentielRepository:
         with self._conn.cursor(row_factory=class_row(TypeCourse)) as cur:
             cur.execute("SELECT id, libelle, description FROM type_course ORDER BY libelle")
             return cur.fetchall()
+
+    # -- get-or-create : cf. L013 §3.3 (idempotence), utilisées par la collecte -----
+
+    def get_or_create_hippodrome(self, nom: str, ville: str | None = None, pays: str | None = None) -> Hippodrome:
+        with self._conn.cursor(row_factory=class_row(Hippodrome)) as cur:
+            cur.execute(
+                """
+                INSERT INTO hippodrome (nom, ville, pays) VALUES (%s, %s, %s)
+                ON CONFLICT (nom) DO NOTHING
+                RETURNING id, nom, ville, pays, corde_id, altitude, latitude, longitude, cree_le
+                """,
+                (nom, ville, pays),
+            )
+            ligne = cur.fetchone()
+        return ligne if ligne is not None else self._get_hippodrome_par_nom(nom)
+
+    def _get_hippodrome_par_nom(self, nom: str) -> Hippodrome:
+        with self._conn.cursor(row_factory=class_row(Hippodrome)) as cur:
+            cur.execute(
+                "SELECT id, nom, ville, pays, corde_id, altitude, latitude, longitude, cree_le "
+                "FROM hippodrome WHERE nom = %s",
+                (nom,),
+            )
+            return cur.fetchone()
+
+    def get_or_create_discipline(self, libelle: str) -> Discipline:
+        with self._conn.cursor(row_factory=class_row(Discipline)) as cur:
+            cur.execute(
+                """
+                INSERT INTO discipline (libelle) VALUES (%s)
+                ON CONFLICT (libelle) DO NOTHING
+                RETURNING id, libelle, description
+                """,
+                (libelle,),
+            )
+            ligne = cur.fetchone()
+            if ligne is not None:
+                return ligne
+            cur.execute("SELECT id, libelle, description FROM discipline WHERE libelle = %s", (libelle,))
+            return cur.fetchone()
+
+    def get_or_create_surface(self, libelle: str) -> Surface:
+        with self._conn.cursor(row_factory=class_row(Surface)) as cur:
+            cur.execute(
+                """
+                INSERT INTO surface (libelle) VALUES (%s)
+                ON CONFLICT (libelle) DO NOTHING
+                RETURNING id, libelle, description
+                """,
+                (libelle,),
+            )
+            ligne = cur.fetchone()
+            if ligne is not None:
+                return ligne
+            cur.execute("SELECT id, libelle, description FROM surface WHERE libelle = %s", (libelle,))
+            return cur.fetchone()
+
+    def get_or_create_etat_piste(self, libelle: str) -> EtatPiste:
+        with self._conn.cursor(row_factory=class_row(EtatPiste)) as cur:
+            cur.execute(
+                """
+                INSERT INTO etat_piste (libelle) VALUES (%s)
+                ON CONFLICT (libelle) DO NOTHING
+                RETURNING id, libelle, indice
+                """,
+                (libelle,),
+            )
+            ligne = cur.fetchone()
+            if ligne is not None:
+                return ligne
+            cur.execute("SELECT id, libelle, indice FROM etat_piste WHERE libelle = %s", (libelle,))
+            return cur.fetchone()
+
+    def get_or_create_distance(self, distance: int, unite: str = "m") -> Distance:
+        with self._conn.cursor(row_factory=class_row(Distance)) as cur:
+            cur.execute(
+                """
+                INSERT INTO distance (distance, unite) VALUES (%s, %s)
+                ON CONFLICT (distance, unite) DO NOTHING
+                RETURNING id, distance, unite
+                """,
+                (distance, unite),
+            )
+            ligne = cur.fetchone()
+            if ligne is not None:
+                return ligne
+            cur.execute("SELECT id, distance, unite FROM distance WHERE distance = %s AND unite = %s", (distance, unite))
+            return cur.fetchone()
