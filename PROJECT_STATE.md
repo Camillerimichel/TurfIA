@@ -28,9 +28,16 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   à L031.1-L031.6, avec garde-fou anti-martingale.
 - **Service** (`src/services/analyse_service.py`) : orchestre la chaîne L006 §3.
 - **API** (`api/`) : FastAPI versionnée (`/api/v1`), enveloppe de réponse normalisée
-  (L032.1 §6), gestion d'erreurs centralisée (L023 §4.1), endpoints `/system/health`,
-  `/system/version`, `GET /hippodromes`.
-- **Tests** (`tests/unit/`) : 61 tests (algorithmes + configuration), tous verts.
+  (L032.1 §6), gestion d'erreurs centralisée y compris 404/422 (L023 §4.1, L016 §7).
+  Endpoints : `/system/health`, `/system/version`, `GET /hippodromes`,
+  `POST/GET /reunions`, `POST/GET /reunions/{id}/courses`, `GET /courses/{id}`,
+  `POST /chevaux`, `POST/GET /courses/{id}/partants`,
+  `POST/GET /courses/{id}/analyses`, `GET /analyses/{id}` — le flux complet
+  réunion → course → chevaux → partants → déclenchement d'analyse → relecture est
+  pilotable de bout en bout via HTTP.
+- **Tests** : 61 tests unitaires (algorithmes + configuration) + 7 tests
+  d'intégration API (repositories en mémoire, `tests/integration/`), tous verts
+  (68 au total).
 
 ## Correction notable apportée au SAD pendant l'implémentation
 
@@ -45,23 +52,29 @@ conceptuel et les colonnes `analyse_id` sont inchangés.
 - Automatisations planifiées (L017/L033) — aucun scheduler, `automations/` est un
   squelette vide.
 - Interface HTML (L018) — `html/` est un squelette vide.
-- Surface API complète : seuls `/system/*` et `GET /hippodromes` existent ; le reste
-  des ressources décrites en L032.2/L032.3 (courses, analyses, statistiques,
-  administration...) reste à exposer.
+- Surface API encore partielle : pas de mise à jour/suppression (PUT/PATCH/DELETE)
+  sur aucune ressource ; pas d'endpoints pour jockeys/entraineurs/résultats/cotes/
+  statistiques/administration (cf. L032.2/L032.3 pour la liste complète cible).
 - Authentification/RBAC réels (L021/L034) — aucune vérification d'identité n'est
   implémentée ; toutes les routes actuelles sont non protégées.
 - Module statistiques (L030.4, L031.7) — aucun code.
 - Collecte/import des données sources (L009, L010) — aucun code ; `AnalyseService`
-  suppose des indicateurs déjà calculés fournis en entrée.
+  et `POST /courses/{id}/analyses` supposent des indicateurs déjà calculés fournis
+  en entrée (sous-scores, cotes), pas de récupération automatique depuis une source
+  externe.
+- Validation d'existence incomplète sur les FK optionnelles : `jockey_id` et
+  `entraineur_id` d'un partant ne sont pas vérifiés avant insertion (contrairement à
+  `cheval_id`) ; une valeur invalide remonte aujourd'hui en erreur 500 générique
+  plutôt qu'en 404 ciblé.
 - CI/CD ; le `Dockerfile`/`docker-compose.yml` sont un socle minimal, non durcis pour
   la production (mots de passe par défaut, pas de secrets management réel).
 
 ## Prochaine étape
 
 Selon la priorité métier : soit la collecte de données réelle (L009/L010) pour
-alimenter `AnalyseService` avec de vraies indicateurs, soit l'extension de la surface
-API (L032.2/L032.3) pour couvrir courses/analyses/statistiques en écriture comme en
-lecture.
+alimenter le déclenchement d'analyse avec de vraies indicateurs plutôt que des
+valeurs saisies à la main, soit la poursuite de l'extension de la surface API
+(jockeys/entraineurs/résultats/cotes/statistiques, puis authentification réelle).
 
 ## Conventions de développement
 
