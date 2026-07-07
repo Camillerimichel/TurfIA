@@ -32,8 +32,9 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   Endpoints : `/system/health`, `/system/version`, `GET /hippodromes`,
   `POST/GET /reunions`, `POST/GET /reunions/{id}/courses`, `GET /courses/{id}`,
   `POST /chevaux`, `POST/GET /courses/{id}/partants`,
-  `POST/GET /courses/{id}/analyses`, `GET /analyses/{id}` — le flux complet
-  réunion → course → chevaux → partants → déclenchement d'analyse → relecture est
+  `POST/GET /courses/{id}/analyses`, `POST /courses/{id}/analyses/auto`,
+  `GET /analyses/{id}` — le flux complet réunion → course → chevaux → partants →
+  déclenchement d'analyse (manuel ou automatique depuis la collecte) → relecture est
   pilotable de bout en bout via HTTP.
 - **Collecte** (`src/collecte/`) : architecture multi-sources en 4 niveaux (données
   officielles, marché, consensus presse, base TurfIA propriétaire). Registre
@@ -55,9 +56,21 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   disponible — tout en get-or-create idempotent. Script manuel
   `scripts/collecter_programme.py --date DDMMYYYY`. Aucune tâche planifiée
   (L017/L033 hors périmètre).
+- **Indicateurs réels** (`src/algorithms/indicateurs.py`) : sous-scores Marché
+  (probabilité implicite du marché, marge neutralisée, normalisée sur le champ) et
+  Forme (moyenne normalisée des dernières positions, format « musique » PMU parsé et
+  vérifié sur données réelles) ; approximation partielle du risque par la taille du
+  champ. `PreparationDonneesService.preparer_donnees_partants(course_id)`
+  (`src/services/preparation_service.py`) construit ces indicateurs à partir des
+  données déjà collectées et les met en forme pour `AnalyseService` — exclut les
+  non-partants et les partants sans cote collectée plutôt que d'inventer une valeur.
+  Exposé via `POST /courses/{id}/analyses/auto` et `scripts/analyser_course.py
+  --course-id N` : la boucle collecte → indicateurs → analyse est désormais complète
+  et automatique, sans saisie manuelle.
 - **Tests** : 61 tests unitaires (algorithmes + configuration) + 14 tests unitaires
-  (mappers PMU, sur fixtures JSON réelles capturées) + 7 tests d'intégration API
-  (repositories en mémoire, `tests/integration/`), tous verts (82 au total).
+  (mappers PMU) + 12 tests unitaires (indicateurs Marché/Forme/risque) + 10 tests
+  d'intégration API (repositories en mémoire, `tests/integration/`), tous verts
+  (107 au total).
 
 ## Correction notable apportée au SAD pendant l'implémentation
 
@@ -107,11 +120,17 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
 - Authentification/RBAC réels (L021/L034) — aucune vérification d'identité n'est
   implémentée ; toutes les routes actuelles sont non protégées.
 - Module statistiques (L030.4, L031.7) — aucun code.
-- Collecte de niveau 1/2 partiellement implémentée (PMU uniquement, cf. ci-dessus) ;
-  `AnalyseService` reste alimenté à la main pour les sous-scores (marché/forme/
-  aptitude/etc.) — la collecte importe les données brutes (partants, cotes,
-  résultats) mais ne calcule pas encore les indicateurs d'entrée de l'analyse.
-- Niveau 3 (consensus presse) non implémenté (cf. limites connues ci-dessus).
+- Collecte de niveau 1/2 partiellement implémentée (PMU uniquement, cf. ci-dessus).
+- Seuls les sous-scores Marché et Forme sont calculés automatiquement depuis les
+  données collectées (cf. `PreparationDonneesService`). Les familles Professionnels
+  (statistiques jockey/entraineur), Historique (hippodrome/distance) et Aptitude
+  (terrain) documentées en L031.2 §3 nécessitent des requêtes d'agrégation
+  supplémentaires, non construites dans cette tranche. Le risque de la course n'est
+  approximé que par la taille du champ (`calculer_indicateur_risque_taille_champ`) ;
+  les autres facteurs de risque documentés (volatilité du marché, désaccord presse,
+  changement de terrain, cf. L031.3 §3) restent hors périmètre.
+- Niveau 3 (consensus presse) non implémenté (cf. limites connues ci-dessus) : la
+  famille de critères « Presse » n'est donc alimentée par aucun indicateur réel.
 - Validation d'existence incomplète sur les FK optionnelles : `jockey_id` et
   `entraineur_id` d'un partant ne sont pas vérifiés avant insertion (contrairement à
   `cheval_id`) ; une valeur invalide remonte aujourd'hui en erreur 500 générique
@@ -121,11 +140,12 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
 
 ## Prochaine étape
 
-Selon la priorité métier : calcul des sous-scores d'entrée de l'analyse à partir des
-données désormais collectées (marché/forme, cf. `src/algorithms/normalisation.py`),
-exploration d'une deuxième source niveau 1 (France Galop) ou niveau 3 (Paris-Turf)
-pour sortir du mono-source PMU, ou poursuite de l'extension de la surface API
-(jockeys/entraineurs/résultats/cotes/statistiques, puis authentification réelle).
+Selon la priorité métier : exploration d'une deuxième source niveau 1 (France Galop)
+ou niveau 3 (Paris-Turf, pour sortir du mono-source PMU et alimenter enfin la famille
+Presse), indicateurs Professionnels/Historique/Aptitude (nécessitent des requêtes
+d'agrégation sur les données déjà collectées), ou poursuite de l'extension de la
+surface API (jockeys/entraineurs/résultats/cotes/statistiques, puis authentification
+réelle).
 
 ## Conventions de développement
 
