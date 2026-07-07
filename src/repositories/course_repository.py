@@ -402,3 +402,88 @@ class CourseRepository:
                 (resultat.course_id, resultat.classement),
             )
             return cur.fetchone()
+
+    def compter_performances_jockey(self, jockey_id: int, exclure_course_id: int) -> tuple[int, int]:
+        """(victoires, courses) du jockey hors course en cours d'analyse — cf.
+        L031.2 famille Professionnels."""
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) FILTER (WHERE r.classement = 1 AND NOT r.disqualification), COUNT(*)
+                FROM partant p
+                JOIN resultat r ON r.partant_id = p.id
+                WHERE p.jockey_id = %s AND p.course_id != %s AND NOT r.non_partant
+                """,
+                (jockey_id, exclure_course_id),
+            )
+            return cur.fetchone()
+
+    def compter_performances_entraineur(self, entraineur_id: int, exclure_course_id: int) -> tuple[int, int]:
+        """(victoires, courses) de l'entraîneur hors course en cours d'analyse — cf.
+        L031.2 famille Professionnels."""
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) FILTER (WHERE r.classement = 1 AND NOT r.disqualification), COUNT(*)
+                FROM partant p
+                JOIN resultat r ON r.partant_id = p.id
+                WHERE p.entraineur_id = %s AND p.course_id != %s AND NOT r.non_partant
+                """,
+                (entraineur_id, exclure_course_id),
+            )
+            return cur.fetchone()
+
+    def compter_performances_couple(
+        self, jockey_id: int, entraineur_id: int, exclure_course_id: int
+    ) -> tuple[int, int]:
+        """(victoires, courses) du couple jockey/entraîneur hors course en cours
+        d'analyse — cf. L031.2 famille Professionnels."""
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) FILTER (WHERE r.classement = 1 AND NOT r.disqualification), COUNT(*)
+                FROM partant p
+                JOIN resultat r ON r.partant_id = p.id
+                WHERE p.jockey_id = %s AND p.entraineur_id = %s AND p.course_id != %s AND NOT r.non_partant
+                """,
+                (jockey_id, entraineur_id, exclure_course_id),
+            )
+            return cur.fetchone()
+
+    def compter_performances_cheval_hippodrome(
+        self, cheval_id: int, hippodrome_id: int, exclure_course_id: int
+    ) -> tuple[int, int]:
+        """(victoires, courses) du cheval à cet hippodrome hors course en cours
+        d'analyse — cf. L031.2 famille Historique (cf. L031.1 §5 : Historique = Hippodrome)."""
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) FILTER (WHERE r.classement = 1 AND NOT r.disqualification), COUNT(*)
+                FROM partant p
+                JOIN resultat r ON r.partant_id = p.id
+                JOIN course c ON c.id = p.course_id
+                JOIN reunion re ON re.id = c.reunion_id
+                WHERE p.cheval_id = %s AND re.hippodrome_id = %s AND p.course_id != %s AND NOT r.non_partant
+                """,
+                (cheval_id, hippodrome_id, exclure_course_id),
+            )
+            return cur.fetchone()
+
+    def compter_performances_cheval_conditions(
+        self, cheval_id: int, distance_id: int, surface_id: int, etat_piste_id: int, exclure_course_id: int
+    ) -> tuple[int, int]:
+        """(victoires, courses) du cheval dans les mêmes distance/surface/état de
+        piste, hors course en cours d'analyse — cf. L031.2 famille Aptitude."""
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) FILTER (WHERE r.classement = 1 AND NOT r.disqualification), COUNT(*)
+                FROM partant p
+                JOIN resultat r ON r.partant_id = p.id
+                JOIN course c ON c.id = p.course_id
+                WHERE p.cheval_id = %s AND c.distance_id = %s AND c.surface_id = %s AND c.etat_piste_id = %s
+                  AND p.course_id != %s AND NOT r.non_partant
+                """,
+                (cheval_id, distance_id, surface_id, etat_piste_id, exclure_course_id),
+            )
+            return cur.fetchone()
