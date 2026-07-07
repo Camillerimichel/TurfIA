@@ -790,6 +790,15 @@ Course
 
 ### 8.3 Table analyse
 
+> **Nom physique** : la table est créée en base sous le nom `analyses` (et non
+> `analyse`). Constaté à l'implémentation : PostgreSQL réserve `ANALYSE` comme alias
+> de la commande `ANALYZE`, ce qui provoque une erreur de syntaxe dès que
+> l'identifiant `analyse` (non qualifié par des guillemets) apparaît hors d'une
+> position `CREATE TABLE` (ex. `REFERENCES analyse(id)`, listes d'identifiants dans
+> `GRANT`). Le nom conceptuel « analyse » (une exécution du moteur TurfIA) est
+> inchangé ; seul l'identifiant SQL physique diffère. Les colonnes `analyse_id` ne
+> sont pas concernées.
+
 | Champ           | Type         |
 | --------------- | ------------ |
 | id              | BIGINT       |
@@ -1567,5 +1576,6 @@ Il constitue la référence unique pour le développement des scripts SQL, des m
 | --- | --- |
 | 1.0 | Version initiale |
 | 1.1 | Enrichissement industriel : métadonnées du document, colonnes d'audit, contraintes NOT NULL, actions référentielles ON DELETE/ON UPDATE, sécurité et contrôle d'accès par rôles applicatifs |
+| 1.2 | Correction post-implémentation : la table `analyse` est physiquement nommée `analyses` (collision avec le mot-clé PostgreSQL ANALYSE/ANALYZE), constaté lors de la vérification de la première implémentation (cf. §8.3) |
 
 *Fin du document L011.*

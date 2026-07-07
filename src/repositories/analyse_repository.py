@@ -1,4 +1,4 @@
-"""Repository des tables d'analyse — cf. L015 §6, L030.3.
+"""Repository des tables d'analyses — cf. L015 §6, L030.3.
 
 Aucune méthode de mise à jour n'est exposée : les analyses sont immuables après
 création (cf. ADR-002 de L001, L030.3 §1). Un recalcul crée une nouvelle version.
@@ -20,7 +20,7 @@ class AnalyseRepository:
         with self._conn.cursor(row_factory=class_row(Analyse)) as cur:
             cur.execute(
                 """
-                INSERT INTO analyse (
+                INSERT INTO analyses (
                     course_id, version, score_confiance, risque, roi_theorique,
                     decision, budget, commentaire
                 )
@@ -47,7 +47,7 @@ class AnalyseRepository:
                 """
                 SELECT id, course_id, version, date_calcul, score_confiance, risque,
                        roi_theorique, decision, budget, commentaire
-                FROM analyse WHERE id = %s
+                FROM analyses WHERE id = %s
                 """,
                 (analyse_id,),
             )
@@ -59,7 +59,7 @@ class AnalyseRepository:
                 """
                 SELECT id, course_id, version, date_calcul, score_confiance, risque,
                        roi_theorique, decision, budget, commentaire
-                FROM analyse WHERE course_id = %s ORDER BY version
+                FROM analyses WHERE course_id = %s ORDER BY version
                 """,
                 (course_id,),
             )
