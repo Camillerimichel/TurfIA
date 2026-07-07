@@ -10,7 +10,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from api.middlewares.error_handler import register_error_handlers
-from api.routes import referentiels, system
+from api.routes import analyses, courses, referentiels, system
 from src.core.config import get_settings
 from src.core.logging import configure_logging
 
@@ -28,3 +28,5 @@ register_error_handlers(app)
 
 app.include_router(system.router, prefix=settings.api_prefix)
 app.include_router(referentiels.router, prefix=settings.api_prefix)
+app.include_router(courses.router, prefix=settings.api_prefix)
+app.include_router(analyses.router, prefix=settings.api_prefix)
