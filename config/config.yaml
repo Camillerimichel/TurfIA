@@ -1,0 +1,11 @@
+# Configuration applicative non sensible (cf. L026 §3.2).
+# Les secrets (identifiants, clés) ne sont jamais placés ici : cf. .env / variables d'environnement.
+
+api:
+  prefix: /api/v1
+  pagination:
+    default_size: 50
+    max_size: 500
+
+logging:
+  format: json

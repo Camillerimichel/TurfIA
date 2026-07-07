@@ -1,0 +1,26 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: turfia
+      POSTGRES_USER: turfia_app
+      POSTGRES_PASSWORD: changeme
+    ports:
+      - "5432:5432"
+    volumes:
+      - turfia_db_data:/var/lib/postgresql/data
+
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://turfia_app:changeme@db:5432/turfia
+      APP_ENV: development
+      APP_PORT: 8000
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+volumes:
+  turfia_db_data:
