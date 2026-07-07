@@ -1,12 +1,11 @@
 """Calcul d'indicateurs réels à partir des données collectées — cf. L031.2 §3
-(familles de critères Marché, Forme et Presse), fonctions pures (cf. L006 §4.2).
+(familles Marché, Forme, Presse, Professionnels, Historique et Aptitude), fonctions
+pures (cf. L006 §4.2).
 
-Périmètre volontaire de cette tranche : uniquement les indicateurs calculables avec
-confiance à partir des données déjà collectées (cotes, musique, consensus presse
-Canalturf). Les familles Professionnels et Historique (statistiques agrégées
-jockey/entraineur/hippodrome) et Aptitude (distance/terrain) nécessitent des
-requêtes d'agrégation supplémentaires, non construites dans cette tranche (cf.
-PROJECT_STATE.md).
+« Historique » et « Aptitude » sont interprétées selon L031.1 §5 (performance passée
+du cheval à l'hippodrome, respectivement dans les mêmes distance/surface/état de
+piste) — la définition littérale de L031.2 (« performances TurfIA passées ») relève
+du futur module Statistiques (L031.7), non construit ici (cf. PROJECT_STATE.md).
 """
 
 from __future__ import annotations
@@ -108,6 +107,28 @@ def calculer_indicateur_presse(classement_numeros: list[int], numero_partant: in
     except ValueError:
         rang = pire_rang
     return normaliser(rang, minimum=1, maximum=pire_rang, inverse=True)
+
+
+def calculer_indicateur_reussite(nb_victoires: int, nb_courses: int, minimum_courses: int = 3) -> float:
+    """Sous-score de réussite (victoires / courses disputées), utilisé pour les
+    familles Historique (performance du cheval à l'hippodrome, cf. L031.1 §5) et
+    Aptitude (mêmes distance/surface/état de piste, cf. L031.2 §Aptitude), ainsi que
+    pour chacune des 3 variables de Professionnels (cf. `calculer_indicateur_professionnels`).
+
+    Retourne un score neutre si l'échantillon est trop petit (`nb_courses <
+    minimum_courses`) pour être statistiquement significatif, plutôt que de faire
+    reposer le score sur 1 ou 2 courses.
+    """
+    if nb_courses < minimum_courses:
+        return SCORE_NEUTRE_PAR_DEFAUT
+    return normaliser(nb_victoires / nb_courses, minimum=0.0, maximum=1.0)
+
+
+def calculer_indicateur_professionnels(score_jockey: float, score_entraineur: float, score_couple: float) -> float:
+    """Sous-score « Professionnels » (cf. L031.2 §Professionnels) : moyenne simple des
+    3 variables documentées (réussite jockey, réussite entraîneur, réussite du
+    couple) — aucune pondération distincte entre elles n'est documentée."""
+    return (score_jockey + score_entraineur + score_couple) / 3
 
 
 def calculer_indicateur_risque_taille_champ(nb_partants: int, minimum: int = 4, maximum: int = 20) -> float:

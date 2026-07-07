@@ -4,6 +4,8 @@ from src.algorithms.indicateurs import (
     SCORE_NEUTRE_PAR_DEFAUT,
     calculer_indicateur_forme,
     calculer_indicateur_presse,
+    calculer_indicateur_professionnels,
+    calculer_indicateur_reussite,
     calculer_indicateur_risque_taille_champ,
     calculer_indicateurs_marche,
     parser_musique,
@@ -71,6 +73,26 @@ def test_calculer_indicateur_presse_non_cite_recoit_le_pire_score():
     score_non_cite = calculer_indicateur_presse([15, 7, 4], numero_partant=99)
     assert score_non_cite < score_dernier_cite
     assert score_non_cite == 0.0
+
+
+def test_calculer_indicateur_reussite_echantillon_insuffisant():
+    assert calculer_indicateur_reussite(nb_victoires=1, nb_courses=2, minimum_courses=3) == SCORE_NEUTRE_PAR_DEFAUT
+
+
+def test_calculer_indicateur_reussite_toutes_victoires():
+    assert calculer_indicateur_reussite(nb_victoires=3, nb_courses=3) == 100.0
+
+
+def test_calculer_indicateur_reussite_aucune_victoire():
+    assert calculer_indicateur_reussite(nb_victoires=0, nb_courses=5) == 0.0
+
+
+def test_calculer_indicateur_reussite_taux_intermediaire():
+    assert calculer_indicateur_reussite(nb_victoires=2, nb_courses=4) == 50.0
+
+
+def test_calculer_indicateur_professionnels_moyenne_simple():
+    assert calculer_indicateur_professionnels(score_jockey=100.0, score_entraineur=50.0, score_couple=0.0) == 50.0
 
 
 def test_calculer_indicateur_risque_taille_champ_petit_champ():
