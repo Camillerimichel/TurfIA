@@ -19,6 +19,14 @@ from src.collecte.base import SourceInfo
 
 RAISON_NON_VERIFIEE = "Site non exploré/vérifié dans cette tranche (cf. plan de collecte)."
 RAISON_PROTECTION_ANTIBOT = "Protection anti-bot constatée à la vérification (HTTP 403/429)."
+RAISON_DIRECTIVE_ROBOTS_ANTHROPIC = (
+    "robots.txt bloque explicitement le user-agent anthropic-ai (Disallow: /), séparément de la "
+    "règle générale User-Agent: * — non exploré par choix, pas par indisponibilité technique."
+)
+RAISON_ROBOTS_CONTENU_BLOQUE = (
+    "robots.txt (User-agent: *) interdit les pages de pronostics/partants elles-mêmes, "
+    "indépendamment de toute protection anti-bot active."
+)
 
 SOURCES: tuple[SourceInfo, ...] = (
     # Niveau 1 — Données officielles (vérité terrain)
@@ -46,19 +54,29 @@ SOURCES: tuple[SourceInfo, ...] = (
     # Niveau 3 — Consensus presse
     SourceInfo(
         "Paris-Turf", niveau=3, role="Consensus presse, pronostics, dernières informations",
-        implementee=False, raison_si_non_implementee=RAISON_NON_VERIFIEE,
+        implementee=False, raison_si_non_implementee=RAISON_DIRECTIVE_ROBOTS_ANTHROPIC,
     ),
     SourceInfo(
         "Geny", niveau=3, role="Pronostics, avis des journalistes, statistiques",
-        implementee=False, raison_si_non_implementee=RAISON_PROTECTION_ANTIBOT,
+        implementee=False,
+        raison_si_non_implementee=(
+            RAISON_PROTECTION_ANTIBOT + " " + RAISON_ROBOTS_CONTENU_BLOQUE
+            + " (Disallow: /PronosticsPMU*, /PartantsPMU*, /FicheCheval*, /FicheJockey*, /StatsPMU*, etc.)"
+        ),
     ),
     SourceInfo(
-        "Canalturf", niveau=3, role="Pronostics, sélections, dernières informations",
-        implementee=False, raison_si_non_implementee=RAISON_NON_VERIFIEE,
+        "Canalturf",
+        niveau=3,
+        role=(
+            "Consensus presse multi-journaux (~14 titres) — Quinté+ du jour uniquement, "
+            "cf. src/collecte/canalturf/"
+        ),
+        implementee=True,
     ),
     SourceInfo(
         "ZEturf", niveau=3, role="Pronostics, cotes, commentaires",
-        implementee=False, raison_si_non_implementee=RAISON_NON_VERIFIEE,
+        implementee=False,
+        raison_si_non_implementee=RAISON_ROBOTS_CONTENU_BLOQUE + " (Disallow: /partants/)",
     ),
 )
 

@@ -200,9 +200,9 @@ collecte/
 (architecture multi-sources en 4 niveaux : données officielles, marché, consensus
 presse, base TurfIA propriétaire — cf. PROJECT_STATE.md pour le détail et le statut
 par source). Ce sous-répertoire n'était pas anticipé dans la version initiale de ce
-document ; il regroupe les adaptateurs par source (ex. `collecte/pmu/`) derrière une
-interface commune (`collecte/base.py`), au même niveau que `algorithms/` ou
-`repositories/`.
+document ; il regroupe les adaptateurs par source (ex. `collecte/pmu/`,
+`collecte/canalturf/`) derrière une interface commune (`collecte/base.py`), au même
+niveau que `algorithms/` ou `repositories/`.
 
 ---
 
