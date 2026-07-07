@@ -1,0 +1,16 @@
+-- Migration initiale : création de l'ensemble du schéma TurfIA.
+-- Cf. L013 §2.2 (convention de nommage) et §5.1 (migration de création).
+--
+-- Cette migration ne duplique pas le DDL : elle référence les fichiers de sql/schema/
+-- (source de vérité du schéma, cf. L011/L030.x) via des directives INCLUDE résolues par
+-- scripts/run_migrations.py. Le checksum enregistré porte sur le contenu résolu, afin de
+-- détecter toute divergence entre la migration exécutée et l'état actuel de sql/schema/.
+
+-- INCLUDE: ../schema/00_roles.sql
+-- INCLUDE: ../schema/01_referentiels.sql
+-- INCLUDE: ../schema/02_metier.sql
+-- INCLUDE: ../schema/03_analyses.sql
+-- INCLUDE: ../schema/04_statistiques.sql
+-- INCLUDE: ../schema/05_techniques.sql
+-- INCLUDE: ../schema/06_grants.sql
+-- INCLUDE: ../seeds/01_referentiels_seed.sql
