@@ -3,6 +3,7 @@ import pytest
 from src.algorithms.indicateurs import (
     SCORE_NEUTRE_PAR_DEFAUT,
     calculer_indicateur_forme,
+    calculer_indicateur_risque_taille_champ,
     calculer_indicateurs_marche,
     parser_musique,
 )
@@ -53,3 +54,11 @@ def test_calculer_indicateurs_marche_cote_absente_recoit_score_neutre():
 
 def test_calculer_indicateurs_marche_toutes_cotes_absentes():
     assert calculer_indicateurs_marche([None, None]) == [SCORE_NEUTRE_PAR_DEFAUT, SCORE_NEUTRE_PAR_DEFAUT]
+
+
+def test_calculer_indicateur_risque_taille_champ_petit_champ():
+    assert calculer_indicateur_risque_taille_champ(4) == 0.0
+
+
+def test_calculer_indicateur_risque_taille_champ_grand_champ():
+    assert calculer_indicateur_risque_taille_champ(20) == 100.0

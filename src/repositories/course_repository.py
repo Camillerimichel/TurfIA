@@ -354,6 +354,24 @@ class CourseRepository:
             )
             return cur.fetchone()
 
+    def get_dernieres_cotes_par_course(self, course_id: int) -> dict[int, float]:
+        """Dernière cote connue (la plus récente `date_maj`) par partant d'une
+        course, cf. L031.2 famille Marché. Un partant sans cote collectée est
+        simplement absent du dictionnaire retourné.
+        """
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT ON (co.partant_id) co.partant_id, co.cote
+                FROM cote co
+                JOIN partant pa ON pa.id = co.partant_id
+                WHERE pa.course_id = %s
+                ORDER BY co.partant_id, co.date_maj DESC
+                """,
+                (course_id,),
+            )
+            return {partant_id: float(cote) for partant_id, cote in cur.fetchall()}
+
     def get_or_create_resultat(self, resultat: Resultat) -> Resultat:
         with self._conn.cursor(row_factory=class_row(Resultat)) as cur:
             cur.execute(
