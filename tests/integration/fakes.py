@@ -154,3 +154,14 @@ class FakeAnalyseRepository:
 
     def create_controle_roi(self, controle):
         return dataclasses.replace(controle, id=self._ids.next())
+
+
+class FakeConsensusPresseService:
+    """Remplace ConsensusPresseService dans les tests d'intégration — aucun accès
+    réseau (cf. L020 §2.2). `classement` est configurable par le test."""
+
+    def __init__(self, classement: list[int] | None = None) -> None:
+        self.classement = classement
+
+    def recuperer_classement_presse(self, numero_reunion: int, numero_course: int) -> list[int] | None:
+        return self.classement
