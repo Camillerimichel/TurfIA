@@ -60,12 +60,22 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
 - **Indicateurs réels** (`src/algorithms/indicateurs.py`) : sous-scores Marché
   (probabilité implicite du marché, marge neutralisée, normalisée sur le champ),
   Forme (moyenne normalisée des dernières positions, format « musique » PMU parsé et
-  vérifié sur données réelles) et Presse (rang dans le consensus multi-journaux
-  Canalturf, cf. ci-dessous) ; approximation partielle du risque par la taille du
-  champ. `PreparationDonneesService.preparer_donnees_partants(course_id)`
+  vérifié sur données réelles), Presse (rang dans le consensus multi-journaux
+  Canalturf, cf. ci-dessous), Professionnels (moyenne des taux de victoires
+  jockey/entraîneur/couple), Historique (taux de victoires du cheval à cet
+  hippodrome, cf. L031.1 §5) et Aptitude (taux de victoires du cheval dans les mêmes
+  distance/surface/état de piste) ; approximation partielle du risque par la taille
+  du champ. `PreparationDonneesService.preparer_donnees_partants(course_id)`
   (`src/services/preparation_service.py`) construit ces indicateurs à partir des
   données déjà collectées et les met en forme pour `AnalyseService` — exclut les
   non-partants et les partants sans cote collectée plutôt que d'inventer une valeur.
+  Professionnels/Historique/Aptitude s'appuient sur 5 requêtes d'agrégation SQL
+  ajoutées à `CourseRepository` (`compter_performances_*`, victoires/courses en
+  excluant la course en cours), transformées en score via
+  `calculer_indicateur_reussite` (score neutre si l'échantillon a moins de 3
+  courses). Professionnels est absente si ni jockey ni entraîneur ne sont connus ;
+  Aptitude est absente si la course ne connaît pas ses distance/surface/état de
+  piste ; Historique est toujours calculée (hippodrome toujours connu).
   Le sous-score Presse est best-effort : `ConsensusPresseService`
   (`src/services/consensus_presse_service.py`) est un collaborateur optionnel (défaut
   `None`) et toute indisponibilité de Canalturf (`ImportationError`) est journalisée
@@ -82,10 +92,11 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   Quinté+ du jour** (1 course/jour) : vérifié réellement que ce bloc n'existe sur
   aucune autre course de la page Canalturf.
 - **Tests** : 61 tests unitaires (algorithmes + configuration) + 14 tests unitaires
-  (mappers PMU) + 9 tests unitaires (mappers Canalturf) + 18 tests unitaires
-  (indicateurs Marché/Forme/Presse/risque) + 10 tests d'intégration API + 3 tests
-  d'intégration du branchement presse (repositories/services en mémoire,
-  `tests/integration/`), tous verts (122 au total).
+  (mappers PMU) + 9 tests unitaires (mappers Canalturf) + 23 tests unitaires
+  (indicateurs Marché/Forme/Presse/Professionnels-Historique-Aptitude/risque) + 10
+  tests d'intégration API + 3 tests d'intégration du branchement presse + 5 tests
+  d'intégration du branchement Professionnels/Historique/Aptitude (repositories/
+  services en mémoire, `tests/integration/`), tous verts (132 au total).
 
 ## Correction notable apportée au SAD pendant l'implémentation
 
@@ -97,6 +108,15 @@ conceptuel et les colonnes `analyse_id` sont inchangés.
 
 `src/collecte/` n'était pas anticipé dans L014 (arborescence) — ajouté avec une note
 explicite dans L014 §6.1.1.
+
+L031.2 §3 définit la famille « Historique » comme « performances TurfIA passées »,
+sans détail. L031.1 §5 (tableau des familles, cohérent avec le code) précise
+« Historique → Hippodrome » : interprété comme la performance passée du cheval à cet
+hippodrome précis, pas comme une méta-mesure de la performance passée du moteur
+TurfIA lui-même (qui relèverait du futur module Statistiques, L031.7, non
+implémenté). Aptitude est bornée à distance/surface/état de piste (le facteur
+hippodrome de L031.2 étant déjà couvert par Historique, pour éviter un double
+comptage).
 
 ## Cadrage sur la collecte PMU (transparence, pas un refus)
 
@@ -143,17 +163,21 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
   statistiques/administration (cf. L032.2/L032.3 pour la liste complète cible).
 - Authentification/RBAC réels (L021/L034) — aucune vérification d'identité n'est
   implémentée ; toutes les routes actuelles sont non protégées.
-- Module statistiques (L030.4, L031.7) — aucun code.
+- Module statistiques (L030.4, L031.7) — aucun code. La vraie définition L031.2 de
+  « Historique » (performance passée du moteur TurfIA lui-même) en dépend et n'est
+  donc pas implémentée ; seule l'interprétation L031.1 (hippodrome) l'est (cf.
+  ci-dessus).
 - Collecte de niveau 1/2 partiellement implémentée (PMU uniquement, cf. ci-dessus).
-- Seuls les sous-scores Marché, Forme et Presse (Quinté+ uniquement, cf. limites
-  connues ci-dessus) sont calculés automatiquement depuis les données collectées
-  (cf. `PreparationDonneesService`). Les familles Professionnels (statistiques
-  jockey/entraineur), Historique (hippodrome/distance) et Aptitude (terrain)
-  documentées en L031.2 §3 nécessitent des requêtes d'agrégation supplémentaires,
-  non construites dans cette tranche. Le risque de la course n'est approximé que
-  par la taille du champ (`calculer_indicateur_risque_taille_champ`) ; les autres
-  facteurs de risque documentés (volatilité du marché, désaccord presse, changement
-  de terrain, cf. L031.3 §3) restent hors périmètre.
+- Tous les sous-scores de `src/algorithms/score.py` sont désormais calculés
+  automatiquement depuis les données collectées, à l'exception de Value et Contexte
+  (non traités dans les tranches Indicateurs/Presse/Professionnels-Historique-
+  Aptitude). Le risque de la course n'est approximé que par la taille du champ
+  (`calculer_indicateur_risque_taille_champ`) ; les autres facteurs de risque
+  documentés (volatilité du marché, désaccord presse, changement de terrain, cf.
+  L031.3 §3) restent hors périmètre.
+- Les requêtes `compter_performances_*` s'exécutent une par une par partant (jusqu'à
+  5 requêtes SQL par partant) — proportionné au volume actuel (déclenchement manuel),
+  non optimisé (pas de requête groupée/matérialisée) si le volume devait augmenter.
 - Validation d'existence incomplète sur les FK optionnelles : `jockey_id` et
   `entraineur_id` d'un partant ne sont pas vérifiés avant insertion (contrairement à
   `cheval_id`) ; une valeur invalide remonte aujourd'hui en erreur 500 générique
@@ -163,11 +187,13 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
 
 ## Prochaine étape
 
-Indicateurs Professionnels/Historique/Aptitude (nécessitent des requêtes
-d'agrégation sur les données déjà collectées, pas de nouvelle source réseau — cf.
-L031.2 §3). Pistes plus lointaines : exploration d'une deuxième source niveau 1
-(France Galop), poursuite de l'extension de la surface API (jockeys/entraineurs/
-résultats/cotes/statistiques, puis authentification réelle).
+Toutes les familles du Score TurfIA calculables sans nouvelle source ou module sont
+désormais implémentées (Marché, Forme, Presse, Professionnels, Historique,
+Aptitude). Pistes possibles : exploration d'une deuxième source niveau 1 (France
+Galop) ou niveau 3 (pour sortir du Quinté+-only de Canalturf), module Statistiques
+(L031.7, pour la vraie définition L031.2 de « Historique » et pour Value/Contexte),
+poursuite de l'extension de la surface API (jockeys/entraineurs/résultats/cotes/
+statistiques, puis authentification réelle).
 
 ## Conventions de développement
 
