@@ -5,7 +5,7 @@ from __future__ import annotations
 import psycopg
 from psycopg.rows import class_row
 
-from src.models.course import Course, Partant, Reunion
+from src.models.course import Cheval, Course, Entraineur, Jockey, Partant, Reunion
 
 
 class CourseRepository:
@@ -138,3 +138,69 @@ class CourseRepository:
                 (course_id,),
             )
             return cur.fetchall()
+
+    def create_cheval(self, cheval: Cheval) -> Cheval:
+        with self._conn.cursor(row_factory=class_row(Cheval)) as cur:
+            cur.execute(
+                """
+                INSERT INTO cheval (nom, sexe, date_naissance, pere, mere, gains, musique, actif)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, nom, sexe, date_naissance, pere, mere, gains, musique, actif
+                """,
+                (
+                    cheval.nom,
+                    cheval.sexe,
+                    cheval.date_naissance,
+                    cheval.pere,
+                    cheval.mere,
+                    cheval.gains,
+                    cheval.musique,
+                    cheval.actif,
+                ),
+            )
+            return cur.fetchone()
+
+    def get_cheval(self, cheval_id: int) -> Cheval | None:
+        with self._conn.cursor(row_factory=class_row(Cheval)) as cur:
+            cur.execute(
+                """
+                SELECT id, nom, sexe, date_naissance, pere, mere, gains, musique, actif
+                FROM cheval WHERE id = %s
+                """,
+                (cheval_id,),
+            )
+            return cur.fetchone()
+
+    def create_jockey(self, jockey: Jockey) -> Jockey:
+        with self._conn.cursor(row_factory=class_row(Jockey)) as cur:
+            cur.execute(
+                """
+                INSERT INTO jockey (nom, prenom, licence, actif)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id, nom, prenom, licence, actif
+                """,
+                (jockey.nom, jockey.prenom, jockey.licence, jockey.actif),
+            )
+            return cur.fetchone()
+
+    def get_jockey(self, jockey_id: int) -> Jockey | None:
+        with self._conn.cursor(row_factory=class_row(Jockey)) as cur:
+            cur.execute("SELECT id, nom, prenom, licence, actif FROM jockey WHERE id = %s", (jockey_id,))
+            return cur.fetchone()
+
+    def create_entraineur(self, entraineur: Entraineur) -> Entraineur:
+        with self._conn.cursor(row_factory=class_row(Entraineur)) as cur:
+            cur.execute(
+                """
+                INSERT INTO entraineur (nom, prenom, actif)
+                VALUES (%s, %s, %s)
+                RETURNING id, nom, prenom, actif
+                """,
+                (entraineur.nom, entraineur.prenom, entraineur.actif),
+            )
+            return cur.fetchone()
+
+    def get_entraineur(self, entraineur_id: int) -> Entraineur | None:
+        with self._conn.cursor(row_factory=class_row(Entraineur)) as cur:
+            cur.execute("SELECT id, nom, prenom, actif FROM entraineur WHERE id = %s", (entraineur_id,))
+            return cur.fetchone()

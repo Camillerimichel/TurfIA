@@ -127,6 +127,28 @@ class AnalyseRepository:
             )
             return cur.fetchone()
 
+    def list_selections_by_analyse(self, analyse_id: int) -> list[Selection]:
+        with self._conn.cursor(row_factory=class_row(Selection)) as cur:
+            cur.execute(
+                """
+                SELECT id, analyse_id, partant_id, categorie, ordre_affichage
+                FROM selection WHERE analyse_id = %s ORDER BY ordre_affichage
+                """,
+                (analyse_id,),
+            )
+            return cur.fetchall()
+
+    def list_paris_by_analyse(self, analyse_id: int) -> list[Pari]:
+        with self._conn.cursor(row_factory=class_row(Pari)) as cur:
+            cur.execute(
+                """
+                SELECT id, analyse_id, type_pari, combinaison, mise, gain_estime, roi_estime
+                FROM pari WHERE analyse_id = %s
+                """,
+                (analyse_id,),
+            )
+            return cur.fetchall()
+
     def create_controle_roi(self, controle: ControleRoi) -> ControleRoi:
         with self._conn.cursor(row_factory=class_row(ControleRoi)) as cur:
             cur.execute(
