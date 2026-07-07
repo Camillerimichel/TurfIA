@@ -35,9 +35,29 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   `POST/GET /courses/{id}/analyses`, `GET /analyses/{id}` — le flux complet
   réunion → course → chevaux → partants → déclenchement d'analyse → relecture est
   pilotable de bout en bout via HTTP.
-- **Tests** : 61 tests unitaires (algorithmes + configuration) + 7 tests
-  d'intégration API (repositories en mémoire, `tests/integration/`), tous verts
-  (68 au total).
+- **Collecte** (`src/collecte/`) : architecture multi-sources en 4 niveaux (données
+  officielles, marché, consensus presse, base TurfIA propriétaire). Registre
+  déclaratif de 12 sources (`src/collecte/registre.py`) avec statut vérifié par accès
+  réseau réel le 2026-07-07 :
+  | Source | Niveau | Statut |
+  | --- | --- | --- |
+  | PMU | 1 (officiel) + 2 (marché) | **Implémentée** (`src/collecte/pmu/`) |
+  | France Galop | 1 | Non implémentée — site atteignable (HTTP 301), structure non explorée |
+  | LeTROT | 1 | Non implémentée — protection anti-bot (HTTP 403) |
+  | ZEbet, Genybet, Unibet, Betclic | 2 | Non implémentées — non explorées |
+  | Paris-Turf | 3 | Non implémentée — site atteignable (HTTP 200), structure non explorée |
+  | Geny | 3 | Non implémentée — limitation immédiate (HTTP 429) |
+  | Canalturf, ZEturf | 3 | Non implémentées — non explorées |
+
+  `CollecteService.collecter_programme_du_jour(jour)` : programme + participants PMU
+  → référentiels (hippodrome/discipline/surface/état de piste/distance),
+  réunion/course/partant, cheval/jockey/entraineur, cote directe, résultat si
+  disponible — tout en get-or-create idempotent. Script manuel
+  `scripts/collecter_programme.py --date DDMMYYYY`. Aucune tâche planifiée
+  (L017/L033 hors périmètre).
+- **Tests** : 61 tests unitaires (algorithmes + configuration) + 14 tests unitaires
+  (mappers PMU, sur fixtures JSON réelles capturées) + 7 tests d'intégration API
+  (repositories en mémoire, `tests/integration/`), tous verts (82 au total).
 
 ## Correction notable apportée au SAD pendant l'implémentation
 
@@ -46,6 +66,35 @@ physique `analyses` : PostgreSQL réserve `ANALYSE` comme alias de la commande
 `ANALYZE`, provoquant une erreur de syntaxe dès que l'identifiant est utilisé hors
 position `CREATE TABLE`. Documenté dans les deux livrables concernés ; le nom
 conceptuel et les colonnes `analyse_id` sont inchangés.
+
+`src/collecte/` n'était pas anticipé dans L014 (arborescence) — ajouté avec une note
+explicite dans L014 §6.1.1.
+
+## Cadrage sur la collecte PMU (transparence, pas un refus)
+
+L'adaptateur PMU utilise une API interne (non documentée publiquement pour un usage
+tiers, mais utilisée par le site/l'application PMU eux-mêmes, accessible sans
+authentification). Usage prévu : personnel, non commercial, volume faible
+(déclenchement manuel, pas de cron). Le respect des CGU du site PMU reste la
+responsabilité de l'utilisateur pour son usage ; le client applique par défaut un
+délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
+`src/collecte/pmu/client.py`) et un `User-Agent` explicite.
+
+## Limites connues de la collecte (documentées, pas cachées)
+
+- `corde` par course non collecté : le schéma ne porte `corde_id` qu'au niveau
+  `hippodrome` (cf. L011/L030.1), alors que PMU le fournit par course — nécessiterait
+  une migration de schéma, hors périmètre de cette tranche.
+- `get_or_create_cheval/jockey/entraineur` par nom sont non atomiques (SELECT puis
+  INSERT, cf. L030.2 absence de contrainte UNIQUE) — acceptable pour un script manuel
+  non concurrent, à revoir si la collecte devient concurrente ou planifiée.
+- Aucun historique d'évolution des cotes n'est conservé au-delà de la dernière cote
+  directe collectée à chaque exécution (plusieurs exécutions dans la journée créent
+  bien plusieurs lignes `cote`, cf. L011 §15, mais sans polling automatique).
+- Niveau 3 (consensus presse) non implémenté : aucune source presse n'a été vérifiée
+  en profondeur ; la famille de critères « Presse » de `src/algorithms/score.py`
+  (`PONDERATIONS_PAR_DEFAUT["presse"]`) doit donc être alimentée manuellement pour
+  l'instant.
 
 ## Explicitement hors périmètre (travail futur, non implémenté)
 
@@ -58,10 +107,11 @@ conceptuel et les colonnes `analyse_id` sont inchangés.
 - Authentification/RBAC réels (L021/L034) — aucune vérification d'identité n'est
   implémentée ; toutes les routes actuelles sont non protégées.
 - Module statistiques (L030.4, L031.7) — aucun code.
-- Collecte/import des données sources (L009, L010) — aucun code ; `AnalyseService`
-  et `POST /courses/{id}/analyses` supposent des indicateurs déjà calculés fournis
-  en entrée (sous-scores, cotes), pas de récupération automatique depuis une source
-  externe.
+- Collecte de niveau 1/2 partiellement implémentée (PMU uniquement, cf. ci-dessus) ;
+  `AnalyseService` reste alimenté à la main pour les sous-scores (marché/forme/
+  aptitude/etc.) — la collecte importe les données brutes (partants, cotes,
+  résultats) mais ne calcule pas encore les indicateurs d'entrée de l'analyse.
+- Niveau 3 (consensus presse) non implémenté (cf. limites connues ci-dessus).
 - Validation d'existence incomplète sur les FK optionnelles : `jockey_id` et
   `entraineur_id` d'un partant ne sont pas vérifiés avant insertion (contrairement à
   `cheval_id`) ; une valeur invalide remonte aujourd'hui en erreur 500 générique
@@ -71,9 +121,10 @@ conceptuel et les colonnes `analyse_id` sont inchangés.
 
 ## Prochaine étape
 
-Selon la priorité métier : soit la collecte de données réelle (L009/L010) pour
-alimenter le déclenchement d'analyse avec de vraies indicateurs plutôt que des
-valeurs saisies à la main, soit la poursuite de l'extension de la surface API
+Selon la priorité métier : calcul des sous-scores d'entrée de l'analyse à partir des
+données désormais collectées (marché/forme, cf. `src/algorithms/normalisation.py`),
+exploration d'une deuxième source niveau 1 (France Galop) ou niveau 3 (Paris-Turf)
+pour sortir du mono-source PMU, ou poursuite de l'extension de la surface API
 (jockeys/entraineurs/résultats/cotes/statistiques, puis authentification réelle).
 
 ## Conventions de développement

@@ -188,7 +188,21 @@ algorithms/
 statistics/
 
 utils/
+
+collecte/
 ```
+
+---
+
+### 6.1.1 Écart constaté à l'implémentation (collecte)
+
+`src/collecte/` a été ajouté lors de l'implémentation de la collecte de données
+(architecture multi-sources en 4 niveaux : données officielles, marché, consensus
+presse, base TurfIA propriétaire — cf. PROJECT_STATE.md pour le détail et le statut
+par source). Ce sous-répertoire n'était pas anticipé dans la version initiale de ce
+document ; il regroupe les adaptateurs par source (ex. `collecte/pmu/`) derrière une
+interface commune (`collecte/base.py`), au même niveau que `algorithms/` ou
+`repositories/`.
 
 ---
 
@@ -384,5 +398,6 @@ mise à jour de ce document) avant sa mise en œuvre.
 | --- | --- |
 | 1.0 | Version initiale |
 | 1.1 | Enrichissement industriel : métadonnées du document, éléments exclus du versionnement Git, propriétaire fonctionnel par répertoire, règle de non-régression de l'arborescence |
+| 1.2 | Correction post-implémentation : ajout de `src/collecte/` (architecture multi-sources de collecte de données, non anticipé initialement), cf. §6.1.1 |
 
 *Fin du document L014.*
