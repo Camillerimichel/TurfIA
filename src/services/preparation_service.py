@@ -58,6 +58,8 @@ class PreparationDonneesService:
             )
 
         sous_risques_course = {
-            "champ": calculer_indicateur_risque_taille_champ(len(partants_exploitables)),
+            # "course" : famille documentée en L031.3 §3 (« Grand nombre de partants »),
+            # cf. src/algorithms/risque.py PONDERATIONS_PAR_DEFAUT.
+            "course": calculer_indicateur_risque_taille_champ(len(partants_exploitables)),
         }
         return donnees_partants, sous_risques_course

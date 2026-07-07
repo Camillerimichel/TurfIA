@@ -45,6 +45,7 @@ class FakeCourseRepository:
         self.jockeys: dict[int, object] = {}
         self.entraineurs: dict[int, object] = {}
         self.partants: dict[int, object] = {}
+        self.cotes: dict[int, float] = {}  # dernière cote par partant_id (simplifié pour les tests)
 
     def create_reunion(self, reunion):
         reunion = dataclasses.replace(reunion, id=self._ids.next())
@@ -96,6 +97,13 @@ class FakeCourseRepository:
 
     def list_partants_by_course(self, course_id: int):
         return [p for p in self.partants.values() if p.course_id == course_id]
+
+    def create_cote(self, cote):
+        self.cotes[cote.partant_id] = cote.cote
+        return dataclasses.replace(cote, id=self._ids.next())
+
+    def get_dernieres_cotes_par_course(self, course_id: int) -> dict[int, float]:
+        return {p.id: self.cotes[p.id] for p in self.list_partants_by_course(course_id) if p.id in self.cotes}
 
 
 class FakeAnalyseRepository:

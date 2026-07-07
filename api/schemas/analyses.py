@@ -29,6 +29,18 @@ class AnalyseTriggerIn(BaseModel):
     perte_precedente: bool = False
 
 
+class AnalyseAutoIn(BaseModel):
+    """Déclenchement automatique : les sous-scores et le risque sont calculés à
+    partir des données déjà collectées (cf. PreparationDonneesService), seuls les
+    paramètres de mise/budget restent à la discrétion de l'appelant.
+    """
+
+    version: int = 1
+    mise_reference: float = 10.0
+    budget_precedent: float = 0.0
+    perte_precedente: bool = False
+
+
 class AnalyseOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
