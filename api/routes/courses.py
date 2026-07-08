@@ -16,20 +16,26 @@ from api.schemas.common import Enveloppe
 from api.schemas.courses import (
     ChevalIn,
     ChevalOut,
+    ChevalPatch,
     CoteIn,
     CoteOut,
     CourseIn,
     CourseOut,
+    CoursePatch,
     EntraineurIn,
     EntraineurOut,
+    EntraineurPatch,
     JockeyIn,
     JockeyOut,
+    JockeyPatch,
     PartantIn,
     PartantOut,
+    PartantPatch,
     ResultatIn,
     ResultatOut,
     ReunionIn,
     ReunionOut,
+    ReunionPatch,
 )
 from src.models.course import Cheval, Cote, Course, Entraineur, Jockey, Partant, Resultat, Reunion
 from src.models.utilisateur import Utilisateur
@@ -54,6 +60,19 @@ def create_reunion(
 @router.get("/reunions/{reunion_id}", response_model=Enveloppe[ReunionOut])
 def get_reunion(reunion_id: int, repo: CourseRepository = Depends(get_course_repository)) -> Enveloppe[ReunionOut]:
     reunion = repo.get_reunion(reunion_id)
+    if reunion is None:
+        raise HTTPException(status_code=404, detail=f"Réunion {reunion_id} introuvable.")
+    return Enveloppe(data=ReunionOut.model_validate(reunion))
+
+
+@router.patch("/reunions/{reunion_id}", response_model=Enveloppe[ReunionOut])
+def update_reunion(
+    reunion_id: int,
+    payload: ReunionPatch,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+) -> Enveloppe[ReunionOut]:
+    reunion = repo.update_reunion(reunion_id, payload.model_dump(exclude_unset=True))
     if reunion is None:
         raise HTTPException(status_code=404, detail=f"Réunion {reunion_id} introuvable.")
     return Enveloppe(data=ReunionOut.model_validate(reunion))
@@ -87,6 +106,19 @@ def get_course(course_id: int, repo: CourseRepository = Depends(get_course_repos
     return Enveloppe(data=CourseOut.model_validate(course))
 
 
+@router.patch("/courses/{course_id}", response_model=Enveloppe[CourseOut])
+def update_course(
+    course_id: int,
+    payload: CoursePatch,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+) -> Enveloppe[CourseOut]:
+    course = repo.update_course(course_id, payload.model_dump(exclude_unset=True))
+    if course is None:
+        raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
+    return Enveloppe(data=CourseOut.model_validate(course))
+
+
 @router.post("/chevaux", response_model=Enveloppe[ChevalOut], status_code=201)
 def create_cheval(payload: ChevalIn, repo: CourseRepository = Depends(get_course_repository)) -> Enveloppe[ChevalOut]:
     cheval = repo.create_cheval(Cheval(**payload.model_dump()))
@@ -96,6 +128,19 @@ def create_cheval(payload: ChevalIn, repo: CourseRepository = Depends(get_course
 @router.get("/chevaux/{cheval_id}", response_model=Enveloppe[ChevalOut])
 def get_cheval(cheval_id: int, repo: CourseRepository = Depends(get_course_repository)) -> Enveloppe[ChevalOut]:
     cheval = repo.get_cheval(cheval_id)
+    if cheval is None:
+        raise HTTPException(status_code=404, detail=f"Cheval {cheval_id} introuvable.")
+    return Enveloppe(data=ChevalOut.model_validate(cheval))
+
+
+@router.patch("/chevaux/{cheval_id}", response_model=Enveloppe[ChevalOut])
+def update_cheval(
+    cheval_id: int,
+    payload: ChevalPatch,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+) -> Enveloppe[ChevalOut]:
+    cheval = repo.update_cheval(cheval_id, payload.model_dump(exclude_unset=True))
     if cheval is None:
         raise HTTPException(status_code=404, detail=f"Cheval {cheval_id} introuvable.")
     return Enveloppe(data=ChevalOut.model_validate(cheval))
@@ -115,6 +160,19 @@ def get_jockey(jockey_id: int, repo: CourseRepository = Depends(get_course_repos
     return Enveloppe(data=JockeyOut.model_validate(jockey))
 
 
+@router.patch("/jockeys/{jockey_id}", response_model=Enveloppe[JockeyOut])
+def update_jockey(
+    jockey_id: int,
+    payload: JockeyPatch,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+) -> Enveloppe[JockeyOut]:
+    jockey = repo.update_jockey(jockey_id, payload.model_dump(exclude_unset=True))
+    if jockey is None:
+        raise HTTPException(status_code=404, detail=f"Jockey {jockey_id} introuvable.")
+    return Enveloppe(data=JockeyOut.model_validate(jockey))
+
+
 @router.post("/entraineurs", response_model=Enveloppe[EntraineurOut], status_code=201)
 def create_entraineur(
     payload: EntraineurIn, repo: CourseRepository = Depends(get_course_repository)
@@ -128,6 +186,19 @@ def get_entraineur(
     entraineur_id: int, repo: CourseRepository = Depends(get_course_repository)
 ) -> Enveloppe[EntraineurOut]:
     entraineur = repo.get_entraineur(entraineur_id)
+    if entraineur is None:
+        raise HTTPException(status_code=404, detail=f"Entraîneur {entraineur_id} introuvable.")
+    return Enveloppe(data=EntraineurOut.model_validate(entraineur))
+
+
+@router.patch("/entraineurs/{entraineur_id}", response_model=Enveloppe[EntraineurOut])
+def update_entraineur(
+    entraineur_id: int,
+    payload: EntraineurPatch,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+) -> Enveloppe[EntraineurOut]:
+    entraineur = repo.update_entraineur(entraineur_id, payload.model_dump(exclude_unset=True))
     if entraineur is None:
         raise HTTPException(status_code=404, detail=f"Entraîneur {entraineur_id} introuvable.")
     return Enveloppe(data=EntraineurOut.model_validate(entraineur))
@@ -157,6 +228,36 @@ def list_partants(
         raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
     partants = repo.list_partants_by_course(course_id)
     return Enveloppe(data=[PartantOut.model_validate(p) for p in partants])
+
+
+@router.get("/partants/{partant_id}", response_model=Enveloppe[PartantOut])
+def get_partant(partant_id: int, repo: CourseRepository = Depends(get_course_repository)) -> Enveloppe[PartantOut]:
+    partant = repo.get_partant(partant_id)
+    if partant is None:
+        raise HTTPException(status_code=404, detail=f"Partant {partant_id} introuvable.")
+    return Enveloppe(data=PartantOut.model_validate(partant))
+
+
+@router.patch("/partants/{partant_id}", response_model=Enveloppe[PartantOut])
+def update_partant(
+    partant_id: int,
+    payload: PartantPatch,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+) -> Enveloppe[PartantOut]:
+    champs = payload.model_dump(exclude_unset=True)
+    if "jockey_id" in champs and champs["jockey_id"] is not None and repo.get_jockey(champs["jockey_id"]) is None:
+        raise HTTPException(status_code=404, detail=f"Jockey {champs['jockey_id']} introuvable.")
+    if (
+        "entraineur_id" in champs
+        and champs["entraineur_id"] is not None
+        and repo.get_entraineur(champs["entraineur_id"]) is None
+    ):
+        raise HTTPException(status_code=404, detail=f"Entraîneur {champs['entraineur_id']} introuvable.")
+    partant = repo.update_partant(partant_id, champs)
+    if partant is None:
+        raise HTTPException(status_code=404, detail=f"Partant {partant_id} introuvable.")
+    return Enveloppe(data=PartantOut.model_validate(partant))
 
 
 @router.post("/courses/{course_id}/resultats", response_model=Enveloppe[ResultatOut], status_code=201)

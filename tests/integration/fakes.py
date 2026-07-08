@@ -56,6 +56,15 @@ class FakeCourseRepository:
         self.performances_hippodrome: dict[tuple[int, int], tuple[int, int]] = {}
         self.performances_conditions: dict[tuple[int, int, int, int], tuple[int, int]] = {}
 
+    @staticmethod
+    def _appliquer_patch(store: dict, resource_id: int, champs: dict):
+        actuel = store.get(resource_id)
+        if actuel is None:
+            return None
+        mis_a_jour = dataclasses.replace(actuel, **champs) if champs else actuel
+        store[resource_id] = mis_a_jour
+        return mis_a_jour
+
     def create_reunion(self, reunion):
         reunion = dataclasses.replace(reunion, id=self._ids.next())
         self.reunions[reunion.id] = reunion
@@ -64,6 +73,9 @@ class FakeCourseRepository:
     def get_reunion(self, reunion_id: int):
         return self.reunions.get(reunion_id)
 
+    def update_reunion(self, reunion_id: int, champs: dict):
+        return self._appliquer_patch(self.reunions, reunion_id, champs)
+
     def create_course(self, course):
         course = dataclasses.replace(course, id=self._ids.next())
         self.courses[course.id] = course
@@ -71,6 +83,9 @@ class FakeCourseRepository:
 
     def get_course(self, course_id: int):
         return self.courses.get(course_id)
+
+    def update_course(self, course_id: int, champs: dict):
+        return self._appliquer_patch(self.courses, course_id, champs)
 
     def list_courses_by_reunion(self, reunion_id: int):
         return [c for c in self.courses.values() if c.reunion_id == reunion_id]
@@ -83,6 +98,9 @@ class FakeCourseRepository:
     def get_cheval(self, cheval_id: int):
         return self.chevaux.get(cheval_id)
 
+    def update_cheval(self, cheval_id: int, champs: dict):
+        return self._appliquer_patch(self.chevaux, cheval_id, champs)
+
     def create_jockey(self, jockey):
         jockey = dataclasses.replace(jockey, id=self._ids.next())
         self.jockeys[jockey.id] = jockey
@@ -90,6 +108,9 @@ class FakeCourseRepository:
 
     def get_jockey(self, jockey_id: int):
         return self.jockeys.get(jockey_id)
+
+    def update_jockey(self, jockey_id: int, champs: dict):
+        return self._appliquer_patch(self.jockeys, jockey_id, champs)
 
     def create_entraineur(self, entraineur):
         entraineur = dataclasses.replace(entraineur, id=self._ids.next())
@@ -99,6 +120,9 @@ class FakeCourseRepository:
     def get_entraineur(self, entraineur_id: int):
         return self.entraineurs.get(entraineur_id)
 
+    def update_entraineur(self, entraineur_id: int, champs: dict):
+        return self._appliquer_patch(self.entraineurs, entraineur_id, champs)
+
     def create_partant(self, partant):
         partant = dataclasses.replace(partant, id=self._ids.next())
         self.partants[partant.id] = partant
@@ -106,6 +130,9 @@ class FakeCourseRepository:
 
     def get_partant(self, partant_id: int):
         return self.partants.get(partant_id)
+
+    def update_partant(self, partant_id: int, champs: dict):
+        return self._appliquer_patch(self.partants, partant_id, champs)
 
     def list_partants_by_course(self, course_id: int):
         return [p for p in self.partants.values() if p.course_id == course_id]

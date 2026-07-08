@@ -12,6 +12,26 @@ class CourseRepository:
     def __init__(self, conn: psycopg.Connection) -> None:
         self._conn = conn
 
+    def _mettre_a_jour(self, table: str, colonnes_select: str, modele: type, ressource_id: int, champs: dict):
+        """`table` et `colonnes_select` sont toujours des littéraux fournis par le
+        code appelant (jamais dérivés d'une entrée utilisateur) ; les clés de
+        `champs` viennent d'un schéma Pydantic serveur (`exclude_unset`), jamais
+        directement des clés JSON brutes du client — pas d'injection possible.
+        Utilisé par les PATCH (cf. api/routes/courses.py), jamais sur les tables
+        historisées (résultat, cote, analyse...) qui n'exposent pas cette méthode."""
+        if not champs:
+            with self._conn.cursor(row_factory=class_row(modele)) as cur:
+                cur.execute(f"SELECT {colonnes_select} FROM {table} WHERE id = %s", (ressource_id,))
+                return cur.fetchone()
+        assignations = ", ".join(f"{cle} = %s" for cle in champs)
+        valeurs = [*champs.values(), ressource_id]
+        with self._conn.cursor(row_factory=class_row(modele)) as cur:
+            cur.execute(
+                f"UPDATE {table} SET {assignations}, modifie_le = now() WHERE id = %s RETURNING {colonnes_select}",
+                valeurs,
+            )
+            return cur.fetchone()
+
     def create_reunion(self, reunion: Reunion) -> Reunion:
         with self._conn.cursor(row_factory=class_row(Reunion)) as cur:
             cur.execute(
@@ -521,3 +541,39 @@ class CourseRepository:
                 (cheval_id, distance_id, surface_id, etat_piste_id, exclure_course_id),
             )
             return cur.fetchone()
+
+    def update_reunion(self, reunion_id: int, champs: dict) -> Reunion | None:
+        return self._mettre_a_jour(
+            "reunion", "id, date, hippodrome_id, numero, heure_debut, heure_fin, statut", Reunion, reunion_id, champs
+        )
+
+    def update_course(self, course_id: int, champs: dict) -> Course | None:
+        return self._mettre_a_jour(
+            "course",
+            "id, reunion_id, numero, nom, heure_depart, discipline_id, type_course_id, "
+            "distance_id, surface_id, etat_piste_id, allocation, nb_partants, quinte",
+            Course,
+            course_id,
+            champs,
+        )
+
+    def update_partant(self, partant_id: int, champs: dict) -> Partant | None:
+        return self._mettre_a_jour(
+            "partant",
+            "id, course_id, cheval_id, jockey_id, entraineur_id, numero, corde, poids, "
+            "valeur, age, ferrure, musique, non_partant",
+            Partant,
+            partant_id,
+            champs,
+        )
+
+    def update_cheval(self, cheval_id: int, champs: dict) -> Cheval | None:
+        return self._mettre_a_jour(
+            "cheval", "id, nom, sexe, date_naissance, pere, mere, gains, musique, actif", Cheval, cheval_id, champs
+        )
+
+    def update_jockey(self, jockey_id: int, champs: dict) -> Jockey | None:
+        return self._mettre_a_jour("jockey", "id, nom, prenom, licence, actif", Jockey, jockey_id, champs)
+
+    def update_entraineur(self, entraineur_id: int, champs: dict) -> Entraineur | None:
+        return self._mettre_a_jour("entraineur", "id, nom, prenom, actif", Entraineur, entraineur_id, champs)
