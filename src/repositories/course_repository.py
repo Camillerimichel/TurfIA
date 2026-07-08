@@ -234,6 +234,18 @@ class CourseRepository:
             )
             return cur.fetchone()
 
+    def get_partant(self, partant_id: int) -> Partant | None:
+        with self._conn.cursor(row_factory=class_row(Partant)) as cur:
+            cur.execute(
+                """
+                SELECT id, course_id, cheval_id, jockey_id, entraineur_id, numero,
+                       corde, poids, valeur, age, ferrure, musique, non_partant
+                FROM partant WHERE id = %s
+                """,
+                (partant_id,),
+            )
+            return cur.fetchone()
+
     def list_partants_by_course(self, course_id: int) -> list[Partant]:
         with self._conn.cursor(row_factory=class_row(Partant)) as cur:
             cur.execute(
@@ -354,6 +366,17 @@ class CourseRepository:
             )
             return cur.fetchone()
 
+    def list_cotes_by_partant(self, partant_id: int) -> list[Cote]:
+        with self._conn.cursor(row_factory=class_row(Cote)) as cur:
+            cur.execute(
+                """
+                SELECT id, partant_id, operateur, cote, evolution, date_maj
+                FROM cote WHERE partant_id = %s ORDER BY date_maj DESC
+                """,
+                (partant_id,),
+            )
+            return cur.fetchall()
+
     def get_dernieres_cotes_par_course(self, course_id: int) -> dict[int, float]:
         """Dernière cote connue (la plus récente `date_maj`) par partant d'une
         course, cf. L031.2 famille Marché. Un partant sans cote collectée est
@@ -402,6 +425,17 @@ class CourseRepository:
                 (resultat.course_id, resultat.classement),
             )
             return cur.fetchone()
+
+    def list_resultats_by_course(self, course_id: int) -> list[Resultat]:
+        with self._conn.cursor(row_factory=class_row(Resultat)) as cur:
+            cur.execute(
+                """
+                SELECT id, course_id, partant_id, classement, temps, ecart, disqualification, non_partant
+                FROM resultat WHERE course_id = %s ORDER BY classement NULLS LAST
+                """,
+                (course_id,),
+            )
+            return cur.fetchall()
 
     def compter_performances_jockey(self, jockey_id: int, exclure_course_id: int) -> tuple[int, int]:
         """(victoires, courses) du jockey hors course en cours d'analyse — cf.

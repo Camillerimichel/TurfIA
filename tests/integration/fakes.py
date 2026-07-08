@@ -47,6 +47,8 @@ class FakeCourseRepository:
         self.entraineurs: dict[int, object] = {}
         self.partants: dict[int, object] = {}
         self.cotes: dict[int, float] = {}  # dernière cote par partant_id (simplifié pour les tests)
+        self.cotes_historique: dict[int, list] = {}  # toutes les cotes par partant_id, dans l'ordre d'insertion
+        self.resultats: dict[int, object] = {}
         # (victoires, courses) configurables par les tests ; absent = (0, 0) (échantillon nul -> score neutre).
         self.performances_jockey: dict[int, tuple[int, int]] = {}
         self.performances_entraineur: dict[int, tuple[int, int]] = {}
@@ -102,12 +104,40 @@ class FakeCourseRepository:
         self.partants[partant.id] = partant
         return partant
 
+    def get_partant(self, partant_id: int):
+        return self.partants.get(partant_id)
+
     def list_partants_by_course(self, course_id: int):
         return [p for p in self.partants.values() if p.course_id == course_id]
 
     def create_cote(self, cote):
+        cote = dataclasses.replace(
+            cote, id=self._ids.next(), date_maj=cote.date_maj or datetime.now(timezone.utc)
+        )
         self.cotes[cote.partant_id] = cote.cote
-        return dataclasses.replace(cote, id=self._ids.next())
+        self.cotes_historique.setdefault(cote.partant_id, []).append(cote)
+        return cote
+
+    def list_cotes_by_partant(self, partant_id: int):
+        return list(reversed(self.cotes_historique.get(partant_id, [])))
+
+    def get_or_create_resultat(self, resultat):
+        existant = next(
+            (
+                r
+                for r in self.resultats.values()
+                if r.course_id == resultat.course_id and r.classement == resultat.classement
+            ),
+            None,
+        )
+        if existant is not None:
+            return existant
+        resultat = dataclasses.replace(resultat, id=self._ids.next())
+        self.resultats[resultat.id] = resultat
+        return resultat
+
+    def list_resultats_by_course(self, course_id: int):
+        return [r for r in self.resultats.values() if r.course_id == course_id]
 
     def get_dernieres_cotes_par_course(self, course_id: int) -> dict[int, float]:
         return {p.id: self.cotes[p.id] for p in self.list_partants_by_course(course_id) if p.id in self.cotes}

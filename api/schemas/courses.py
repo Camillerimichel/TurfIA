@@ -142,3 +142,42 @@ class PartantOut(BaseModel):
     ferrure: str | None = None
     musique: str | None = None
     non_partant: bool
+
+
+class ResultatIn(BaseModel):
+    partant_id: int
+    classement: int | None = None
+    temps: str | None = None
+    ecart: str | None = None
+    disqualification: bool = False
+    non_partant: bool = False
+
+
+class ResultatOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    course_id: int
+    partant_id: int
+    classement: int | None = None
+    temps: str | None = None
+    ecart: str | None = None
+    disqualification: bool
+    non_partant: bool
+
+
+class CoteIn(BaseModel):
+    operateur: str
+    cote: float
+    evolution: float | None = None
+
+
+class CoteOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    partant_id: int
+    operateur: str
+    cote: float
+    evolution: float | None = None
+    date_maj: datetime

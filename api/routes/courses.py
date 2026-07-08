@@ -10,11 +10,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from api.dependencies.auth import ECRITURE_DONNEES, LECTURE, exiger_roles
 from api.dependencies.db import get_course_repository, get_referentiel_repository
 from api.schemas.common import Enveloppe
 from api.schemas.courses import (
     ChevalIn,
     ChevalOut,
+    CoteIn,
+    CoteOut,
     CourseIn,
     CourseOut,
     EntraineurIn,
@@ -23,10 +26,13 @@ from api.schemas.courses import (
     JockeyOut,
     PartantIn,
     PartantOut,
+    ResultatIn,
+    ResultatOut,
     ReunionIn,
     ReunionOut,
 )
-from src.models.course import Cheval, Course, Entraineur, Jockey, Partant, Reunion
+from src.models.course import Cheval, Cote, Course, Entraineur, Jockey, Partant, Resultat, Reunion
+from src.models.utilisateur import Utilisateur
 from src.repositories.course_repository import CourseRepository
 from src.repositories.referentiel_repository import ReferentielRepository
 
@@ -151,3 +157,60 @@ def list_partants(
         raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
     partants = repo.list_partants_by_course(course_id)
     return Enveloppe(data=[PartantOut.model_validate(p) for p in partants])
+
+
+@router.post("/courses/{course_id}/resultats", response_model=Enveloppe[ResultatOut], status_code=201)
+def create_resultat(
+    course_id: int,
+    payload: ResultatIn,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+) -> Enveloppe[ResultatOut]:
+    """Toujours une création (get-or-create sur `(course_id, classement)`) : un
+    résultat officiel est figé une fois validé, jamais modifié ni supprimé (cf.
+    L011 §15, L009 §5.1) — aucun PATCH/DELETE n'est exposé sur cette ressource."""
+    if repo.get_course(course_id) is None:
+        raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
+    if repo.get_partant(payload.partant_id) is None:
+        raise HTTPException(status_code=404, detail=f"Partant {payload.partant_id} introuvable.")
+    resultat = repo.get_or_create_resultat(Resultat(course_id=course_id, **payload.model_dump()))
+    return Enveloppe(data=ResultatOut.model_validate(resultat))
+
+
+@router.get("/courses/{course_id}/resultats", response_model=Enveloppe[list[ResultatOut]])
+def list_resultats(
+    course_id: int,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
+) -> Enveloppe[list[ResultatOut]]:
+    if repo.get_course(course_id) is None:
+        raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
+    resultats = repo.list_resultats_by_course(course_id)
+    return Enveloppe(data=[ResultatOut.model_validate(r) for r in resultats])
+
+
+@router.post("/partants/{partant_id}/cotes", response_model=Enveloppe[CoteOut], status_code=201)
+def create_cote(
+    partant_id: int,
+    payload: CoteIn,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+) -> Enveloppe[CoteOut]:
+    """Toujours une création : une cote n'est jamais remplacée mais historisée
+    (cf. L011 §15) — aucun PATCH/DELETE n'est exposé sur cette ressource."""
+    if repo.get_partant(partant_id) is None:
+        raise HTTPException(status_code=404, detail=f"Partant {partant_id} introuvable.")
+    cote = repo.create_cote(Cote(partant_id=partant_id, **payload.model_dump()))
+    return Enveloppe(data=CoteOut.model_validate(cote))
+
+
+@router.get("/partants/{partant_id}/cotes", response_model=Enveloppe[list[CoteOut]])
+def list_cotes(
+    partant_id: int,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
+) -> Enveloppe[list[CoteOut]]:
+    if repo.get_partant(partant_id) is None:
+        raise HTTPException(status_code=404, detail=f"Partant {partant_id} introuvable.")
+    cotes = repo.list_cotes_by_partant(partant_id)
+    return Enveloppe(data=[CoteOut.model_validate(c) for c in cotes])
