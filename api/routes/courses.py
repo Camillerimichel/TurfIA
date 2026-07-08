@@ -11,7 +11,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies.auth import ECRITURE_DONNEES, LECTURE, exiger_roles
-from api.dependencies.db import get_course_repository, get_referentiel_repository
+from api.dependencies.db import get_audit_repository, get_course_repository, get_referentiel_repository
 from api.schemas.common import Enveloppe
 from api.schemas.courses import (
     ChevalIn,
@@ -37,8 +37,10 @@ from api.schemas.courses import (
     ReunionOut,
     ReunionPatch,
 )
+from src.core.audit import serialiser_etat
 from src.models.course import Cheval, Cote, Course, Entraineur, Jockey, Partant, Resultat, Reunion
 from src.models.utilisateur import Utilisateur
+from src.repositories.audit_repository import AuditRepository
 from src.repositories.course_repository import CourseRepository
 from src.repositories.referentiel_repository import ReferentielRepository
 
@@ -50,11 +52,13 @@ def create_reunion(
     payload: ReunionIn,
     repo: CourseRepository = Depends(get_course_repository),
     referentiel_repo: ReferentielRepository = Depends(get_referentiel_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[ReunionOut]:
     if referentiel_repo.get_hippodrome(payload.hippodrome_id) is None:
         raise HTTPException(status_code=404, detail=f"Hippodrome {payload.hippodrome_id} introuvable.")
     reunion = repo.create_reunion(Reunion(**payload.model_dump()))
+    audit_repo.enregistrer(utilisateur.id, "creation_reunion", objet=str(reunion.id), nouvel_etat=serialiser_etat(reunion))
     return Enveloppe(data=ReunionOut.model_validate(reunion))
 
 
@@ -75,11 +79,17 @@ def update_reunion(
     reunion_id: int,
     payload: ReunionPatch,
     repo: CourseRepository = Depends(get_course_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[ReunionOut]:
-    reunion = repo.update_reunion(reunion_id, payload.model_dump(exclude_unset=True))
-    if reunion is None:
+    ancien = repo.get_reunion(reunion_id)
+    if ancien is None:
         raise HTTPException(status_code=404, detail=f"Réunion {reunion_id} introuvable.")
+    reunion = repo.update_reunion(reunion_id, payload.model_dump(exclude_unset=True))
+    audit_repo.enregistrer(
+        utilisateur.id, "modification_reunion", objet=str(reunion_id),
+        ancien_etat=serialiser_etat(ancien), nouvel_etat=serialiser_etat(reunion),
+    )
     return Enveloppe(data=ReunionOut.model_validate(reunion))
 
 
@@ -87,10 +97,14 @@ def update_reunion(
 def delete_reunion(
     reunion_id: int,
     repo: CourseRepository = Depends(get_course_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[dict]:
-    if not repo.delete_reunion(reunion_id):
+    ancien = repo.get_reunion(reunion_id)
+    if ancien is None:
         raise HTTPException(status_code=404, detail=f"Réunion {reunion_id} introuvable.")
+    repo.delete_reunion(reunion_id)
+    audit_repo.enregistrer(utilisateur.id, "suppression_reunion", objet=str(reunion_id), ancien_etat=serialiser_etat(ancien))
     return Enveloppe(data={"supprime": True})
 
 
@@ -99,11 +113,13 @@ def create_course(
     reunion_id: int,
     payload: CourseIn,
     repo: CourseRepository = Depends(get_course_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[CourseOut]:
     if repo.get_reunion(reunion_id) is None:
         raise HTTPException(status_code=404, detail=f"Réunion {reunion_id} introuvable.")
     course = repo.create_course(Course(reunion_id=reunion_id, **payload.model_dump()))
+    audit_repo.enregistrer(utilisateur.id, "creation_course", objet=str(course.id), nouvel_etat=serialiser_etat(course))
     return Enveloppe(data=CourseOut.model_validate(course))
 
 
@@ -136,11 +152,17 @@ def update_course(
     course_id: int,
     payload: CoursePatch,
     repo: CourseRepository = Depends(get_course_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[CourseOut]:
-    course = repo.update_course(course_id, payload.model_dump(exclude_unset=True))
-    if course is None:
+    ancien = repo.get_course(course_id)
+    if ancien is None:
         raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
+    course = repo.update_course(course_id, payload.model_dump(exclude_unset=True))
+    audit_repo.enregistrer(
+        utilisateur.id, "modification_course", objet=str(course_id),
+        ancien_etat=serialiser_etat(ancien), nouvel_etat=serialiser_etat(course),
+    )
     return Enveloppe(data=CourseOut.model_validate(course))
 
 
@@ -148,10 +170,14 @@ def update_course(
 def delete_course(
     course_id: int,
     repo: CourseRepository = Depends(get_course_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[dict]:
-    if not repo.delete_course(course_id):
+    ancien = repo.get_course(course_id)
+    if ancien is None:
         raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
+    repo.delete_course(course_id)
+    audit_repo.enregistrer(utilisateur.id, "suppression_course", objet=str(course_id), ancien_etat=serialiser_etat(ancien))
     return Enveloppe(data={"supprime": True})
 
 
@@ -159,9 +185,11 @@ def delete_course(
 def create_cheval(
     payload: ChevalIn,
     repo: CourseRepository = Depends(get_course_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[ChevalOut]:
     cheval = repo.create_cheval(Cheval(**payload.model_dump()))
+    audit_repo.enregistrer(utilisateur.id, "creation_cheval", objet=str(cheval.id), nouvel_etat=serialiser_etat(cheval))
     return Enveloppe(data=ChevalOut.model_validate(cheval))
 
 
@@ -182,11 +210,17 @@ def update_cheval(
     cheval_id: int,
     payload: ChevalPatch,
     repo: CourseRepository = Depends(get_course_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[ChevalOut]:
-    cheval = repo.update_cheval(cheval_id, payload.model_dump(exclude_unset=True))
-    if cheval is None:
+    ancien = repo.get_cheval(cheval_id)
+    if ancien is None:
         raise HTTPException(status_code=404, detail=f"Cheval {cheval_id} introuvable.")
+    cheval = repo.update_cheval(cheval_id, payload.model_dump(exclude_unset=True))
+    audit_repo.enregistrer(
+        utilisateur.id, "modification_cheval", objet=str(cheval_id),
+        ancien_etat=serialiser_etat(ancien), nouvel_etat=serialiser_etat(cheval),
+    )
     return Enveloppe(data=ChevalOut.model_validate(cheval))
 
 
@@ -194,10 +228,14 @@ def update_cheval(
 def delete_cheval(
     cheval_id: int,
     repo: CourseRepository = Depends(get_course_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[dict]:
-    if not repo.delete_cheval(cheval_id):
+    ancien = repo.get_cheval(cheval_id)
+    if ancien is None:
         raise HTTPException(status_code=404, detail=f"Cheval {cheval_id} introuvable.")
+    repo.delete_cheval(cheval_id)
+    audit_repo.enregistrer(utilisateur.id, "suppression_cheval", objet=str(cheval_id), ancien_etat=serialiser_etat(ancien))
     return Enveloppe(data={"supprime": True})
 
 
@@ -205,9 +243,11 @@ def delete_cheval(
 def create_jockey(
     payload: JockeyIn,
     repo: CourseRepository = Depends(get_course_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[JockeyOut]:
     jockey = repo.create_jockey(Jockey(**payload.model_dump()))
+    audit_repo.enregistrer(utilisateur.id, "creation_jockey", objet=str(jockey.id), nouvel_etat=serialiser_etat(jockey))
     return Enveloppe(data=JockeyOut.model_validate(jockey))
 
 
@@ -228,11 +268,17 @@ def update_jockey(
     jockey_id: int,
     payload: JockeyPatch,
     repo: CourseRepository = Depends(get_course_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[JockeyOut]:
-    jockey = repo.update_jockey(jockey_id, payload.model_dump(exclude_unset=True))
-    if jockey is None:
+    ancien = repo.get_jockey(jockey_id)
+    if ancien is None:
         raise HTTPException(status_code=404, detail=f"Jockey {jockey_id} introuvable.")
+    jockey = repo.update_jockey(jockey_id, payload.model_dump(exclude_unset=True))
+    audit_repo.enregistrer(
+        utilisateur.id, "modification_jockey", objet=str(jockey_id),
+        ancien_etat=serialiser_etat(ancien), nouvel_etat=serialiser_etat(jockey),
+    )
     return Enveloppe(data=JockeyOut.model_validate(jockey))
 
 
@@ -240,10 +286,14 @@ def update_jockey(
 def delete_jockey(
     jockey_id: int,
     repo: CourseRepository = Depends(get_course_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[dict]:
-    if not repo.delete_jockey(jockey_id):
+    ancien = repo.get_jockey(jockey_id)
+    if ancien is None:
         raise HTTPException(status_code=404, detail=f"Jockey {jockey_id} introuvable.")
+    repo.delete_jockey(jockey_id)
+    audit_repo.enregistrer(utilisateur.id, "suppression_jockey", objet=str(jockey_id), ancien_etat=serialiser_etat(ancien))
     return Enveloppe(data={"supprime": True})
 
 
@@ -251,9 +301,13 @@ def delete_jockey(
 def create_entraineur(
     payload: EntraineurIn,
     repo: CourseRepository = Depends(get_course_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[EntraineurOut]:
     entraineur = repo.create_entraineur(Entraineur(**payload.model_dump()))
+    audit_repo.enregistrer(
+        utilisateur.id, "creation_entraineur", objet=str(entraineur.id), nouvel_etat=serialiser_etat(entraineur)
+    )
     return Enveloppe(data=EntraineurOut.model_validate(entraineur))
 
 
@@ -274,11 +328,17 @@ def update_entraineur(
     entraineur_id: int,
     payload: EntraineurPatch,
     repo: CourseRepository = Depends(get_course_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[EntraineurOut]:
-    entraineur = repo.update_entraineur(entraineur_id, payload.model_dump(exclude_unset=True))
-    if entraineur is None:
+    ancien = repo.get_entraineur(entraineur_id)
+    if ancien is None:
         raise HTTPException(status_code=404, detail=f"Entraîneur {entraineur_id} introuvable.")
+    entraineur = repo.update_entraineur(entraineur_id, payload.model_dump(exclude_unset=True))
+    audit_repo.enregistrer(
+        utilisateur.id, "modification_entraineur", objet=str(entraineur_id),
+        ancien_etat=serialiser_etat(ancien), nouvel_etat=serialiser_etat(entraineur),
+    )
     return Enveloppe(data=EntraineurOut.model_validate(entraineur))
 
 
@@ -286,10 +346,16 @@ def update_entraineur(
 def delete_entraineur(
     entraineur_id: int,
     repo: CourseRepository = Depends(get_course_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[dict]:
-    if not repo.delete_entraineur(entraineur_id):
+    ancien = repo.get_entraineur(entraineur_id)
+    if ancien is None:
         raise HTTPException(status_code=404, detail=f"Entraîneur {entraineur_id} introuvable.")
+    repo.delete_entraineur(entraineur_id)
+    audit_repo.enregistrer(
+        utilisateur.id, "suppression_entraineur", objet=str(entraineur_id), ancien_etat=serialiser_etat(ancien)
+    )
     return Enveloppe(data={"supprime": True})
 
 
@@ -298,7 +364,8 @@ def create_partant(
     course_id: int,
     payload: PartantIn,
     repo: CourseRepository = Depends(get_course_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[PartantOut]:
     if repo.get_course(course_id) is None:
         raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
@@ -309,6 +376,7 @@ def create_partant(
     if payload.entraineur_id is not None and repo.get_entraineur(payload.entraineur_id) is None:
         raise HTTPException(status_code=404, detail=f"Entraîneur {payload.entraineur_id} introuvable.")
     partant = repo.create_partant(Partant(course_id=course_id, **payload.model_dump()))
+    audit_repo.enregistrer(utilisateur.id, "creation_partant", objet=str(partant.id), nouvel_etat=serialiser_etat(partant))
     return Enveloppe(data=PartantOut.model_validate(partant))
 
 
@@ -341,8 +409,12 @@ def update_partant(
     partant_id: int,
     payload: PartantPatch,
     repo: CourseRepository = Depends(get_course_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[PartantOut]:
+    ancien = repo.get_partant(partant_id)
+    if ancien is None:
+        raise HTTPException(status_code=404, detail=f"Partant {partant_id} introuvable.")
     champs = payload.model_dump(exclude_unset=True)
     if "jockey_id" in champs and champs["jockey_id"] is not None and repo.get_jockey(champs["jockey_id"]) is None:
         raise HTTPException(status_code=404, detail=f"Jockey {champs['jockey_id']} introuvable.")
@@ -353,8 +425,10 @@ def update_partant(
     ):
         raise HTTPException(status_code=404, detail=f"Entraîneur {champs['entraineur_id']} introuvable.")
     partant = repo.update_partant(partant_id, champs)
-    if partant is None:
-        raise HTTPException(status_code=404, detail=f"Partant {partant_id} introuvable.")
+    audit_repo.enregistrer(
+        utilisateur.id, "modification_partant", objet=str(partant_id),
+        ancien_etat=serialiser_etat(ancien), nouvel_etat=serialiser_etat(partant),
+    )
     return Enveloppe(data=PartantOut.model_validate(partant))
 
 
@@ -362,10 +436,14 @@ def update_partant(
 def delete_partant(
     partant_id: int,
     repo: CourseRepository = Depends(get_course_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[dict]:
-    if not repo.delete_partant(partant_id):
+    ancien = repo.get_partant(partant_id)
+    if ancien is None:
         raise HTTPException(status_code=404, detail=f"Partant {partant_id} introuvable.")
+    repo.delete_partant(partant_id)
+    audit_repo.enregistrer(utilisateur.id, "suppression_partant", objet=str(partant_id), ancien_etat=serialiser_etat(ancien))
     return Enveloppe(data={"supprime": True})
 
 
@@ -374,7 +452,8 @@ def create_resultat(
     course_id: int,
     payload: ResultatIn,
     repo: CourseRepository = Depends(get_course_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[ResultatOut]:
     """Toujours une création (get-or-create sur `(course_id, classement)`) : un
     résultat officiel est figé une fois validé, jamais modifié ni supprimé (cf.
@@ -384,6 +463,9 @@ def create_resultat(
     if repo.get_partant(payload.partant_id) is None:
         raise HTTPException(status_code=404, detail=f"Partant {payload.partant_id} introuvable.")
     resultat = repo.get_or_create_resultat(Resultat(course_id=course_id, **payload.model_dump()))
+    audit_repo.enregistrer(
+        utilisateur.id, "creation_resultat", objet=str(resultat.id), nouvel_etat=serialiser_etat(resultat)
+    )
     return Enveloppe(data=ResultatOut.model_validate(resultat))
 
 
@@ -404,13 +486,15 @@ def create_cote(
     partant_id: int,
     payload: CoteIn,
     repo: CourseRepository = Depends(get_course_repository),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[CoteOut]:
     """Toujours une création : une cote n'est jamais remplacée mais historisée
     (cf. L011 §15) — aucun PATCH/DELETE n'est exposé sur cette ressource."""
     if repo.get_partant(partant_id) is None:
         raise HTTPException(status_code=404, detail=f"Partant {partant_id} introuvable.")
     cote = repo.create_cote(Cote(partant_id=partant_id, **payload.model_dump()))
+    audit_repo.enregistrer(utilisateur.id, "creation_cote", objet=str(cote.id), nouvel_etat=serialiser_etat(cote))
     return Enveloppe(data=CoteOut.model_validate(cote))
 
 

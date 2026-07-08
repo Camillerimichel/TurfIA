@@ -14,9 +14,12 @@ from src.services.auth_service import AuthService
 # - DECLENCHEMENT_ANALYSE : lecture + déclenchement d'une analyse.
 # - ECRITURE_DONNEES : création/correction/suppression de données (référentiels,
 #   courses, partants, résultats, cotes).
+# - ADMINISTRATION : consultation de l'audit (expose les actions de tous les
+#   utilisateurs, pas seulement les siennes, cf. GET /audit).
 LECTURE = ("Administrateur", "Analyste", "Consultation", "Automatisation")
 DECLENCHEMENT_ANALYSE = ("Administrateur", "Analyste", "Automatisation")
 ECRITURE_DONNEES = ("Administrateur", "Automatisation")
+ADMINISTRATION = ("Administrateur",)
 
 
 def extraire_jeton(authorization: str | None) -> str:

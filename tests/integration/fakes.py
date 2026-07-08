@@ -12,6 +12,7 @@ import itertools
 from datetime import datetime, timezone
 
 from src.core.exceptions import BusinessRuleError, ImportationError
+from src.models.audit import Audit
 
 
 class _AutoId:
@@ -375,10 +376,31 @@ class FakeUtilisateurRepository:
 
 class FakeAuditRepository:
     def __init__(self) -> None:
-        self.entrees: list[tuple] = []
+        self._ids = _AutoId()
+        self.entrees: list[Audit] = []
 
-    def enregistrer(self, utilisateur_id, action: str, objet: str | None = None) -> None:
-        self.entrees.append((utilisateur_id, action, objet))
+    def enregistrer(
+        self,
+        utilisateur_id,
+        action: str,
+        objet: str | None = None,
+        ancien_etat: str | None = None,
+        nouvel_etat: str | None = None,
+    ) -> None:
+        self.entrees.append(
+            Audit(
+                id=self._ids.next(),
+                utilisateur_id=utilisateur_id,
+                date_action=datetime.now(timezone.utc),
+                action=action,
+                objet=objet,
+                ancien_etat=ancien_etat,
+                nouvel_etat=nouvel_etat,
+            )
+        )
+
+    def lister(self, limite: int = 200) -> list[Audit]:
+        return list(reversed(self.entrees))[:limite]
 
 
 class FakeConsensusPresseService:

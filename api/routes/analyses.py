@@ -10,7 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies.auth import DECLENCHEMENT_ANALYSE, LECTURE, exiger_roles
-from api.dependencies.db import get_analyse_repository, get_course_repository
+from api.dependencies.db import get_analyse_repository, get_audit_repository, get_course_repository
 from api.dependencies.services import get_analyse_service, get_preparation_service
 from api.schemas.analyses import (
     AnalyseAutoIn,
@@ -22,10 +22,12 @@ from api.schemas.analyses import (
 )
 from api.schemas.common import Enveloppe
 from src.algorithms.classement import PartantClasse
+from src.core.audit import serialiser_etat
 from src.core.exceptions import ValidationError
 from src.models.analyse import AnalysePartant, Selection
 from src.models.utilisateur import Utilisateur
 from src.repositories.analyse_repository import AnalyseRepository
+from src.repositories.audit_repository import AuditRepository
 from src.repositories.course_repository import CourseRepository
 from src.services.analyse_service import AnalyseService, DonneesPartant
 from src.services.preparation_service import PreparationDonneesService
@@ -69,7 +71,8 @@ def trigger_analyse(
     payload: AnalyseTriggerIn,
     course_repo: CourseRepository = Depends(get_course_repository),
     service: AnalyseService = Depends(get_analyse_service),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*DECLENCHEMENT_ANALYSE)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*DECLENCHEMENT_ANALYSE)),
 ) -> Enveloppe[AnalyseDetailOut]:
     if course_repo.get_course(course_id) is None:
         raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
@@ -88,6 +91,10 @@ def trigger_analyse(
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    audit_repo.enregistrer(
+        utilisateur.id, "declenchement_analyse", objet=str(resultat.analyse.id),
+        nouvel_etat=serialiser_etat(resultat.analyse),
+    )
     detail = AnalyseDetailOut(
         analyse=AnalyseOut.model_validate(resultat.analyse),
         partants=[_partant_classe_vers_out(pc) for pc in resultat.partants_classes],
@@ -103,7 +110,8 @@ def trigger_analyse_auto(
     course_repo: CourseRepository = Depends(get_course_repository),
     preparation: PreparationDonneesService = Depends(get_preparation_service),
     service: AnalyseService = Depends(get_analyse_service),
-    _utilisateur: Utilisateur = Depends(exiger_roles(*DECLENCHEMENT_ANALYSE)),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*DECLENCHEMENT_ANALYSE)),
 ) -> Enveloppe[AnalyseDetailOut]:
     """Referme la boucle collecte -> analyse : les sous-scores (marché, forme) et
     le risque sont calculés à partir des données déjà collectées
@@ -126,6 +134,10 @@ def trigger_analyse_auto(
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    audit_repo.enregistrer(
+        utilisateur.id, "declenchement_analyse", objet=str(resultat.analyse.id),
+        nouvel_etat=serialiser_etat(resultat.analyse),
+    )
     detail = AnalyseDetailOut(
         analyse=AnalyseOut.model_validate(resultat.analyse),
         partants=[_partant_classe_vers_out(pc) for pc in resultat.partants_classes],

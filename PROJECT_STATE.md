@@ -141,12 +141,32 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   timing). RBAC (L021 §4.1) via `exiger_roles(*roles)` sur chaque route : matrice
   LECTURE (tout rôle, GET) / DECLENCHEMENT_ANALYSE (Administrateur/Analyste/
   Automatisation, déclenchement d'analyse) / ECRITURE_DONNEES (Administrateur/
-  Automatisation, POST/PATCH/DELETE). `POST /auth/login` limité en débit par
-  (login, IP) — L021 §7.2.1. Connexion/échec de connexion/déconnexion journalisés
-  dans `audit` (table déjà prévue au schéma, jusque-là inutilisée). Bootstrap des
-  comptes via `scripts/creer_utilisateur.py` (mot de passe saisi de façon
-  interactive, jamais en argument CLI) — l'API n'expose pas de route de création
+  Automatisation, POST/PATCH/DELETE) / ADMINISTRATION (Administrateur seul,
+  consultation de l'audit, cf. ci-dessous). `POST /auth/login` limité en débit
+  par (login, IP) — L021 §7.2.1. Bootstrap des comptes via
+  `scripts/creer_utilisateur.py` (mot de passe saisi de façon interactive,
+  jamais en argument CLI) — l'API n'expose pas de route de création
   d'utilisateurs.
+- **Audit systématique des écritures (2026-07-08)** (`src/core/audit.py`,
+  `src/repositories/audit_repository.py`, `api/routes/audit.py`) : en plus des
+  événements d'authentification déjà journalisés (connexion, échec, déconnexion),
+  chaque POST/PATCH/DELETE de `api/routes/courses.py` (réunion/course/cheval/
+  jockey/entraineur/partant/résultat/cote) et chaque déclenchement d'analyse
+  (`api/routes/analyses.py`) crée désormais une ligne dans `audit` — auteur,
+  action (`{creation,modification,suppression}_{ressource}` ou
+  `declenchement_analyse`), objet concerné, état avant/après sérialisé en JSON
+  (`serialiser_etat`, `dataclasses.asdict` + `json.dumps`). L'écriture métier et
+  son audit partagent la même transaction par requête (`src/database/
+  connection.py::session`, commit unique en fin de requête) : un échec de
+  l'insertion d'audit annule toute la transaction, y compris l'écriture — pas de
+  gestion d'erreur spécifique nécessaire, l'échec remonte comme n'importe quel
+  autre échec SQL (cf. `api/middlewares/error_handler.py`). `GET /audit`
+  (RBAC `ADMINISTRATION`, `?limite=200` par défaut) permet de la consulter.
+  Hors périmètre : les écritures des traitements planifiés (`ControleRoiService`,
+  `StatistiqueService`, `CollecteService`, hors requête API authentifiée, sans
+  utilisateur à attribuer) restent couvertes uniquement par la journalisation
+  structurée (`src/core/logging.py`, cf. L022), pas par `audit`. La gestion des
+  utilisateurs reste script-only, donc hors scope également.
 - **Statistiques et ROI réel** (`src/algorithms/controle_roi.py`,
   `src/services/controle_roi_service.py`, `src/services/statistique_service.py`,
   `src/repositories/statistique_repository.py`, `scripts/calculer_statistiques.py`,
@@ -236,15 +256,15 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   FK `ON DELETE RESTRICT` (déjà en place, cf. L011 §9) est traduite en 409 plutôt
   que vérifiée à l'avance (évite une fenêtre de concurrence). **Jamais** de PATCH/
   DELETE sur résultat/cote/analyse et dérivés (historisés, cf. L011 §15).
-- **Tests** : 165 tests unitaires (algorithmes dont ROI réel des 5 types de
+- **Tests** : 168 tests unitaires (algorithmes dont ROI réel des 5 types de
   pari, configuration, mappers PMU/Canalturf/Zone-Turf, sécurité — hachage mot
-  de passe/jeton, limiteur de débit, dépendances RBAC) + 86 tests d'intégration
-  (API courses/analyses/résultats/cotes/PATCH/DELETE/statistiques, AuthService,
-  authentification API bout en bout, branchement presse combinée
-  Canalturf+Zone-Turf, Professionnels/Historique/Aptitude, ControleRoiService
-  (5 types de pari + détail par pari `controle_roi_pari`), StatistiqueService —
-  repositories/services en mémoire, `tests/integration/`), tous verts (251 au
-  total).
+  de passe/jeton, limiteur de débit, dépendances RBAC, sérialisation d'audit)
+  + 93 tests d'intégration (API courses/analyses/résultats/cotes/PATCH/DELETE/
+  statistiques/audit, AuthService, authentification API bout en bout,
+  branchement presse combinée Canalturf+Zone-Turf, Professionnels/Historique/
+  Aptitude, ControleRoiService (5 types de pari + détail par pari
+  `controle_roi_pari`), StatistiqueService — repositories/services en mémoire,
+  `tests/integration/`), tous verts (261 au total).
 
 ## Correction notable apportée au SAD pendant l'implémentation
 
@@ -330,9 +350,10 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
 - Limiteur de débit (`src/core/rate_limiter.py`) en mémoire, un seul processus —
   ne protège pas contre la force brute si l'API tourne sur plusieurs workers/
   instances sans état partagé (pas de Redis ou équivalent dans cette tranche).
-- L'audit (table `audit`) n'enregistre que les événements d'authentification
-  (connexion, échec, déconnexion) — pas encore chaque écriture sur chaque
-  ressource (cf. « Prochaine étape »).
+- La table `audit` grossit indéfiniment (comme les tables statistiques, cf.
+  ci-dessus) — aucune purge/archivage, `GET /audit` limite juste le nombre de
+  lignes retournées par appel (`?limite`, défaut 200), sans pagination réelle
+  (offset/curseur).
 - Pas de purge des sessions expirées/révoquées dans la table `session` — elle
   grossit indéfiniment ; acceptable pour le volume actuel, à revoir si l'usage
   s'intensifie (même logique que les autres limites déjà actées : get-or-create
@@ -375,15 +396,15 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
 
 L'essentiel de la surface API, l'authentification/RBAC réelle, une deuxième
 source de consensus presse, le module Statistiques (ROI réel + 6 tables
-agrégées, granularité par pari via `controle_roi_pari`) et 5 types de pari
-(Simple Gagnant/Placé, Couplé Gagnant/Placé, 2 sur 4) sont désormais en place.
-Pistes possibles : moteur de rejeu/backtesting L031.7 §4 (comparer des versions
-du modèle sur un historique identique — débloquerait aussi la vraie définition
-L031.2 de « Historique » et les familles Value/Contexte), Quinté Flexi, audit
-systématique des écritures (au-delà des
-seuls événements d'authentification), administration des utilisateurs via
-l'API, exploration d'une source niveau 1 (France Galop) pour sortir du
-mono-source PMU, sortir du Quinté+-only pour la Presse, interface HTML (L018).
+agrégées, granularité par pari via `controle_roi_pari`), 5 types de pari
+(Simple Gagnant/Placé, Couplé Gagnant/Placé, 2 sur 4) et l'audit systématique
+des écritures (au-delà des seuls événements d'authentification) sont désormais
+en place. Pistes possibles : moteur de rejeu/backtesting L031.7 §4 (comparer
+des versions du modèle sur un historique identique — débloquerait aussi la
+vraie définition L031.2 de « Historique » et les familles Value/Contexte),
+Quinté Flexi, exploration d'une source niveau 1 (France Galop) pour sortir du
+mono-source PMU, sortir du Quinté+-only pour la Presse, interface HTML (L018),
+administration des utilisateurs via l'API.
 
 ## Conventions de développement
 
