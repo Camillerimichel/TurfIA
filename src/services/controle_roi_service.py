@@ -74,9 +74,10 @@ class ControleRoiService:
                     extra={"context": {"analyse_id": analyse.id}},
                 )
                 continue
-            mise_totale += pari.mise
+            mise = float(pari.mise)
+            mise_totale += mise
             gains_totaux += calculer_gains_simple_gagnant(
-                pari.mise, str(partant.numero), combinaison_gagnante, dividende, rembourse
+                mise, str(partant.numero), combinaison_gagnante, dividende, rembourse
             )
 
         if mise_totale == 0:
