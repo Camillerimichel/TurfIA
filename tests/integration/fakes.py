@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
+from datetime import datetime, timezone
 
 
 class _AutoId:
@@ -176,6 +177,73 @@ class FakeAnalyseRepository:
 
     def list_paris_by_analyse(self, analyse_id: int):
         return list(self.paris.get(analyse_id, []))
+
+
+class FakeUtilisateurRepository:
+    def __init__(self) -> None:
+        self._ids = _AutoId()
+        self.roles: dict[int, object] = {}
+        self.utilisateurs: dict[int, object] = {}
+        self.sessions: dict[str, object] = {}  # jeton_hache -> Session
+
+    def seed_role(self, role):
+        role = dataclasses.replace(role, id=self._ids.next())
+        self.roles[role.id] = role
+        return role
+
+    def seed_utilisateur(self, utilisateur):
+        utilisateur = dataclasses.replace(utilisateur, id=self._ids.next())
+        self.utilisateurs[utilisateur.id] = utilisateur
+        return utilisateur
+
+    def get_role_par_nom(self, nom: str):
+        return next((r for r in self.roles.values() if r.nom == nom), None)
+
+    def get_role_par_id(self, role_id: int):
+        return self.roles.get(role_id)
+
+    def get_utilisateur_par_login(self, login: str):
+        return next((u for u in self.utilisateurs.values() if u.login == login), None)
+
+    def creer_utilisateur(self, utilisateur):
+        return self.seed_utilisateur(utilisateur)
+
+    def mettre_a_jour_derniere_connexion(self, utilisateur_id: int) -> None:
+        u = self.utilisateurs[utilisateur_id]
+        self.utilisateurs[utilisateur_id] = dataclasses.replace(u, derniere_connexion="now")
+
+    def creer_session(self, session):
+        session = dataclasses.replace(session, id=self._ids.next())
+        self.sessions[session.jeton_hache] = session
+        return session
+
+    def get_utilisateur_par_session_active(self, jeton_hache: str):
+        session = self.sessions.get(jeton_hache)
+        if session is None or session.revoque_le is not None:
+            return None
+        if session.expire_le <= datetime.now(timezone.utc):
+            return None
+        utilisateur = self.utilisateurs.get(session.utilisateur_id)
+        if utilisateur is None or not utilisateur.actif:
+            return None
+        role = self.roles.get(utilisateur.role_id)
+        return utilisateur, role
+
+    def marquer_utilisation_session(self, jeton_hache: str) -> None:
+        pass
+
+    def revoquer_session(self, jeton_hache: str) -> None:
+        session = self.sessions.get(jeton_hache)
+        if session is not None:
+            self.sessions[jeton_hache] = dataclasses.replace(session, revoque_le="revoked")
+
+
+class FakeAuditRepository:
+    def __init__(self) -> None:
+        self.entrees: list[tuple] = []
+
+    def enregistrer(self, utilisateur_id, action: str, objet: str | None = None) -> None:
+        self.entrees.append((utilisateur_id, action, objet))
 
     def create_controle_roi(self, controle):
         return dataclasses.replace(controle, id=self._ids.next())
