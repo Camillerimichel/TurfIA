@@ -9,3 +9,12 @@ api:
 
 logging:
   format: json
+
+securite:
+  # Durée de validité d'une session (cf. L021 §3.3) — au-delà, le jeton est
+  # refusé même s'il n'a pas été explicitement révoqué.
+  session_duree_minutes: 60
+  login:
+    # Limitation de débit sur POST /auth/login (cf. L021 §7.2.1).
+    max_tentatives: 5
+    fenetre_secondes: 300

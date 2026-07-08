@@ -86,6 +86,105 @@ def test_creation_partant_cheval_inconnu_retourne_404(client):
     assert reponse.status_code == 404
 
 
+def test_creation_partant_jockey_inconnu_retourne_404(client):
+    reunion = client.post(
+        "/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": 1, "numero": 1}
+    ).json()["data"]
+    course = client.post(
+        f"/api/v1/reunions/{reunion['id']}/courses", json={"numero": 1, "nom": "Test"}
+    ).json()["data"]
+    cheval = client.post("/api/v1/chevaux", json={"nom": "Cheval Test"}).json()["data"]
+
+    reponse = client.post(
+        f"/api/v1/courses/{course['id']}/partants",
+        json={"cheval_id": cheval["id"], "numero": 1, "jockey_id": 999},
+    )
+    assert reponse.status_code == 404
+    assert reponse.json()["error"]["code"] == "RESSOURCE_INTROUVABLE"
+
+
+def test_creation_partant_entraineur_inconnu_retourne_404(client):
+    reunion = client.post(
+        "/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": 1, "numero": 1}
+    ).json()["data"]
+    course = client.post(
+        f"/api/v1/reunions/{reunion['id']}/courses", json={"numero": 1, "nom": "Test"}
+    ).json()["data"]
+    cheval = client.post("/api/v1/chevaux", json={"nom": "Cheval Test"}).json()["data"]
+
+    reponse = client.post(
+        f"/api/v1/courses/{course['id']}/partants",
+        json={"cheval_id": cheval["id"], "numero": 1, "entraineur_id": 999},
+    )
+    assert reponse.status_code == 404
+    assert reponse.json()["error"]["code"] == "RESSOURCE_INTROUVABLE"
+
+
+def test_creation_et_lecture_cheval(client):
+    cheval = client.post("/api/v1/chevaux", json={"nom": "Cheval Test"}).json()["data"]
+    reponse = client.get(f"/api/v1/chevaux/{cheval['id']}")
+    assert reponse.status_code == 200
+    assert reponse.json()["data"]["nom"] == "Cheval Test"
+
+
+def test_lecture_cheval_inconnu_retourne_404(client):
+    reponse = client.get("/api/v1/chevaux/999")
+    assert reponse.status_code == 404
+
+
+def test_creation_et_lecture_jockey(client):
+    jockey = client.post("/api/v1/jockeys", json={"nom": "Dupont", "prenom": "Jean"}).json()["data"]
+    reponse = client.get(f"/api/v1/jockeys/{jockey['id']}")
+    assert reponse.status_code == 200
+    corps = reponse.json()["data"]
+    assert corps["nom"] == "Dupont"
+    assert corps["prenom"] == "Jean"
+    assert corps["actif"] is True
+
+
+def test_lecture_jockey_inconnu_retourne_404(client):
+    reponse = client.get("/api/v1/jockeys/999")
+    assert reponse.status_code == 404
+
+
+def test_creation_et_lecture_entraineur(client):
+    entraineur = client.post("/api/v1/entraineurs", json={"nom": "Martin"}).json()["data"]
+    reponse = client.get(f"/api/v1/entraineurs/{entraineur['id']}")
+    assert reponse.status_code == 200
+    assert reponse.json()["data"]["nom"] == "Martin"
+
+
+def test_lecture_entraineur_inconnu_retourne_404(client):
+    reponse = client.get("/api/v1/entraineurs/999")
+    assert reponse.status_code == 404
+
+
+def test_creation_partant_avec_jockey_et_entraineur_connus(client):
+    reunion = client.post(
+        "/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": 1, "numero": 1}
+    ).json()["data"]
+    course = client.post(
+        f"/api/v1/reunions/{reunion['id']}/courses", json={"numero": 1, "nom": "Test"}
+    ).json()["data"]
+    cheval = client.post("/api/v1/chevaux", json={"nom": "Cheval Test"}).json()["data"]
+    jockey = client.post("/api/v1/jockeys", json={"nom": "Dupont"}).json()["data"]
+    entraineur = client.post("/api/v1/entraineurs", json={"nom": "Martin"}).json()["data"]
+
+    reponse = client.post(
+        f"/api/v1/courses/{course['id']}/partants",
+        json={
+            "cheval_id": cheval["id"],
+            "numero": 1,
+            "jockey_id": jockey["id"],
+            "entraineur_id": entraineur["id"],
+        },
+    )
+    assert reponse.status_code == 201
+    corps = reponse.json()["data"]
+    assert corps["jockey_id"] == jockey["id"]
+    assert corps["entraineur_id"] == entraineur["id"]
+
+
 def test_validation_pydantic_retourne_enveloppe_422(client):
     reponse = client.post("/api/v1/reunions", json={"hippodrome_id": 1, "numero": 1})
     assert reponse.status_code == 422

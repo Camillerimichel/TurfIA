@@ -1,0 +1,12 @@
+-- Ajoute la table `controle_roi_pari` (détail par pari du contrôle ROI, cf. L011
+-- §8.7) : depuis qu'une analyse produit plusieurs types de pari (cf. L031.6 §5),
+-- `controle_roi` (un agrégat par analyse) ne suffit plus à un calcul correct de
+-- `statistique_pari` par type. `controle_roi` reste inchangé (toujours utilisé par
+-- statistique_globale/score/hippodrome/discipline).
+--
+-- Ré-inclut les fichiers entiers plutôt que juste le delta : toutes les
+-- instructions sont idempotentes (CREATE TABLE/INDEX IF NOT EXISTS, GRANT déjà
+-- accordé = no-op), cf. L013 §7 (pas de duplication du DDL).
+
+-- INCLUDE: ../schema/03_analyses.sql
+-- INCLUDE: ../schema/06_grants.sql

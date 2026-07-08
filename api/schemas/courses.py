@@ -83,6 +83,36 @@ class ChevalOut(BaseModel):
     actif: bool
 
 
+class JockeyIn(BaseModel):
+    nom: str
+    prenom: str | None = None
+    licence: str | None = None
+
+
+class JockeyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    nom: str
+    prenom: str | None = None
+    licence: str | None = None
+    actif: bool
+
+
+class EntraineurIn(BaseModel):
+    nom: str
+    prenom: str | None = None
+
+
+class EntraineurOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    nom: str
+    prenom: str | None = None
+    actif: bool
+
+
 class PartantIn(BaseModel):
     cheval_id: int
     numero: int = Field(gt=0)
@@ -112,3 +142,103 @@ class PartantOut(BaseModel):
     ferrure: str | None = None
     musique: str | None = None
     non_partant: bool
+
+
+class ResultatIn(BaseModel):
+    partant_id: int
+    classement: int | None = None
+    temps: str | None = None
+    ecart: str | None = None
+    disqualification: bool = False
+    non_partant: bool = False
+
+
+class ResultatOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    course_id: int
+    partant_id: int
+    classement: int | None = None
+    temps: str | None = None
+    ecart: str | None = None
+    disqualification: bool
+    non_partant: bool
+
+
+class CoteIn(BaseModel):
+    operateur: str
+    cote: float
+    evolution: float | None = None
+
+
+class CoteOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    partant_id: int
+    operateur: str
+    cote: float
+    evolution: float | None = None
+    date_maj: datetime
+
+
+# Schémas PATCH — correction partielle des ressources mutables (cf. plan
+# "Résultats/cotes en écriture, PATCH/DELETE, authentification réelle"). Tous les
+# champs sont optionnels ; seuls ceux effectivement fournis sont modifiés
+# (`exclude_unset`, cf. api/routes/courses.py). Jamais de PATCH pour résultat/cote
+# (historisés, cf. L011 §15).
+
+
+class ReunionPatch(BaseModel):
+    statut: str | None = None
+    heure_debut: datetime | None = None
+    heure_fin: datetime | None = None
+
+
+class CoursePatch(BaseModel):
+    nom: str | None = None
+    heure_depart: datetime | None = None
+    discipline_id: int | None = None
+    type_course_id: int | None = None
+    distance_id: int | None = None
+    surface_id: int | None = None
+    etat_piste_id: int | None = None
+    allocation: float | None = None
+    nb_partants: int | None = None
+    quinte: bool | None = None
+
+
+class PartantPatch(BaseModel):
+    jockey_id: int | None = None
+    entraineur_id: int | None = None
+    corde: int | None = None
+    poids: float | None = None
+    valeur: float | None = None
+    age: int | None = None
+    ferrure: str | None = None
+    musique: str | None = None
+    non_partant: bool | None = None
+
+
+class ChevalPatch(BaseModel):
+    nom: str | None = None
+    sexe: str | None = Field(default=None, pattern="^[MFH]$")
+    date_naissance: date | None = None
+    pere: str | None = None
+    mere: str | None = None
+    musique: str | None = None
+    actif: bool | None = None
+
+
+class JockeyPatch(BaseModel):
+    nom: str | None = None
+    prenom: str | None = None
+    licence: str | None = None
+    actif: bool | None = None
+
+
+class EntraineurPatch(BaseModel):
+    nom: str | None = None
+    prenom: str | None = None
+    actif: bool | None = None

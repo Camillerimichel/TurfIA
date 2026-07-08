@@ -64,3 +64,19 @@ class ControleRoi:
     roi: float | None = None
     valide: bool = False
     commentaire: str | None = None
+
+
+@dataclass(frozen=True)
+class ControleRoiPari:
+    """Détail par pari du contrôle ROI (cf. L011 §8.7) — `controle_roi` reste
+    l'agrégat par analyse ; cette table donne la granularité par pari nécessaire
+    à `statistique_pari` depuis qu'une analyse produit plusieurs types de pari
+    (cf. `src.algorithms.classement.construire_paris`)."""
+
+    pari_id: int
+    id: int | None = None
+    mise: float = 0.0
+    gains: float = 0.0
+    profit: float | None = None
+    roi: float | None = None
+    valide: bool = False

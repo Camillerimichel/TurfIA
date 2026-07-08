@@ -48,6 +48,9 @@ def test_load_settings_valeurs_correctes(monkeypatch, config_file):
     assert settings.pagination_default_size == 20
     assert settings.pagination_max_size == 100
     assert settings.app_port == 8000
+    assert settings.session_duree_minutes == 60
+    assert settings.login_max_tentatives == 5
+    assert settings.login_fenetre_secondes == 300
 
 
 def test_load_settings_fichier_introuvable(monkeypatch, tmp_path):

@@ -1,0 +1,317 @@
+"""Repository des tables statistiques — cf. L015 §6, L030.4.
+
+Chaque table expose `calculer_X` (agrégation en lecture sur `controle_roi` et les
+tables liées, ne persiste rien) puis `create_X` (INSERT — jamais d'UPDATE : un
+recalcul insère toujours une nouvelle ligne, cf. L030.4 §10).
+"""
+
+from __future__ import annotations
+
+import psycopg
+from psycopg.rows import class_row
+
+from src.algorithms.score import SEUILS_DECISION_PAR_DEFAUT
+from src.models.statistique import (
+    StatistiqueDiscipline,
+    StatistiqueGlobale,
+    StatistiqueHippodrome,
+    StatistiqueModele,
+    StatistiquePari,
+    StatistiqueScore,
+)
+
+
+def _ratio_pourcentage(numerateur: float, denominateur: float) -> float | None:
+    return (numerateur / denominateur) * 100 if denominateur else None
+
+
+class StatistiqueRepository:
+    def __init__(self, conn: psycopg.Connection) -> None:
+        self._conn = conn
+
+    def calculer_globale(self) -> StatistiqueGlobale:
+        with self._conn.cursor() as cur:
+            cur.execute("SELECT COUNT(DISTINCT course_id) FROM analyses")
+            (nb_courses,) = cur.fetchone()
+            cur.execute("SELECT COUNT(DISTINCT course_id) FROM analyses WHERE budget > 0")
+            (nb_jouees,) = cur.fetchone()
+            cur.execute(
+                "SELECT COALESCE(SUM(mise), 0), COALESCE(SUM(gains), 0), COUNT(*), COUNT(*) FILTER (WHERE valide) "
+                "FROM controle_roi"
+            )
+            mises, gains, nb_controles, nb_valides = cur.fetchone()
+
+        mises, gains = float(mises), float(gains)
+        profit = gains - mises
+        return StatistiqueGlobale(
+            nb_courses=nb_courses,
+            nb_jouees=nb_jouees,
+            nb_ignorees=nb_courses - nb_jouees,
+            mises=mises,
+            gains=gains,
+            profit=profit,
+            roi=_ratio_pourcentage(profit, mises),
+            taux_reussite=_ratio_pourcentage(nb_valides, nb_controles),
+        )
+
+    def create_globale(self, stat: StatistiqueGlobale) -> StatistiqueGlobale:
+        with self._conn.cursor(row_factory=class_row(StatistiqueGlobale)) as cur:
+            cur.execute(
+                """
+                INSERT INTO statistique_globale
+                    (nb_courses, nb_jouees, nb_ignorees, mises, gains, profit, roi, taux_reussite)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, date_calcul, nb_courses, nb_jouees, nb_ignorees, mises, gains, profit, roi, taux_reussite
+                """,
+                (
+                    stat.nb_courses,
+                    stat.nb_jouees,
+                    stat.nb_ignorees,
+                    stat.mises,
+                    stat.gains,
+                    stat.profit,
+                    stat.roi,
+                    stat.taux_reussite,
+                ),
+            )
+            return cur.fetchone()
+
+    def calculer_scores(self) -> list[StatistiqueScore]:
+        seuil_prudent, seuil_normal, seuil_opportunite = SEUILS_DECISION_PAR_DEFAUT
+        tranches = [
+            (0.0, seuil_prudent),
+            (seuil_prudent, seuil_normal),
+            (seuil_normal, seuil_opportunite),
+            (seuil_opportunite, 100.0),
+        ]
+        resultats = []
+        with self._conn.cursor() as cur:
+            for index, (score_min, score_max) in enumerate(tranches):
+                dernier = index == len(tranches) - 1
+                operateur_max = "<=" if dernier else "<"
+                cur.execute(
+                    f"""
+                    SELECT COUNT(*), COUNT(*) FILTER (WHERE cr.valide), COALESCE(SUM(cr.mise), 0), COALESCE(SUM(cr.gains), 0)
+                    FROM controle_roi cr
+                    JOIN analyses a ON a.id = cr.analyse_id
+                    WHERE a.score_confiance >= %s AND a.score_confiance {operateur_max} %s
+                    """,
+                    (score_min, score_max),
+                )
+                nb_courses, nb_gagnantes, mises, gains = cur.fetchone()
+                mises, gains = float(mises), float(gains)
+                resultats.append(
+                    StatistiqueScore(
+                        score_min=score_min,
+                        score_max=score_max,
+                        nb_courses=nb_courses,
+                        nb_gagnantes=nb_gagnantes,
+                        roi=_ratio_pourcentage(gains - mises, mises),
+                        taux_reussite=_ratio_pourcentage(nb_gagnantes, nb_courses),
+                    )
+                )
+        return resultats
+
+    def create_score(self, stat: StatistiqueScore) -> StatistiqueScore:
+        with self._conn.cursor(row_factory=class_row(StatistiqueScore)) as cur:
+            cur.execute(
+                """
+                INSERT INTO statistique_score (score_min, score_max, nb_courses, nb_gagnantes, roi, taux_reussite)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id, score_min, score_max, nb_courses, nb_gagnantes, roi, taux_reussite
+                """,
+                (stat.score_min, stat.score_max, stat.nb_courses, stat.nb_gagnantes, stat.roi, stat.taux_reussite),
+            )
+            return cur.fetchone()
+
+    def calculer_hippodromes(self) -> list[StatistiqueHippodrome]:
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT re.hippodrome_id, COUNT(*), COALESCE(SUM(cr.mise), 0), COALESCE(SUM(cr.gains), 0)
+                FROM controle_roi cr
+                JOIN analyses a ON a.id = cr.analyse_id
+                JOIN course c ON c.id = a.course_id
+                JOIN reunion re ON re.id = c.reunion_id
+                GROUP BY re.hippodrome_id
+                """
+            )
+            lignes = cur.fetchall()
+        resultats = []
+        for hippodrome_id, nb_courses, mises, gains in lignes:
+            mises, gains = float(mises), float(gains)
+            resultats.append(
+                StatistiqueHippodrome(
+                    hippodrome_id=hippodrome_id, nb_courses=nb_courses, mises=mises, gains=gains,
+                    profit=gains - mises, roi=_ratio_pourcentage(gains - mises, mises),
+                )
+            )
+        return resultats
+
+    def create_hippodrome(self, stat: StatistiqueHippodrome) -> StatistiqueHippodrome:
+        with self._conn.cursor(row_factory=class_row(StatistiqueHippodrome)) as cur:
+            cur.execute(
+                """
+                INSERT INTO statistique_hippodrome (hippodrome_id, nb_courses, mises, gains, profit, roi)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id, hippodrome_id, nb_courses, mises, gains, profit, roi
+                """,
+                (stat.hippodrome_id, stat.nb_courses, stat.mises, stat.gains, stat.profit, stat.roi),
+            )
+            return cur.fetchone()
+
+    def calculer_disciplines(self) -> list[StatistiqueDiscipline]:
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT c.discipline_id, COUNT(*), COALESCE(SUM(cr.mise), 0), COALESCE(SUM(cr.gains), 0)
+                FROM controle_roi cr
+                JOIN analyses a ON a.id = cr.analyse_id
+                JOIN course c ON c.id = a.course_id
+                WHERE c.discipline_id IS NOT NULL
+                GROUP BY c.discipline_id
+                """
+            )
+            lignes = cur.fetchall()
+        resultats = []
+        for discipline_id, nb_courses, mises, gains in lignes:
+            mises, gains = float(mises), float(gains)
+            resultats.append(
+                StatistiqueDiscipline(
+                    discipline_id=discipline_id, nb_courses=nb_courses, mises=mises, gains=gains,
+                    profit=gains - mises, roi=_ratio_pourcentage(gains - mises, mises),
+                )
+            )
+        return resultats
+
+    def create_discipline(self, stat: StatistiqueDiscipline) -> StatistiqueDiscipline:
+        with self._conn.cursor(row_factory=class_row(StatistiqueDiscipline)) as cur:
+            cur.execute(
+                """
+                INSERT INTO statistique_discipline (discipline_id, nb_courses, mises, gains, profit, roi)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id, discipline_id, nb_courses, mises, gains, profit, roi
+                """,
+                (stat.discipline_id, stat.nb_courses, stat.mises, stat.gains, stat.profit, stat.roi),
+            )
+            return cur.fetchone()
+
+    def calculer_paris(self) -> list[StatistiquePari]:
+        """Regroupe par `pari.type_pari` — mise/gains/validité viennent de
+        `controle_roi_pari` (une ligne par pari, cf. L011 §8.7), pas de
+        `controle_roi` (un agrégat par analyse, insuffisant depuis qu'une analyse
+        produit plusieurs types de pari, cf. `construire_paris` — corrigé le
+        2026-07-08, cf. PROJECT_STATE.md)."""
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT p.type_pari, COUNT(*), COUNT(*) FILTER (WHERE crp.valide),
+                       COALESCE(SUM(crp.mise), 0), COALESCE(SUM(crp.gains), 0)
+                FROM controle_roi_pari crp
+                JOIN pari p ON p.id = crp.pari_id
+                GROUP BY p.type_pari
+                """
+            )
+            lignes = cur.fetchall()
+        resultats = []
+        for type_pari, nb_paris, nb_gagnants, mises, gains in lignes:
+            mises, gains = float(mises), float(gains)
+            resultats.append(
+                StatistiquePari(
+                    type_pari=type_pari, nb_paris=nb_paris, mises=mises, gains=gains,
+                    profit=gains - mises, roi=_ratio_pourcentage(gains - mises, mises),
+                    taux_reussite=_ratio_pourcentage(nb_gagnants, nb_paris),
+                )
+            )
+        return resultats
+
+    def create_pari_stat(self, stat: StatistiquePari) -> StatistiquePari:
+        with self._conn.cursor(row_factory=class_row(StatistiquePari)) as cur:
+            cur.execute(
+                """
+                INSERT INTO statistique_pari (type_pari, nb_paris, mises, gains, profit, roi, taux_reussite)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, type_pari, nb_paris, mises, gains, profit, roi, taux_reussite
+                """,
+                (stat.type_pari, stat.nb_paris, stat.mises, stat.gains, stat.profit, stat.roi, stat.taux_reussite),
+            )
+            return cur.fetchone()
+
+    def calculer_modeles(self) -> list[StatistiqueModele]:
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT a.version, MIN(re.date), MAX(re.date), COUNT(*),
+                       COUNT(*) FILTER (WHERE cr.valide), COALESCE(SUM(cr.mise), 0), COALESCE(SUM(cr.gains), 0)
+                FROM controle_roi cr
+                JOIN analyses a ON a.id = cr.analyse_id
+                JOIN course c ON c.id = a.course_id
+                JOIN reunion re ON re.id = c.reunion_id
+                GROUP BY a.version
+                """
+            )
+            lignes = cur.fetchall()
+        resultats = []
+        for version, date_debut, date_fin, nb_courses, nb_valides, mises, gains in lignes:
+            mises, gains = float(mises), float(gains)
+            resultats.append(
+                StatistiqueModele(
+                    version_modele=str(version), date_debut=date_debut, date_fin=date_fin, nb_courses=nb_courses,
+                    roi=_ratio_pourcentage(gains - mises, mises), taux_reussite=_ratio_pourcentage(nb_valides, nb_courses),
+                )
+            )
+        return resultats
+
+    def create_modele(self, stat: StatistiqueModele) -> StatistiqueModele:
+        with self._conn.cursor(row_factory=class_row(StatistiqueModele)) as cur:
+            cur.execute(
+                """
+                INSERT INTO statistique_modele
+                    (version_modele, date_debut, date_fin, nb_courses, roi, taux_reussite, commentaire)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, version_modele, date_debut, date_fin, nb_courses, roi, taux_reussite, commentaire
+                """,
+                (
+                    stat.version_modele,
+                    stat.date_debut,
+                    stat.date_fin,
+                    stat.nb_courses,
+                    stat.roi,
+                    stat.taux_reussite,
+                    stat.commentaire,
+                ),
+            )
+            return cur.fetchone()
+
+    def list_globale(self) -> list[StatistiqueGlobale]:
+        return self._list("statistique_globale", StatistiqueGlobale,
+                           "id, date_calcul, nb_courses, nb_jouees, nb_ignorees, mises, gains, profit, roi, taux_reussite",
+                           "date_calcul")
+
+    def list_scores(self) -> list[StatistiqueScore]:
+        return self._list("statistique_score", StatistiqueScore,
+                           "id, score_min, score_max, nb_courses, nb_gagnantes, roi, taux_reussite", "cree_le")
+
+    def list_hippodromes(self) -> list[StatistiqueHippodrome]:
+        return self._list("statistique_hippodrome", StatistiqueHippodrome,
+                           "id, hippodrome_id, nb_courses, mises, gains, profit, roi", "cree_le")
+
+    def list_disciplines(self) -> list[StatistiqueDiscipline]:
+        return self._list("statistique_discipline", StatistiqueDiscipline,
+                           "id, discipline_id, nb_courses, mises, gains, profit, roi", "cree_le")
+
+    def list_paris(self) -> list[StatistiquePari]:
+        return self._list("statistique_pari", StatistiquePari,
+                           "id, type_pari, nb_paris, mises, gains, profit, roi, taux_reussite", "cree_le")
+
+    def list_modeles(self) -> list[StatistiqueModele]:
+        return self._list("statistique_modele", StatistiqueModele,
+                           "id, version_modele, date_debut, date_fin, nb_courses, roi, taux_reussite, commentaire",
+                           "cree_le")
+
+    def _list(self, table: str, modele: type, colonnes: str, colonne_tri: str) -> list:
+        """`table`/`colonnes`/`colonne_tri` sont toujours des littéraux fournis par
+        le code appelant ci-dessus, jamais dérivés d'une entrée utilisateur."""
+        with self._conn.cursor(row_factory=class_row(modele)) as cur:
+            cur.execute(f"SELECT {colonnes} FROM {table} ORDER BY {colonne_tri} DESC")
+            return cur.fetchall()

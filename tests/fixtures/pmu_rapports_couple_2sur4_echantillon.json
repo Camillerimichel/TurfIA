@@ -1,0 +1,191 @@
+[
+  {
+    "typePari": "COUPLE_GAGNANT",
+    "miseBase": 200,
+    "rembourse": false,
+    "rapports": [
+      {
+        "libelle": "Couplé gagnant",
+        "dividende": 6760,
+        "dividendePourUnEuro": 6760,
+        "combinaison": "5-3",
+        "nombreGagnants": 1164.81,
+        "dividendePourUneMiseDeBase": 13520,
+        "dividendeUnite": "PourUnEuro"
+      },
+      {
+        "libelle": "Couplé Gagnant 1 NP",
+        "dividende": 0,
+        "dividendePourUnEuro": 0,
+        "combinaison": "5-NP",
+        "nombreGagnants": 0,
+        "dividendePourUneMiseDeBase": 0,
+        "dividendeUnite": "PourUnEuro"
+      }
+    ],
+    "audience": "NATIONAL",
+    "dividendeUnite": "PourUnEuro",
+    "famillePari": "Couple"
+  },
+  {
+    "typePari": "COUPLE_PLACE",
+    "miseBase": 200,
+    "rembourse": false,
+    "rapports": [
+      {
+        "libelle": "Couplé placé",
+        "dividende": 1840,
+        "dividendePourUnEuro": 1840,
+        "combinaison": "5-3",
+        "nombreGagnants": 2306.47,
+        "dividendePourUneMiseDeBase": 3680,
+        "dividendeUnite": "PourUnEuro"
+      },
+      {
+        "libelle": "Couplé placé",
+        "dividende": 1380,
+        "dividendePourUnEuro": 1380,
+        "combinaison": "5-7",
+        "nombreGagnants": 3776.8,
+        "dividendePourUneMiseDeBase": 2760,
+        "dividendeUnite": "PourUnEuro"
+      },
+      {
+        "libelle": "Couplé placé",
+        "dividende": 1510,
+        "dividendePourUnEuro": 1510,
+        "combinaison": "3-7",
+        "nombreGagnants": 3233.76,
+        "dividendePourUneMiseDeBase": 3020,
+        "dividendeUnite": "PourUnEuro"
+      },
+      {
+        "libelle": "Couplé Placé 1 NP",
+        "dividende": 0,
+        "dividendePourUnEuro": 0,
+        "combinaison": "5-NP",
+        "dividendePourUneMiseDeBase": 0,
+        "dividendeUnite": "PourUnEuro"
+      },
+      {
+        "libelle": "Couplé Placé 1 NP",
+        "dividende": 0,
+        "dividendePourUnEuro": 0,
+        "combinaison": "3-NP",
+        "dividendePourUneMiseDeBase": 0,
+        "dividendeUnite": "PourUnEuro"
+      },
+      {
+        "libelle": "Couplé Placé 1 NP",
+        "dividende": 0,
+        "dividendePourUnEuro": 0,
+        "combinaison": "7-NP",
+        "dividendePourUneMiseDeBase": 0,
+        "dividendeUnite": "PourUnEuro"
+      }
+    ],
+    "audience": "NATIONAL",
+    "dividendeUnite": "PourUnEuro",
+    "famillePari": "Couple"
+  },
+  {
+    "typePari": "DEUX_SUR_QUATRE",
+    "miseBase": 300,
+    "rembourse": false,
+    "rapports": [
+      {
+        "libelle": "2sur4",
+        "dividende": 3090,
+        "dividendePourUnEuro": 1030,
+        "combinaison": "5-3",
+        "nombreGagnants": 11191.93,
+        "dividendePourUneMiseDeBase": 3090,
+        "dividendeUnite": "PourUneMiseDeBase"
+      },
+      {
+        "libelle": "2sur4",
+        "dividende": 3090,
+        "dividendePourUnEuro": 1030,
+        "combinaison": "5-7",
+        "nombreGagnants": 11191.93,
+        "dividendePourUneMiseDeBase": 3090,
+        "dividendeUnite": "PourUneMiseDeBase"
+      },
+      {
+        "libelle": "2sur4",
+        "dividende": 3090,
+        "dividendePourUnEuro": 1030,
+        "combinaison": "5-10",
+        "nombreGagnants": 11191.93,
+        "dividendePourUneMiseDeBase": 3090,
+        "dividendeUnite": "PourUneMiseDeBase"
+      },
+      {
+        "libelle": "2sur4",
+        "dividende": 3090,
+        "dividendePourUnEuro": 1030,
+        "combinaison": "3-7",
+        "nombreGagnants": 11191.93,
+        "dividendePourUneMiseDeBase": 3090,
+        "dividendeUnite": "PourUneMiseDeBase"
+      },
+      {
+        "libelle": "2sur4",
+        "dividende": 3090,
+        "dividendePourUnEuro": 1030,
+        "combinaison": "3-10",
+        "nombreGagnants": 11191.93,
+        "dividendePourUneMiseDeBase": 3090,
+        "dividendeUnite": "PourUneMiseDeBase"
+      },
+      {
+        "libelle": "2sur4",
+        "dividende": 3090,
+        "dividendePourUnEuro": 1030,
+        "combinaison": "7-10",
+        "nombreGagnants": 11191.93,
+        "dividendePourUneMiseDeBase": 3090,
+        "dividendeUnite": "PourUneMiseDeBase"
+      },
+      {
+        "libelle": "2sur4 1 NP",
+        "dividende": 0,
+        "dividendePourUnEuro": 0,
+        "combinaison": "5-NP",
+        "nombreGagnants": 0,
+        "dividendePourUneMiseDeBase": 0,
+        "dividendeUnite": "PourUneMiseDeBase"
+      },
+      {
+        "libelle": "2sur4 1 NP",
+        "dividende": 0,
+        "dividendePourUnEuro": 0,
+        "combinaison": "3-NP",
+        "nombreGagnants": 0,
+        "dividendePourUneMiseDeBase": 0,
+        "dividendeUnite": "PourUneMiseDeBase"
+      },
+      {
+        "libelle": "2sur4 1 NP",
+        "dividende": 0,
+        "dividendePourUnEuro": 0,
+        "combinaison": "7-NP",
+        "nombreGagnants": 0,
+        "dividendePourUneMiseDeBase": 0,
+        "dividendeUnite": "PourUneMiseDeBase"
+      },
+      {
+        "libelle": "2sur4 1 NP",
+        "dividende": 0,
+        "dividendePourUnEuro": 0,
+        "combinaison": "10-NP",
+        "nombreGagnants": 0,
+        "dividendePourUneMiseDeBase": 0,
+        "dividendeUnite": "PourUneMiseDeBase"
+      }
+    ],
+    "audience": "NATIONAL",
+    "dividendeUnite": "PourUneMiseDeBase",
+    "famillePari": "2sur4"
+  }
+]

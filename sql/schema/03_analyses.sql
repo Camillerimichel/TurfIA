@@ -77,3 +77,23 @@ CREATE TABLE IF NOT EXISTS controle_roi (
     CONSTRAINT ck_controle_roi_mise CHECK (mise >= 0),
     CONSTRAINT ck_controle_roi_gains CHECK (gains >= 0)
 );
+
+-- Détail par pari du contrôle ROI (cf. L011 §8.7) — `controle_roi` reste l'agrégat
+-- par analyse (inchangé, alimente statistique_globale/score/hippodrome/discipline) ;
+-- cette table donne la granularité par pari nécessaire à statistique_pari depuis
+-- qu'une analyse produit plusieurs types de pari (cf. `pari`, L031.6 §5). Immuable
+-- après création, comme controle_roi : jamais de mise à jour en place.
+CREATE TABLE IF NOT EXISTS controle_roi_pari (
+    id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    pari_id        BIGINT NOT NULL REFERENCES pari(id) ON DELETE RESTRICT,
+    mise           DECIMAL(8,2) NOT NULL DEFAULT 0,
+    gains          DECIMAL(10,2) NOT NULL DEFAULT 0,
+    profit         DECIMAL(10,2),
+    roi            DECIMAL(8,2),
+    valide         BOOLEAN NOT NULL DEFAULT FALSE,
+    cree_le        TIMESTAMP NOT NULL DEFAULT now(),
+    CONSTRAINT uk_controle_roi_pari_pari UNIQUE (pari_id),
+    CONSTRAINT ck_controle_roi_pari_mise CHECK (mise >= 0),
+    CONSTRAINT ck_controle_roi_pari_gains CHECK (gains >= 0)
+);
+CREATE INDEX IF NOT EXISTS idx_controle_roi_pari_pari ON controle_roi_pari (pari_id);
