@@ -58,6 +58,7 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   | LeTROT | 1 | Non implémentée — protection anti-bot (HTTP 403) |
   | ZEbet, Genybet, Unibet, Betclic | 2 | Non implémentées — non explorées |
   | Canalturf | 3 | **Implémentée** (`src/collecte/canalturf/`) — Quinté+ du jour uniquement, cf. ci-dessous |
+  | Zone-Turf | 3 | **Implémentée** (`src/collecte/zoneturf/`) — Quinté+ du jour uniquement, combinée à Canalturf, cf. ci-dessous. Source hors taxonomie initiale, ajoutée à la demande de l'utilisateur (compte créé sur le site, non nécessaire pour la page utilisée — publique) |
   | Paris-Turf | 3 | Non implémentée — robots.txt bloque explicitement le user-agent `anthropic-ai` (`Disallow: /`), séparément de la règle générale `User-Agent: *` |
   | Geny | 3 | Non implémentée — protection anti-bot (HTTP 429) **et** robots.txt interdit les pages de pronostics/partants pour tous |
   | ZEturf | 3 | Non implémentée — robots.txt interdit `/partants/` pour tous |
@@ -71,11 +72,12 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
 - **Indicateurs réels** (`src/algorithms/indicateurs.py`) : sous-scores Marché
   (probabilité implicite du marché, marge neutralisée, normalisée sur le champ),
   Forme (moyenne normalisée des dernières positions, format « musique » PMU parsé et
-  vérifié sur données réelles), Presse (rang dans le consensus multi-journaux
-  Canalturf, cf. ci-dessous), Professionnels (moyenne des taux de victoires
-  jockey/entraîneur/couple), Historique (taux de victoires du cheval à cet
-  hippodrome, cf. L031.1 §5) et Aptitude (taux de victoires du cheval dans les mêmes
-  distance/surface/état de piste) ; approximation partielle du risque par la taille
+  vérifié sur données réelles), Presse (moyenne des rangs dans les consensus
+  multi-journaux Canalturf et Zone-Turf combinés, cf. ci-dessous), Professionnels
+  (moyenne des taux de victoires jockey/entraîneur/couple), Historique (taux de
+  victoires du cheval à cet hippodrome, cf. L031.1 §5) et Aptitude (taux de
+  victoires du cheval dans les mêmes distance/surface/état de piste) ;
+  approximation partielle du risque par la taille
   du champ. `PreparationDonneesService.preparer_donnees_partants(course_id)`
   (`src/services/preparation_service.py`) construit ces indicateurs à partir des
   données déjà collectées et les met en forme pour `AnalyseService` — exclut les
@@ -89,19 +91,32 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   piste ; Historique est toujours calculée (hippodrome toujours connu).
   Le sous-score Presse est best-effort : `ConsensusPresseService`
   (`src/services/consensus_presse_service.py`) est un collaborateur optionnel (défaut
-  `None`) et toute indisponibilité de Canalturf (`ImportationError`) est journalisée
-  puis ignorée plutôt que de faire échouer l'analyse. Exposé via `POST
-  /courses/{id}/analyses/auto` et `scripts/analyser_course.py --course-id N` (ce
-  dernier ne branche pas encore le service presse, cf. limites ci-dessous) : la
-  boucle collecte → indicateurs → analyse est désormais complète et automatique,
-  sans saisie manuelle.
-- **Consensus presse** (`src/collecte/canalturf/`, `src/services/consensus_presse_service.py`) :
-  scrape la page `courses_quinte.php` de Canalturf pour trouver le Quinté+ du jour,
-  confirme via le `R{réunion}C{course}` extrait de la page que la course analysée
-  est bien celle-là, puis extrait le classement du bloc « La sélection de la presse »
-  (~14 titres de presse hippique agrégés par Canalturf lui-même). **Limité au
-  Quinté+ du jour** (1 course/jour) : vérifié réellement que ce bloc n'existe sur
-  aucune autre course de la page Canalturf.
+  `None`) et l'indisponibilité de chaque source (`ImportationError`) est journalisée
+  et encaissée indépendamment — une source en panne n'empêche jamais l'autre de
+  contribuer. Exposé via `POST /courses/{id}/analyses/auto` et
+  `scripts/analyser_course.py --course-id N` (ce dernier ne branche pas encore le
+  service presse, cf. limites ci-dessous) : la boucle collecte → indicateurs →
+  analyse est désormais complète et automatique, sans saisie manuelle.
+- **Consensus presse** (`src/collecte/canalturf/`, `src/collecte/zoneturf/`,
+  `src/services/consensus_presse_service.py`) : combine deux sources, chacune
+  vérifiée réellement comme ne portant un vrai consensus multi-titres que pour la
+  course Quinté+ du jour (1 course/jour) :
+  - **Canalturf** : scrape `courses_quinte.php` pour trouver le Quinté+, confirme
+    via le `R{réunion}C{course}` de la page, extrait le bloc « La sélection de la
+    presse » (~14 titres de presse hippique).
+  - **Zone-Turf** : une seule page (`/quinte/`) porte à la fois le repère
+    `R{réunion} C{course}` et le tableau « Les pronostics de la presse du Tiercé
+    Quarté Quinté » ; seule la ligne « Synthèse Quinté de la presse » (consensus
+    sur 7 titres) est utilisée — la sélection maison Zone-Turf (première ligne du
+    tableau) est mono-source, hors périmètre, même principe que Canalturf.
+  - Les deux sous-scores individuels (`calculer_indicateur_presse`) sont moyennés
+    (`calculer_indicateur_presse_combine`) quand les deux sources répondent ;
+    sinon la seule source disponible est utilisée seule ; si aucune ne répond, la
+    clé `"presse"` est simplement absente.
+  - Source Zone-Turf ajoutée hors de la taxonomie niveau 3 initiale (Paris-Turf/
+    Geny/Canalturf/ZEturf) : découverte via un compte créé par l'utilisateur sur
+    le site, mais la page utilisée est publique — le compte n'était pas
+    nécessaire pour cette donnée précise.
 - **Authentification** (`src/core/security.py`, `src/services/auth_service.py`,
   `api/routes/auth.py`, `api/dependencies/auth.py`) : jetons de session **opaques**
   côté serveur (pas de JWT) — L021 §3.3 décrit littéralement des « sessions »
@@ -127,12 +142,13 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   FK `ON DELETE RESTRICT` (déjà en place, cf. L011 §9) est traduite en 409 plutôt
   que vérifiée à l'avance (évite une fenêtre de concurrence). **Jamais** de PATCH/
   DELETE sur résultat/cote/analyse et dérivés (historisés, cf. L011 §15).
-- **Tests** : 119 tests unitaires (algorithmes, configuration, mappers PMU/
-  Canalturf, sécurité — hachage mot de passe/jeton, limiteur de débit, dépendances
-  RBAC) + 69 tests d'intégration (API courses/analyses/résultats/cotes/PATCH/
-  DELETE, AuthService, authentification API bout en bout, branchement presse et
-  Professionnels/Historique/Aptitude — repositories/services en mémoire,
-  `tests/integration/`), tous verts (188 au total).
+- **Tests** : 127 tests unitaires (algorithmes, configuration, mappers PMU/
+  Canalturf/Zone-Turf, sécurité — hachage mot de passe/jeton, limiteur de débit,
+  dépendances RBAC) + 70 tests d'intégration (API courses/analyses/résultats/
+  cotes/PATCH/DELETE, AuthService, authentification API bout en bout, branchement
+  presse combinée Canalturf+Zone-Turf et Professionnels/Historique/Aptitude —
+  repositories/services en mémoire, `tests/integration/`), tous verts (197 au
+  total).
 
 ## Correction notable apportée au SAD pendant l'implémentation
 
@@ -238,13 +254,15 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
 
 ## Prochaine étape
 
-L'essentiel de la surface API et l'authentification/RBAC réelle sont désormais en
-place. Pistes possibles : module Statistiques (L031.7 — débloquerait la vraie
-définition L031.2 de « Historique » et les familles Value/Contexte, ainsi que des
-endpoints de lecture pour ce module), audit systématique des écritures (au-delà
-des seuls événements d'authentification), administration des utilisateurs via
-l'API, exploration d'une deuxième source niveau 1 (France Galop) ou niveau 3
-(pour sortir du Quinté+-only de Canalturf), interface HTML (L018).
+L'essentiel de la surface API, l'authentification/RBAC réelle et une deuxième
+source de consensus presse sont désormais en place. Pistes possibles : module
+Statistiques (L031.7 — débloquerait la vraie définition L031.2 de « Historique »
+et les familles Value/Contexte, ainsi que des endpoints de lecture pour ce
+module), audit systématique des écritures (au-delà des seuls événements
+d'authentification), administration des utilisateurs via l'API, exploration
+d'une source niveau 1 (France Galop) pour sortir du mono-source PMU, sortir du
+Quinté+-only pour la Presse (aucune des sources niveau 3 vérifiées ne couvre les
+autres courses), interface HTML (L018).
 
 ## Conventions de développement
 

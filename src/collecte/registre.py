@@ -78,6 +78,16 @@ SOURCES: tuple[SourceInfo, ...] = (
         implementee=False,
         raison_si_non_implementee=RAISON_ROBOTS_CONTENU_BLOQUE + " (Disallow: /partants/)",
     ),
+    SourceInfo(
+        "Zone-Turf",
+        niveau=3,
+        role=(
+            "Consensus presse multi-journaux (7 titres) — Quinté+ du jour uniquement, "
+            "combiné à Canalturf (cf. src/collecte/zoneturf/, src/services/consensus_presse_service.py). "
+            "Source ajoutée hors de la taxonomie initiale, à la demande de l'utilisateur."
+        ),
+        implementee=True,
+    ),
 )
 
 
