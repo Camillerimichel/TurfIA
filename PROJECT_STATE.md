@@ -47,6 +47,10 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
 - **Authentification/RBAC réels** (cf. « Authentification » ci-dessous) : toutes
   les routes hors `/system/*` et `/auth/login` exigent un jeton de session valide ;
   chaque route impose un rôle minimal (L021 §4.1).
+- **Module Statistiques** (cf. « Statistiques et ROI réel » ci-dessous) : ROI réel
+  a posteriori (comparé au rapport officiel PMU) et 6 tables statistiques agrégées
+  (L030.4), désormais alimentées — `PROJECT_STATE.md` documentait jusqu'ici
+  l'absence totale de code pour ce module.
 - **Collecte** (`src/collecte/`) : architecture multi-sources en 4 niveaux (données
   officielles, marché, consensus presse, base TurfIA propriétaire). Registre
   déclaratif de 12 sources (`src/collecte/registre.py`) avec statut vérifié par accès
@@ -143,6 +147,43 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   comptes via `scripts/creer_utilisateur.py` (mot de passe saisi de façon
   interactive, jamais en argument CLI) — l'API n'expose pas de route de création
   d'utilisateurs.
+- **Statistiques et ROI réel** (`src/algorithms/controle_roi.py`,
+  `src/services/controle_roi_service.py`, `src/services/statistique_service.py`,
+  `src/repositories/statistique_repository.py`, `scripts/calculer_statistiques.py`,
+  `GET /statistiques/*`) : ferme la boucle collecte → analyse → résultat réel →
+  statistiques.
+  - **Découverte réelle (2026-07-08)** : PMU expose `GET /programme/{date}/
+    R{n}/C{n}/rapports-definitifs` (jusque-là non exploité), qui donne le rapport
+    officiel réel par type de pari une fois la course arrivée — permet de calculer
+    un vrai ROI sans nouvelle source externe, juste une extension de l'adaptateur
+    PMU déjà en place (`src/collecte/pmu/client.py`,
+    `extraire_rapport_simple_gagnant`).
+  - `AnalyseService` ne génère aujourd'hui qu'un seul type de pari, « Simple
+    Gagnant » (cf. `src/services/analyse_service.py`) : seul ce type est donc
+    contrôlé contre le rapport réel dans cette tranche.
+  - `ControleRoiService.calculer_controles_manquants()` résout `pari.combinaison`
+    (le `partant_id` interne) vers le vrai numéro de course, compare au rapport
+    PMU, persiste dans `controle_roi` (table déjà prévue au schéma, jusque-là
+    inutilisée) — best-effort par analyse (rapport pas encore disponible ou type
+    de pari non pris en charge : journalisé, analyse suivante poursuivie).
+  - `StatistiqueService.calculer_toutes()` agrège `controle_roi` en 6 tables
+    (globale/score/hippodrome/discipline/pari/modèle, cf. L030.4) — toujours une
+    nouvelle ligne, jamais une mise à jour (cf. L030.4 §10). Les tranches de score
+    réutilisent `SEUILS_DECISION_PAR_DEFAUT` de `src/algorithms/score.py`.
+  - Déclenchement uniquement via `scripts/calculer_statistiques.py` (pas de route
+    API d'écriture, cohérent avec L017/L033 hors périmètre — aucun ordonnanceur).
+    Lecture via `GET /statistiques/globale|scores|hippodromes|disciplines|paris|
+    modeles` (RBAC `LECTURE`).
+  - Vérifié contre une instance PostgreSQL locale réelle (3 courses, 2 contrôlées
+    dont 1 gagnante/1 perdante, 1 analysée mais non jouée → agrégats corrects sur
+    les 6 tables) et contre l'API PMU réelle (rapport Simple Gagnant d'une course
+    déjà arrivée le jour même).
+  - **Limites assumées** (cf. ci-dessous) : le remboursement réglementaire PMU
+    pour un partant devenu non-partant après l'analyse n'est pas modélisé ;
+    `statistique_modele` agrège les analyses déjà faites par version, ce n'est
+    **pas** le moteur de rejeu/backtesting complet décrit en L031.7 §4 (comparer
+    des versions du modèle sur un historique identique) — resterait à construire
+    si un jour plusieurs types de pari ou plusieurs jeux de pondérations coexistent.
 - **PATCH/DELETE** : PATCH partiel (`exclude_unset`) sur réunion/course/partant/
   cheval/jockey/entraineur ; pas de PUT (avec des FK obligatoires immuables et des
   champs presque tous optionnels, un remplacement complet n'apporte rien de plus
@@ -150,13 +191,14 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   FK `ON DELETE RESTRICT` (déjà en place, cf. L011 §9) est traduite en 409 plutôt
   que vérifiée à l'avance (évite une fenêtre de concurrence). **Jamais** de PATCH/
   DELETE sur résultat/cote/analyse et dérivés (historisés, cf. L011 §15).
-- **Tests** : 127 tests unitaires (algorithmes, configuration, mappers PMU/
-  Canalturf/Zone-Turf, sécurité — hachage mot de passe/jeton, limiteur de débit,
-  dépendances RBAC) + 70 tests d'intégration (API courses/analyses/résultats/
-  cotes/PATCH/DELETE, AuthService, authentification API bout en bout, branchement
-  presse combinée Canalturf+Zone-Turf et Professionnels/Historique/Aptitude —
-  repositories/services en mémoire, `tests/integration/`), tous verts (197 au
-  total).
+- **Tests** : 134 tests unitaires (algorithmes dont ROI réel, configuration,
+  mappers PMU/Canalturf/Zone-Turf, sécurité — hachage mot de passe/jeton,
+  limiteur de débit, dépendances RBAC) + 81 tests d'intégration (API courses/
+  analyses/résultats/cotes/PATCH/DELETE/statistiques, AuthService,
+  authentification API bout en bout, branchement presse combinée
+  Canalturf+Zone-Turf, Professionnels/Historique/Aptitude, ControleRoiService,
+  StatistiqueService — repositories/services en mémoire, `tests/integration/`),
+  tous verts (215 au total).
 
 ## Correction notable apportée au SAD pendant l'implémentation
 
@@ -213,6 +255,28 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
   consensus presse actuel, qui s'appuie sur le `R{réunion}C{course}` extrait de
   Canalturf lui-même, pas sur cette colonne.
 
+## Limites connues du module Statistiques (documentées, pas cachées)
+
+- Seul le pari « Simple Gagnant » est contrôlé contre un rapport réel (le seul
+  type que `AnalyseService` génère aujourd'hui) — un autre type de pari
+  rencontré serait journalisé et ignoré, pas deviné.
+- Le remboursement réglementaire PMU quand le partant choisi devient non-partant
+  après l'analyse n'est pas modélisé (règles pari-mutuel non triviales, non
+  vérifiées) : traité simplement comme un pari perdant si son numéro ne
+  correspond pas à la combinaison gagnante.
+- `statistique_pari` regroupe par `type_pari` via une jointure sur `controle_roi`
+  (niveau analyse, pas niveau pari) — correct tant qu'une analyse ne produit
+  qu'un seul pari ; à revoir si plusieurs types de pari coexistent un jour dans
+  une même analyse (double-comptage possible des mises/gains).
+- `statistique_modele` est peuplée par simple agrégation des analyses déjà
+  faites, groupées par `version` — ce n'est pas le moteur de rejeu/backtesting
+  complet décrit en L031.7 §4 (recalculer tout un historique avec de nouveaux
+  paramètres pour comparer des versions), qui reste à construire.
+- Pas de purge/archivage des lignes historisées dans les 6 tables statistiques —
+  chaque exécution de `scripts/calculer_statistiques.py` ajoute une nouvelle
+  ligne par table (cf. L030.4 §10, volontaire), mais rien ne limite leur nombre
+  dans le temps.
+
 ## Limites connues de l'authentification/RBAC (documentées, pas cachées)
 
 - Limiteur de débit (`src/core/rate_limiter.py`) en mémoire, un seul processus —
@@ -238,14 +302,13 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
   squelette vide.
 - Interface HTML (L018) — `html/` est un squelette vide.
 - Endpoints résultats/cotes en écriture, PATCH/DELETE sur les ressources
-  référentielles/métier et authentification/RBAC réels sont désormais
-  implémentés (cf. ci-dessus). Reste hors périmètre : endpoints pour le module
-  Statistiques (dépend du module lui-même, non construit), administration des
-  utilisateurs via l'API.
-- Module statistiques (L030.4, L031.7) — aucun code. La vraie définition L031.2 de
-  « Historique » (performance passée du moteur TurfIA lui-même) en dépend et n'est
-  donc pas implémentée ; seule l'interprétation L031.1 (hippodrome) l'est (cf.
-  ci-dessus).
+  référentielles/métier, authentification/RBAC réels et module Statistiques
+  (ROI réel + 6 tables agrégées) sont désormais implémentés (cf. ci-dessus).
+  Reste hors périmètre : administration des utilisateurs via l'API, moteur de
+  rejeu/backtesting L031.7 §4 (cf. « Limites connues du module Statistiques »).
+- La vraie définition L031.2 de « Historique » (performance passée du moteur
+  TurfIA lui-même, pas du cheval) dépendrait de ce moteur de rejeu ; seule
+  l'interprétation L031.1 (hippodrome) est implémentée (cf. ci-dessus).
 - Collecte de niveau 1/2 partiellement implémentée (PMU uniquement, cf. ci-dessus).
 - Tous les sous-scores de `src/algorithms/score.py` sont désormais calculés
   automatiquement depuis les données collectées, à l'exception de Value et Contexte
@@ -262,15 +325,17 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
 
 ## Prochaine étape
 
-L'essentiel de la surface API, l'authentification/RBAC réelle et une deuxième
-source de consensus presse sont désormais en place. Pistes possibles : module
-Statistiques (L031.7 — débloquerait la vraie définition L031.2 de « Historique »
-et les familles Value/Contexte, ainsi que des endpoints de lecture pour ce
-module), audit systématique des écritures (au-delà des seuls événements
-d'authentification), administration des utilisateurs via l'API, exploration
-d'une source niveau 1 (France Galop) pour sortir du mono-source PMU, sortir du
-Quinté+-only pour la Presse (aucune des sources niveau 3 vérifiées ne couvre les
-autres courses), interface HTML (L018).
+L'essentiel de la surface API, l'authentification/RBAC réelle, une deuxième
+source de consensus presse et le module Statistiques (ROI réel + 6 tables
+agrégées) sont désormais en place. Pistes possibles : moteur de rejeu/
+backtesting L031.7 §4 (comparer des versions du modèle sur un historique
+identique — débloquerait aussi la vraie définition L031.2 de « Historique » et
+les familles Value/Contexte), générer d'autres types de pari que Simple Gagnant
+(Couplé, Quinté...) pour enrichir `statistique_pari`, audit systématique des
+écritures (au-delà des seuls événements d'authentification), administration
+des utilisateurs via l'API, exploration d'une source niveau 1 (France Galop)
+pour sortir du mono-source PMU, sortir du Quinté+-only pour la Presse, interface
+HTML (L018).
 
 ## Conventions de développement
 
