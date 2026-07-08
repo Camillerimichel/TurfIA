@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from api.dependencies.auth import DECLENCHEMENT_ANALYSE, LECTURE, exiger_roles
 from api.dependencies.db import get_analyse_repository, get_course_repository
 from api.dependencies.services import get_analyse_service, get_preparation_service
 from api.schemas.analyses import (
@@ -23,6 +24,7 @@ from api.schemas.common import Enveloppe
 from src.algorithms.classement import PartantClasse
 from src.core.exceptions import ValidationError
 from src.models.analyse import AnalysePartant, Selection
+from src.models.utilisateur import Utilisateur
 from src.repositories.analyse_repository import AnalyseRepository
 from src.repositories.course_repository import CourseRepository
 from src.services.analyse_service import AnalyseService, DonneesPartant
@@ -67,6 +69,7 @@ def trigger_analyse(
     payload: AnalyseTriggerIn,
     course_repo: CourseRepository = Depends(get_course_repository),
     service: AnalyseService = Depends(get_analyse_service),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*DECLENCHEMENT_ANALYSE)),
 ) -> Enveloppe[AnalyseDetailOut]:
     if course_repo.get_course(course_id) is None:
         raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
@@ -100,6 +103,7 @@ def trigger_analyse_auto(
     course_repo: CourseRepository = Depends(get_course_repository),
     preparation: PreparationDonneesService = Depends(get_preparation_service),
     service: AnalyseService = Depends(get_analyse_service),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*DECLENCHEMENT_ANALYSE)),
 ) -> Enveloppe[AnalyseDetailOut]:
     """Referme la boucle collecte -> analyse : les sous-scores (marché, forme) et
     le risque sont calculés à partir des données déjà collectées
@@ -132,7 +136,9 @@ def trigger_analyse_auto(
 
 @router.get("/courses/{course_id}/analyses", response_model=Enveloppe[list[AnalyseOut]])
 def list_analyses(
-    course_id: int, repo: AnalyseRepository = Depends(get_analyse_repository)
+    course_id: int,
+    repo: AnalyseRepository = Depends(get_analyse_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
 ) -> Enveloppe[list[AnalyseOut]]:
     analyses = [AnalyseOut.model_validate(a) for a in repo.list_analyses_by_course(course_id)]
     return Enveloppe(data=analyses)
@@ -140,7 +146,9 @@ def list_analyses(
 
 @router.get("/analyses/{analyse_id}", response_model=Enveloppe[AnalyseDetailOut])
 def get_analyse(
-    analyse_id: int, repo: AnalyseRepository = Depends(get_analyse_repository)
+    analyse_id: int,
+    repo: AnalyseRepository = Depends(get_analyse_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
 ) -> Enveloppe[AnalyseDetailOut]:
     analyse = repo.get_analyse(analyse_id)
     if analyse is None:

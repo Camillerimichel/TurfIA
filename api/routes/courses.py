@@ -50,6 +50,7 @@ def create_reunion(
     payload: ReunionIn,
     repo: CourseRepository = Depends(get_course_repository),
     referentiel_repo: ReferentielRepository = Depends(get_referentiel_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[ReunionOut]:
     if referentiel_repo.get_hippodrome(payload.hippodrome_id) is None:
         raise HTTPException(status_code=404, detail=f"Hippodrome {payload.hippodrome_id} introuvable.")
@@ -58,7 +59,11 @@ def create_reunion(
 
 
 @router.get("/reunions/{reunion_id}", response_model=Enveloppe[ReunionOut])
-def get_reunion(reunion_id: int, repo: CourseRepository = Depends(get_course_repository)) -> Enveloppe[ReunionOut]:
+def get_reunion(
+    reunion_id: int,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
+) -> Enveloppe[ReunionOut]:
     reunion = repo.get_reunion(reunion_id)
     if reunion is None:
         raise HTTPException(status_code=404, detail=f"Réunion {reunion_id} introuvable.")
@@ -91,7 +96,10 @@ def delete_reunion(
 
 @router.post("/reunions/{reunion_id}/courses", response_model=Enveloppe[CourseOut], status_code=201)
 def create_course(
-    reunion_id: int, payload: CourseIn, repo: CourseRepository = Depends(get_course_repository)
+    reunion_id: int,
+    payload: CourseIn,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[CourseOut]:
     if repo.get_reunion(reunion_id) is None:
         raise HTTPException(status_code=404, detail=f"Réunion {reunion_id} introuvable.")
@@ -101,7 +109,9 @@ def create_course(
 
 @router.get("/reunions/{reunion_id}/courses", response_model=Enveloppe[list[CourseOut]])
 def list_courses(
-    reunion_id: int, repo: CourseRepository = Depends(get_course_repository)
+    reunion_id: int,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
 ) -> Enveloppe[list[CourseOut]]:
     if repo.get_reunion(reunion_id) is None:
         raise HTTPException(status_code=404, detail=f"Réunion {reunion_id} introuvable.")
@@ -110,7 +120,11 @@ def list_courses(
 
 
 @router.get("/courses/{course_id}", response_model=Enveloppe[CourseOut])
-def get_course(course_id: int, repo: CourseRepository = Depends(get_course_repository)) -> Enveloppe[CourseOut]:
+def get_course(
+    course_id: int,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
+) -> Enveloppe[CourseOut]:
     course = repo.get_course(course_id)
     if course is None:
         raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
@@ -142,13 +156,21 @@ def delete_course(
 
 
 @router.post("/chevaux", response_model=Enveloppe[ChevalOut], status_code=201)
-def create_cheval(payload: ChevalIn, repo: CourseRepository = Depends(get_course_repository)) -> Enveloppe[ChevalOut]:
+def create_cheval(
+    payload: ChevalIn,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+) -> Enveloppe[ChevalOut]:
     cheval = repo.create_cheval(Cheval(**payload.model_dump()))
     return Enveloppe(data=ChevalOut.model_validate(cheval))
 
 
 @router.get("/chevaux/{cheval_id}", response_model=Enveloppe[ChevalOut])
-def get_cheval(cheval_id: int, repo: CourseRepository = Depends(get_course_repository)) -> Enveloppe[ChevalOut]:
+def get_cheval(
+    cheval_id: int,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
+) -> Enveloppe[ChevalOut]:
     cheval = repo.get_cheval(cheval_id)
     if cheval is None:
         raise HTTPException(status_code=404, detail=f"Cheval {cheval_id} introuvable.")
@@ -180,13 +202,21 @@ def delete_cheval(
 
 
 @router.post("/jockeys", response_model=Enveloppe[JockeyOut], status_code=201)
-def create_jockey(payload: JockeyIn, repo: CourseRepository = Depends(get_course_repository)) -> Enveloppe[JockeyOut]:
+def create_jockey(
+    payload: JockeyIn,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+) -> Enveloppe[JockeyOut]:
     jockey = repo.create_jockey(Jockey(**payload.model_dump()))
     return Enveloppe(data=JockeyOut.model_validate(jockey))
 
 
 @router.get("/jockeys/{jockey_id}", response_model=Enveloppe[JockeyOut])
-def get_jockey(jockey_id: int, repo: CourseRepository = Depends(get_course_repository)) -> Enveloppe[JockeyOut]:
+def get_jockey(
+    jockey_id: int,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
+) -> Enveloppe[JockeyOut]:
     jockey = repo.get_jockey(jockey_id)
     if jockey is None:
         raise HTTPException(status_code=404, detail=f"Jockey {jockey_id} introuvable.")
@@ -219,7 +249,9 @@ def delete_jockey(
 
 @router.post("/entraineurs", response_model=Enveloppe[EntraineurOut], status_code=201)
 def create_entraineur(
-    payload: EntraineurIn, repo: CourseRepository = Depends(get_course_repository)
+    payload: EntraineurIn,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[EntraineurOut]:
     entraineur = repo.create_entraineur(Entraineur(**payload.model_dump()))
     return Enveloppe(data=EntraineurOut.model_validate(entraineur))
@@ -227,7 +259,9 @@ def create_entraineur(
 
 @router.get("/entraineurs/{entraineur_id}", response_model=Enveloppe[EntraineurOut])
 def get_entraineur(
-    entraineur_id: int, repo: CourseRepository = Depends(get_course_repository)
+    entraineur_id: int,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
 ) -> Enveloppe[EntraineurOut]:
     entraineur = repo.get_entraineur(entraineur_id)
     if entraineur is None:
@@ -261,7 +295,10 @@ def delete_entraineur(
 
 @router.post("/courses/{course_id}/partants", response_model=Enveloppe[PartantOut], status_code=201)
 def create_partant(
-    course_id: int, payload: PartantIn, repo: CourseRepository = Depends(get_course_repository)
+    course_id: int,
+    payload: PartantIn,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[PartantOut]:
     if repo.get_course(course_id) is None:
         raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
@@ -277,7 +314,9 @@ def create_partant(
 
 @router.get("/courses/{course_id}/partants", response_model=Enveloppe[list[PartantOut]])
 def list_partants(
-    course_id: int, repo: CourseRepository = Depends(get_course_repository)
+    course_id: int,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
 ) -> Enveloppe[list[PartantOut]]:
     if repo.get_course(course_id) is None:
         raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
@@ -286,7 +325,11 @@ def list_partants(
 
 
 @router.get("/partants/{partant_id}", response_model=Enveloppe[PartantOut])
-def get_partant(partant_id: int, repo: CourseRepository = Depends(get_course_repository)) -> Enveloppe[PartantOut]:
+def get_partant(
+    partant_id: int,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
+) -> Enveloppe[PartantOut]:
     partant = repo.get_partant(partant_id)
     if partant is None:
         raise HTTPException(status_code=404, detail=f"Partant {partant_id} introuvable.")
