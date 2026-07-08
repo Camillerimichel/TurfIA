@@ -28,17 +28,25 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   à L031.1-L031.6, avec garde-fou anti-martingale.
 - **Service** (`src/services/analyse_service.py`) : orchestre la chaîne L006 §3.
 - **API** (`api/`) : FastAPI versionnée (`/api/v1`), enveloppe de réponse normalisée
-  (L032.1 §6), gestion d'erreurs centralisée y compris 404/422 (L023 §4.1, L016 §7).
-  Endpoints : `/system/health`, `/system/version`, `GET /hippodromes`,
-  `POST/GET /reunions`, `POST/GET /reunions/{id}/courses`, `GET /courses/{id}`,
-  `POST/GET /chevaux/{id}`, `POST/GET /jockeys/{id}`, `POST/GET /entraineurs/{id}`,
-  `POST/GET /courses/{id}/partants`, `POST/GET /courses/{id}/analyses`,
-  `POST /courses/{id}/analyses/auto`, `GET /analyses/{id}` — le flux complet
-  réunion → course → chevaux/jockeys/entraîneurs → partants → déclenchement
-  d'analyse (manuel ou automatique depuis la collecte) → relecture est pilotable de
-  bout en bout via HTTP. La création d'un partant vérifie l'existence de
+  (L032.1 §6), gestion d'erreurs centralisée y compris 401/403/404/409/422/429
+  (L023 §4.1, L016 §7). Endpoints : `/system/health`, `/system/version` (publics),
+  `POST /auth/login`, `POST /auth/logout`, `GET /hippodromes`,
+  `POST/GET/PATCH/DELETE /reunions/{id}`, `POST/GET /reunions/{id}/courses`,
+  `POST/GET/PATCH/DELETE /courses/{id}`, `POST/GET/PATCH/DELETE /chevaux/{id}`,
+  `POST/GET/PATCH/DELETE /jockeys/{id}`, `POST/GET/PATCH/DELETE /entraineurs/{id}`,
+  `POST/GET /courses/{id}/partants`, `GET/PATCH/DELETE /partants/{id}`,
+  `POST/GET /courses/{id}/resultats`, `POST/GET /partants/{id}/cotes`,
+  `POST/GET /courses/{id}/analyses`, `POST /courses/{id}/analyses/auto`,
+  `GET /analyses/{id}` — le flux complet réunion → course →
+  chevaux/jockeys/entraîneurs → partants → déclenchement d'analyse (manuel ou
+  automatique depuis la collecte) → relecture est pilotable de bout en bout via
+  HTTP, avec correction (PATCH) et suppression (DELETE) des ressources
+  référentielles/métier. La création d'un partant vérifie l'existence de
   `cheval_id`, `jockey_id` et `entraineur_id` (404 ciblé, jamais une violation de
   contrainte SQL brute).
+- **Authentification/RBAC réels** (cf. « Authentification » ci-dessous) : toutes
+  les routes hors `/system/*` et `/auth/login` exigent un jeton de session valide ;
+  chaque route impose un rôle minimal (L021 §4.1).
 - **Collecte** (`src/collecte/`) : architecture multi-sources en 4 niveaux (données
   officielles, marché, consensus presse, base TurfIA propriétaire). Registre
   déclaratif de 12 sources (`src/collecte/registre.py`) avec statut vérifié par accès
@@ -94,12 +102,37 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   (~14 titres de presse hippique agrégés par Canalturf lui-même). **Limité au
   Quinté+ du jour** (1 course/jour) : vérifié réellement que ce bloc n'existe sur
   aucune autre course de la page Canalturf.
-- **Tests** : 61 tests unitaires (algorithmes + configuration) + 14 tests unitaires
-  (mappers PMU) + 9 tests unitaires (mappers Canalturf) + 23 tests unitaires
-  (indicateurs Marché/Forme/Presse/Professionnels-Historique-Aptitude/risque) + 19
-  tests d'intégration API + 3 tests d'intégration du branchement presse + 5 tests
-  d'intégration du branchement Professionnels/Historique/Aptitude (repositories/
-  services en mémoire, `tests/integration/`), tous verts (141 au total).
+- **Authentification** (`src/core/security.py`, `src/services/auth_service.py`,
+  `api/routes/auth.py`, `api/dependencies/auth.py`) : jetons de session **opaques**
+  côté serveur (pas de JWT) — L021 §3.3 décrit littéralement des « sessions »
+  (durée limitée, expiration, invalidation à la déconnexion) ; un JWT
+  auto-porteur ne peut satisfaire l'invalidation immédiate sans état côté serveur
+  de toute façon, autant stocker directement une session opaque dans la nouvelle
+  table `session` (jeton aléatoire `secrets.token_urlsafe`, seul son hash SHA-256
+  est stocké, cf. L021 §5.1). Mots de passe bcrypt (L021 §3.2), vérification en
+  temps constant même si le login est inconnu (pas d'énumération de comptes par
+  timing). RBAC (L021 §4.1) via `exiger_roles(*roles)` sur chaque route : matrice
+  LECTURE (tout rôle, GET) / DECLENCHEMENT_ANALYSE (Administrateur/Analyste/
+  Automatisation, déclenchement d'analyse) / ECRITURE_DONNEES (Administrateur/
+  Automatisation, POST/PATCH/DELETE). `POST /auth/login` limité en débit par
+  (login, IP) — L021 §7.2.1. Connexion/échec de connexion/déconnexion journalisés
+  dans `audit` (table déjà prévue au schéma, jusque-là inutilisée). Bootstrap des
+  comptes via `scripts/creer_utilisateur.py` (mot de passe saisi de façon
+  interactive, jamais en argument CLI) — l'API n'expose pas de route de création
+  d'utilisateurs.
+- **PATCH/DELETE** : PATCH partiel (`exclude_unset`) sur réunion/course/partant/
+  cheval/jockey/entraineur ; pas de PUT (avec des FK obligatoires immuables et des
+  champs presque tous optionnels, un remplacement complet n'apporte rien de plus
+  qu'un PATCH). DELETE réel sur ces mêmes ressources : une violation de contrainte
+  FK `ON DELETE RESTRICT` (déjà en place, cf. L011 §9) est traduite en 409 plutôt
+  que vérifiée à l'avance (évite une fenêtre de concurrence). **Jamais** de PATCH/
+  DELETE sur résultat/cote/analyse et dérivés (historisés, cf. L011 §15).
+- **Tests** : 119 tests unitaires (algorithmes, configuration, mappers PMU/
+  Canalturf, sécurité — hachage mot de passe/jeton, limiteur de débit, dépendances
+  RBAC) + 69 tests d'intégration (API courses/analyses/résultats/cotes/PATCH/
+  DELETE, AuthService, authentification API bout en bout, branchement presse et
+  Professionnels/Historique/Aptitude — repositories/services en mémoire,
+  `tests/integration/`), tous verts (188 au total).
 
 ## Correction notable apportée au SAD pendant l'implémentation
 
@@ -156,18 +189,35 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
   consensus presse actuel, qui s'appuie sur le `R{réunion}C{course}` extrait de
   Canalturf lui-même, pas sur cette colonne.
 
+## Limites connues de l'authentification/RBAC (documentées, pas cachées)
+
+- Limiteur de débit (`src/core/rate_limiter.py`) en mémoire, un seul processus —
+  ne protège pas contre la force brute si l'API tourne sur plusieurs workers/
+  instances sans état partagé (pas de Redis ou équivalent dans cette tranche).
+- L'audit (table `audit`) n'enregistre que les événements d'authentification
+  (connexion, échec, déconnexion) — pas encore chaque écriture sur chaque
+  ressource (cf. « Prochaine étape »).
+- Pas de purge des sessions expirées/révoquées dans la table `session` — elle
+  grossit indéfiniment ; acceptable pour le volume actuel, à revoir si l'usage
+  s'intensifie (même logique que les autres limites déjà actées : get-or-create
+  non atomique, etc.).
+- Pas de route de gestion des utilisateurs (création/désactivation) via l'API :
+  uniquement `scripts/creer_utilisateur.py`, en ligne de commande.
+- Un PATCH sur `course` référençant un `distance_id`/`surface_id`/`etat_piste_id`
+  référentiel inconnu n'est pas validé avant l'écriture (contrairement à
+  `jockey_id`/`entraineur_id` sur un partant) : remonte en violation de
+  contrainte FK brute (500), pas en 404 ciblé.
+
 ## Explicitement hors périmètre (travail futur, non implémenté)
 
 - Automatisations planifiées (L017/L033) — aucun scheduler, `automations/` est un
   squelette vide.
 - Interface HTML (L018) — `html/` est un squelette vide.
-- Surface API encore partielle : pas de mise à jour/suppression (PUT/PATCH/DELETE)
-  sur aucune ressource ; jockeys/entraineurs/chevaux ont désormais un POST/GET, mais
-  pas encore d'endpoints pour résultats/cotes/statistiques/administration (L032.2/
-  L032.3 ne fixent qu'un regroupement par domaine, pas une liste d'URLs figée — les
-  routes suivent les conventions déjà en place, cf. `api/routes/courses.py`).
-- Authentification/RBAC réels (L021/L034) — aucune vérification d'identité n'est
-  implémentée ; toutes les routes actuelles sont non protégées.
+- Endpoints résultats/cotes en écriture, PATCH/DELETE sur les ressources
+  référentielles/métier et authentification/RBAC réels sont désormais
+  implémentés (cf. ci-dessus). Reste hors périmètre : endpoints pour le module
+  Statistiques (dépend du module lui-même, non construit), administration des
+  utilisateurs via l'API.
 - Module statistiques (L030.4, L031.7) — aucun code. La vraie définition L031.2 de
   « Historique » (performance passée du moteur TurfIA lui-même) en dépend et n'est
   donc pas implémentée ; seule l'interprétation L031.1 (hippodrome) l'est (cf.
@@ -188,13 +238,13 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
 
 ## Prochaine étape
 
-Toutes les familles du Score TurfIA calculables sans nouvelle source ou module sont
-désormais implémentées (Marché, Forme, Presse, Professionnels, Historique,
-Aptitude). Pistes possibles : exploration d'une deuxième source niveau 1 (France
-Galop) ou niveau 3 (pour sortir du Quinté+-only de Canalturf), module Statistiques
-(L031.7, pour la vraie définition L031.2 de « Historique » et pour Value/Contexte),
-poursuite de l'extension de la surface API (jockeys/entraineurs/résultats/cotes/
-statistiques, puis authentification réelle).
+L'essentiel de la surface API et l'authentification/RBAC réelle sont désormais en
+place. Pistes possibles : module Statistiques (L031.7 — débloquerait la vraie
+définition L031.2 de « Historique » et les familles Value/Contexte, ainsi que des
+endpoints de lecture pour ce module), audit systématique des écritures (au-delà
+des seuls événements d'authentification), administration des utilisateurs via
+l'API, exploration d'une deuxième source niveau 1 (France Galop) ou niveau 3
+(pour sortir du Quinté+-only de Canalturf), interface HTML (L018).
 
 ## Conventions de développement
 
