@@ -2,6 +2,8 @@ import pytest
 
 from src.algorithms.classement import (
     PartantClasse,
+    _calculer_mise_quinte_flexi,
+    _construire_selection_quinte,
     calculer_budget,
     calculer_score_final,
     categoriser,
@@ -113,3 +115,72 @@ def test_construire_paris_combinaison_utilise_partant_id():
     paris = construire_paris(partants, budget=20.0)
     couple = next(chevaux for type_pari, chevaux, _ in paris if type_pari == "Couplé Gagnant")
     assert [c.partant_id for c in couple] == [1, 2]
+
+
+def test_construire_selection_quinte_inclut_bases_chances_outsider_tocard_positif():
+    partants = [
+        _partant(1, 90, 1, "Base"),
+        _partant(2, 88, 2, "Base"),
+        _partant(3, 75, 3, "Chance régulière"),
+        _partant(4, 72, 4, "Chance régulière"),
+        _partant(5, 60, 5, "Outsider"),
+        _partant(6, 45, 6, "Tocard", roi_theorique=2.0),
+    ]
+    selection = _construire_selection_quinte(partants)
+    assert {p.partant_id for p in selection} == {1, 2, 3, 4, 5, 6}
+
+
+def test_construire_selection_quinte_exclut_tocard_a_roi_negatif():
+    partants = [
+        _partant(1, 90, 1, "Base"),
+        _partant(2, 88, 2, "Base"),
+        _partant(3, 75, 3, "Chance régulière"),
+        _partant(4, 45, 4, "Tocard", roi_theorique=-1.0),
+    ]
+    selection = _construire_selection_quinte(partants)
+    assert {p.partant_id for p in selection} == {1, 2, 3}
+
+
+def test_calculer_mise_quinte_flexi_choisit_le_palier_le_plus_eleve_finançable():
+    # n=5 -> 1 combinaison ; 100% = 2.0, tient dans un budget de 3.0
+    assert _calculer_mise_quinte_flexi(5, budget_alloue=3.0) == 2.0
+    # n=6 -> 6 combinaisons ; 100% = 12.0 (trop cher), 50% = 6.0 (tient dans 6.0)
+    assert _calculer_mise_quinte_flexi(6, budget_alloue=6.0) == 6.0
+    # n=6, budget serré : seul 25% (3.0) tient
+    assert _calculer_mise_quinte_flexi(6, budget_alloue=4.0) == 3.0
+
+
+def test_calculer_mise_quinte_flexi_none_si_meme_25_pourcent_trop_cher():
+    # n=8 -> 56 combinaisons ; même 25% = 28.0, dépasse un budget de 2.5
+    assert _calculer_mise_quinte_flexi(8, budget_alloue=2.5) is None
+
+
+def test_construire_paris_avec_champ_large_inclut_quinte_flexi():
+    partants = [
+        _partant(1, 90, 1, "Base"),
+        _partant(2, 88, 2, "Base"),
+        _partant(3, 75, 3, "Chance régulière"),
+        _partant(4, 72, 4, "Chance régulière"),
+        _partant(5, 60, 5, "Outsider"),
+    ]
+    paris = construire_paris(partants, budget=50.0)
+    quinte = next(((chevaux, mise) for type_pari, chevaux, mise in paris if type_pari == "Quinté Flexi"), None)
+    assert quinte is not None
+    chevaux, mise = quinte
+    assert {c.partant_id for c in chevaux} == {1, 2, 3, 4, 5}
+    assert mise == 2.0  # n=5 -> 1 combinaison, tarif plein largement couvert par 5% de 50€
+
+
+def test_construire_paris_omet_quinte_flexi_si_budget_alloue_insuffisant():
+    partants = [
+        _partant(1, 90, 1, "Base"),
+        _partant(2, 88, 2, "Base"),
+        _partant(3, 75, 3, "Chance régulière"),
+        _partant(4, 72, 4, "Chance régulière"),
+        _partant(5, 60, 5, "Outsider"),
+    ]
+    # budget minimal (palier 10€) -> 5% alloué = 0.50€, insuffisant même à 25% (0.50€ tient tout juste en fait)
+    # on force un budget très bas pour garantir l'omission
+    paris = construire_paris(partants, budget=1.0)
+    types = {type_pari for type_pari, _, _ in paris}
+    assert "Quinté Flexi" not in types

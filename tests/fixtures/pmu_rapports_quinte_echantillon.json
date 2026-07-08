@@ -1,0 +1,84 @@
+[
+  {
+    "typePari": "QUINTE_PLUS",
+    "miseBase": 200,
+    "rembourse": false,
+    "rapports": [
+      {
+        "libelle": "Quinté+ Ordre",
+        "dividende": 12635140,
+        "dividendePourUnEuro": 6317570,
+        "combinaison": "5-3-7-10-2",
+        "nombreGagnants": 1.25,
+        "dividendePourUneMiseDeBase": 12635140,
+        "dividendeUnite": "PourUneMiseDeBase"
+      },
+      {
+        "libelle": "Quinté+ Désordre",
+        "dividende": 105280,
+        "dividendePourUnEuro": 52640,
+        "combinaison": "5-3-7-10-2",
+        "nombreGagnants": 451.23,
+        "dividendePourUneMiseDeBase": 105280,
+        "dividendeUnite": "PourUneMiseDeBase"
+      },
+      {
+        "libelle": "Bonus 4sur5",
+        "dividende": 1200,
+        "dividendePourUnEuro": 600,
+        "combinaison": "5-3-7-10",
+        "nombreGagnants": 24692.91,
+        "dividendePourUneMiseDeBase": 1200,
+        "dividendeUnite": "PourUneMiseDeBase"
+      },
+      {
+        "libelle": "Bonus 4sur5",
+        "dividende": 1200,
+        "dividendePourUnEuro": 600,
+        "combinaison": "5-3-7-2",
+        "nombreGagnants": 24692.91,
+        "dividendePourUneMiseDeBase": 1200,
+        "dividendeUnite": "PourUneMiseDeBase"
+      },
+      {
+        "libelle": "Bonus 4sur5",
+        "dividende": 1200,
+        "dividendePourUnEuro": 600,
+        "combinaison": "5-3-10-2",
+        "nombreGagnants": 24692.91,
+        "dividendePourUneMiseDeBase": 1200,
+        "dividendeUnite": "PourUneMiseDeBase"
+      },
+      {
+        "libelle": "Bonus 4sur5",
+        "dividende": 1200,
+        "dividendePourUnEuro": 600,
+        "combinaison": "5-7-10-2",
+        "nombreGagnants": 24692.91,
+        "dividendePourUneMiseDeBase": 1200,
+        "dividendeUnite": "PourUneMiseDeBase"
+      },
+      {
+        "libelle": "Bonus 4sur5",
+        "dividende": 1200,
+        "dividendePourUnEuro": 600,
+        "combinaison": "3-7-10-2",
+        "nombreGagnants": 24692.91,
+        "dividendePourUneMiseDeBase": 1200,
+        "dividendeUnite": "PourUneMiseDeBase"
+      },
+      {
+        "libelle": "Bonus 3",
+        "dividende": 880,
+        "dividendePourUnEuro": 440,
+        "combinaison": "5-3-7",
+        "nombreGagnants": 42446.33,
+        "dividendePourUneMiseDeBase": 880,
+        "dividendeUnite": "PourUneMiseDeBase"
+      }
+    ],
+    "audience": "NATIONAL",
+    "dividendeUnite": "PourUneMiseDeBase",
+    "famillePari": "Quinte Plus"
+  }
+]
