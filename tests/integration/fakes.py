@@ -374,9 +374,6 @@ class FakeAuditRepository:
     def enregistrer(self, utilisateur_id, action: str, objet: str | None = None) -> None:
         self.entrees.append((utilisateur_id, action, objet))
 
-    def create_controle_roi(self, controle):
-        return dataclasses.replace(controle, id=self._ids.next())
-
 
 class FakeConsensusPresseService:
     """Remplace ConsensusPresseService dans les tests d'intégration — aucun accès
@@ -388,3 +385,91 @@ class FakeConsensusPresseService:
 
     def recuperer_classements_presse(self, numero_reunion: int, numero_course: int) -> list[list[int]]:
         return self.classements
+
+
+class FakeStatistiqueRepository:
+    """Remplace StatistiqueRepository — pas de recalcul d'agrégation en mémoire
+    (déjà vérifié contre une instance PostgreSQL réelle, cf. PROJECT_STATE.md) :
+    `calculer_X` retourne des valeurs configurables par le test, `create_X` les
+    stocke simplement (jamais de mise à jour, comme le vrai repository)."""
+
+    def __init__(self) -> None:
+        self._ids = _AutoId()
+        self.a_calculer_globale = None
+        self.a_calculer_scores: list = []
+        self.a_calculer_hippodromes: list = []
+        self.a_calculer_disciplines: list = []
+        self.a_calculer_paris: list = []
+        self.a_calculer_modeles: list = []
+        self.globale: list = []
+        self.scores: list = []
+        self.hippodromes: list = []
+        self.disciplines: list = []
+        self.paris: list = []
+        self.modeles: list = []
+
+    def calculer_globale(self):
+        return self.a_calculer_globale
+
+    def create_globale(self, stat):
+        stat = dataclasses.replace(stat, id=self._ids.next(), date_calcul=stat.date_calcul or datetime.now(timezone.utc))
+        self.globale.append(stat)
+        return stat
+
+    def calculer_scores(self):
+        return self.a_calculer_scores
+
+    def create_score(self, stat):
+        stat = dataclasses.replace(stat, id=self._ids.next())
+        self.scores.append(stat)
+        return stat
+
+    def calculer_hippodromes(self):
+        return self.a_calculer_hippodromes
+
+    def create_hippodrome(self, stat):
+        stat = dataclasses.replace(stat, id=self._ids.next())
+        self.hippodromes.append(stat)
+        return stat
+
+    def calculer_disciplines(self):
+        return self.a_calculer_disciplines
+
+    def create_discipline(self, stat):
+        stat = dataclasses.replace(stat, id=self._ids.next())
+        self.disciplines.append(stat)
+        return stat
+
+    def calculer_paris(self):
+        return self.a_calculer_paris
+
+    def create_pari_stat(self, stat):
+        stat = dataclasses.replace(stat, id=self._ids.next())
+        self.paris.append(stat)
+        return stat
+
+    def calculer_modeles(self):
+        return self.a_calculer_modeles
+
+    def create_modele(self, stat):
+        stat = dataclasses.replace(stat, id=self._ids.next())
+        self.modeles.append(stat)
+        return stat
+
+    def list_globale(self):
+        return list(self.globale)
+
+    def list_scores(self):
+        return list(self.scores)
+
+    def list_hippodromes(self):
+        return list(self.hippodromes)
+
+    def list_disciplines(self):
+        return list(self.disciplines)
+
+    def list_paris(self):
+        return list(self.paris)
+
+    def list_modeles(self):
+        return list(self.modeles)

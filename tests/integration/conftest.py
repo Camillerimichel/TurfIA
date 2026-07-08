@@ -7,7 +7,12 @@ os.environ.setdefault("DATABASE_URL", "postgresql://dummy@localhost/dummy")
 os.environ.setdefault("SECRET_KEY", "dummy")
 
 from api.dependencies.auth import get_utilisateur_courant  # noqa: E402
-from api.dependencies.db import get_analyse_repository, get_course_repository, get_referentiel_repository  # noqa: E402
+from api.dependencies.db import (  # noqa: E402
+    get_analyse_repository,
+    get_course_repository,
+    get_referentiel_repository,
+    get_statistique_repository,
+)
 from api.dependencies.services import get_analyse_service, get_auth_service, get_preparation_service  # noqa: E402
 from api.main import app  # noqa: E402
 from src.models.referentiels import Hippodrome  # noqa: E402
@@ -21,6 +26,7 @@ from tests.integration.fakes import (  # noqa: E402
     FakeConsensusPresseService,
     FakeCourseRepository,
     FakeReferentielRepository,
+    FakeStatistiqueRepository,
     FakeUtilisateurRepository,
 )
 
@@ -34,6 +40,7 @@ def repos():
     presse_service = FakeConsensusPresseService()
     utilisateur_repo = FakeUtilisateurRepository()
     audit_repo = FakeAuditRepository()
+    statistique_repo = FakeStatistiqueRepository()
     return {
         "referentiel": referentiel_repo,
         "course": course_repo,
@@ -41,6 +48,7 @@ def repos():
         "presse": presse_service,
         "utilisateurs": utilisateur_repo,
         "audit": audit_repo,
+        "statistiques": statistique_repo,
     }
 
 
@@ -56,6 +64,7 @@ def client(repos):
     app.dependency_overrides[get_preparation_service] = lambda: PreparationDonneesService(
         repos["course"], repos["presse"]
     )
+    app.dependency_overrides[get_statistique_repository] = lambda: repos["statistiques"]
     role_admin = Role(id=1, nom="Administrateur")
     utilisateur_test = Utilisateur(id=1, login="test", mot_de_passe="", role_id=1)
     app.dependency_overrides[get_utilisateur_courant] = lambda: (utilisateur_test, role_admin)
