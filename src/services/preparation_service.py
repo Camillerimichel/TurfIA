@@ -11,13 +11,13 @@ from __future__ import annotations
 from src.algorithms.indicateurs import (
     SCORE_NEUTRE_PAR_DEFAUT,
     calculer_indicateur_forme,
-    calculer_indicateur_presse,
+    calculer_indicateur_presse_combine,
     calculer_indicateur_professionnels,
     calculer_indicateur_reussite,
     calculer_indicateur_risque_taille_champ,
     calculer_indicateurs_marche,
 )
-from src.core.exceptions import ImportationError, ValidationError
+from src.core.exceptions import ValidationError
 from src.core.logging import get_logger
 from src.repositories.course_repository import CourseRepository
 from src.services.analyse_service import DonneesPartant
@@ -58,15 +58,9 @@ class PreparationDonneesService:
         course = self._courses.get_course(course_id)
         reunion = self._courses.get_reunion(course.reunion_id)
 
-        classement_presse: list[int] | None = None
+        classements_presse: list[list[int]] = []
         if self._presse is not None:
-            try:
-                classement_presse = self._presse.recuperer_classement_presse(reunion.numero, course.numero)
-            except ImportationError as exc:
-                logger.warning(
-                    f"Consensus presse indisponible, analyse poursuivie sans ce sous-score : {exc}",
-                    extra={"context": {"course_id": course_id}},
-                )
+            classements_presse = self._presse.recuperer_classements_presse(reunion.numero, course.numero)
 
         conditions_connues = (
             course.distance_id is not None and course.surface_id is not None and course.etat_piste_id is not None
@@ -77,8 +71,8 @@ class PreparationDonneesService:
             cheval = self._courses.get_cheval(partant.cheval_id)
             score_forme = calculer_indicateur_forme(cheval.musique if cheval else None)
             sous_scores = {"marche": score_marche, "forme": score_forme}
-            if classement_presse is not None:
-                sous_scores["presse"] = calculer_indicateur_presse(classement_presse, partant.numero)
+            if classements_presse:
+                sous_scores["presse"] = calculer_indicateur_presse_combine(classements_presse, partant.numero)
 
             if partant.jockey_id is not None or partant.entraineur_id is not None:
                 score_jockey = (

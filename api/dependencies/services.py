@@ -13,6 +13,7 @@ from api.dependencies.db import (
     get_utilisateur_repository,
 )
 from src.collecte.canalturf.client import CanalturfClient
+from src.collecte.zoneturf.client import ZoneTurfClient
 from src.core.config import Settings, get_settings
 from src.repositories.analyse_repository import AnalyseRepository
 from src.repositories.audit_repository import AuditRepository
@@ -37,8 +38,8 @@ def get_auth_service(
 
 
 def get_consensus_presse_service() -> Generator[ConsensusPresseService, None, None]:
-    with CanalturfClient() as client:
-        yield ConsensusPresseService(client)
+    with CanalturfClient() as canalturf_client, ZoneTurfClient() as zoneturf_client:
+        yield ConsensusPresseService(canalturf_client, zoneturf_client)
 
 
 def get_preparation_service(
