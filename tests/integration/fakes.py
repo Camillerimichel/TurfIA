@@ -352,10 +352,11 @@ class FakeAuditRepository:
 
 class FakeConsensusPresseService:
     """Remplace ConsensusPresseService dans les tests d'intégration — aucun accès
-    réseau (cf. L020 §2.2). `classement` est configurable par le test."""
+    réseau (cf. L020 §2.2). `classements` (0, 1 ou 2 classements, un par source
+    simulée) est configurable par le test."""
 
-    def __init__(self, classement: list[int] | None = None) -> None:
-        self.classement = classement
+    def __init__(self, classements: list[list[int]] | None = None) -> None:
+        self.classements = classements if classements is not None else []
 
-    def recuperer_classement_presse(self, numero_reunion: int, numero_course: int) -> list[int] | None:
-        return self.classement
+    def recuperer_classements_presse(self, numero_reunion: int, numero_course: int) -> list[list[int]]:
+        return self.classements

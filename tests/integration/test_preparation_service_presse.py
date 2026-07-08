@@ -21,10 +21,10 @@ def _preparer_course_avec_partants(course_repo: FakeCourseRepository) -> Course:
     return course
 
 
-def test_presse_ajoutee_quand_la_course_est_celle_du_quinte():
+def test_presse_ajoutee_quand_une_source_repond():
     course_repo = FakeCourseRepository()
     course = _preparer_course_avec_partants(course_repo)
-    presse = FakeConsensusPresseService(classement=[2, 1, 3])
+    presse = FakeConsensusPresseService(classements=[[2, 1, 3]])
     service = PreparationDonneesService(course_repo, presse)
 
     donnees_partants, _ = service.preparer_donnees_partants(course.id)
@@ -32,10 +32,21 @@ def test_presse_ajoutee_quand_la_course_est_celle_du_quinte():
     assert all("presse" in dp.sous_scores for dp in donnees_partants)
 
 
-def test_presse_absente_quand_le_service_ne_renvoie_rien():
+def test_presse_combine_deux_sources_quand_les_deux_repondent():
     course_repo = FakeCourseRepository()
     course = _preparer_course_avec_partants(course_repo)
-    presse = FakeConsensusPresseService(classement=None)  # course demandée != Quinté+ du jour
+    presse = FakeConsensusPresseService(classements=[[2, 1, 3], [1, 2, 3]])
+    service = PreparationDonneesService(course_repo, presse)
+
+    donnees_partants, _ = service.preparer_donnees_partants(course.id)
+
+    assert all("presse" in dp.sous_scores for dp in donnees_partants)
+
+
+def test_presse_absente_quand_aucune_source_ne_repond():
+    course_repo = FakeCourseRepository()
+    course = _preparer_course_avec_partants(course_repo)
+    presse = FakeConsensusPresseService(classements=[])  # aucune source n'a confirmé le Quinté+ du jour
     service = PreparationDonneesService(course_repo, presse)
 
     donnees_partants, _ = service.preparer_donnees_partants(course.id)
