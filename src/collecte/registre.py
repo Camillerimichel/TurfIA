@@ -84,7 +84,11 @@ SOURCES: tuple[SourceInfo, ...] = (
         role=(
             "Consensus presse multi-journaux (7 titres) — Quinté+ du jour uniquement, "
             "combiné à Canalturf (cf. src/collecte/zoneturf/, src/services/consensus_presse_service.py). "
-            "Source ajoutée hors de la taxonomie initiale, à la demande de l'utilisateur."
+            "Source ajoutée hors de la taxonomie initiale, à la demande de l'utilisateur. "
+            "Limité aux pages publiques : l'espace abonnés (/abonnes/, historiques inclus) est "
+            "explicitement interdit par robots.txt pour tout user-agent (pas seulement un bot "
+            "précis, contrairement à Paris-Turf) — décision explicite de ne pas l'automatiser "
+            "même avec un compte valide, cf. PROJECT_STATE.md."
         ),
         implementee=True,
     ),

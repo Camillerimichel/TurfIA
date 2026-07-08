@@ -117,6 +117,14 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
     Geny/Canalturf/ZEturf) : découverte via un compte créé par l'utilisateur sur
     le site, mais la page utilisée est publique — le compte n'était pas
     nécessaire pour cette donnée précise.
+  - **Décision explicite (2026-07-08) : l'espace abonnés du site (`/abonnes/`,
+    historiques inclus) n'est pas automatisé**, même avec un compte valide.
+    `robots.txt` l'interdit pour `User-agent: *` (tout crawler, pas seulement un
+    bot précis — contrairement au blocage `anthropic-ai` de Paris-Turf), et
+    l'automatiser exposerait le compte personnel de l'utilisateur aux CGU du
+    site. Les indicateurs Historique/Aptitude/Professionnels restent alimentés
+    uniquement par les données déjà collectées (PMU), qui s'enrichissent avec le
+    temps plutôt que via cet historique tiers.
 - **Authentification** (`src/core/security.py`, `src/services/auth_service.py`,
   `api/routes/auth.py`, `api/dependencies/auth.py`) : jetons de session **opaques**
   côté serveur (pas de JWT) — L021 §3.3 décrit littéralement des « sessions »
