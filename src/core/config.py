@@ -31,6 +31,9 @@ class Settings:
     api_prefix: str
     pagination_default_size: int
     pagination_max_size: int
+    session_duree_minutes: int
+    login_max_tentatives: int
+    login_fenetre_secondes: int
 
 
 def load_settings(config_path: Path | None = None, load_env_file: bool = True) -> Settings:
@@ -60,6 +63,8 @@ def load_settings(config_path: Path | None = None, load_env_file: bool = True) -
     api_cfg = raw.get("api", {})
     pagination_cfg = api_cfg.get("pagination", {})
     logging_cfg = raw.get("logging", {})
+    securite_cfg = raw.get("securite", {})
+    login_cfg = securite_cfg.get("login", {})
 
     try:
         return Settings(
@@ -71,6 +76,9 @@ def load_settings(config_path: Path | None = None, load_env_file: bool = True) -
             api_prefix=api_cfg.get("prefix", "/api/v1"),
             pagination_default_size=int(pagination_cfg.get("default_size", 50)),
             pagination_max_size=int(pagination_cfg.get("max_size", 500)),
+            session_duree_minutes=int(securite_cfg.get("session_duree_minutes", 60)),
+            login_max_tentatives=int(login_cfg.get("max_tentatives", 5)),
+            login_fenetre_secondes=int(login_cfg.get("fenetre_secondes", 300)),
         )
     except (TypeError, ValueError) as exc:
         raise ConfigurationError(f"Configuration invalide : {exc}") from exc
