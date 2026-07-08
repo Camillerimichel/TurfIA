@@ -156,16 +156,58 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
     R{n}/C{n}/rapports-definitifs` (jusque-là non exploité), qui donne le rapport
     officiel réel par type de pari une fois la course arrivée — permet de calculer
     un vrai ROI sans nouvelle source externe, juste une extension de l'adaptateur
-    PMU déjà en place (`src/collecte/pmu/client.py`,
-    `extraire_rapport_simple_gagnant`).
-  - `AnalyseService` ne génère aujourd'hui qu'un seul type de pari, « Simple
-    Gagnant » (cf. `src/services/analyse_service.py`) : seul ce type est donc
-    contrôlé contre le rapport réel dans cette tranche.
+    PMU déjà en place (`src/collecte/pmu/client.py`).
+  - **Extension (2026-07-08) : 5 types de pari** (cf. L031.6 §5) —
+    `AnalyseService.analyser_course` génère désormais Simple Gagnant, Simple
+    Placé, Couplé Gagnant, Couplé Placé et 2 sur 4 par analyse (au lieu du seul
+    Simple Gagnant), via `construire_paris` (`src/algorithms/classement.py`) à
+    partir des catégories déjà assignées (Base élargie à `rang <= 2` pour
+    permettre « Base n°1 + Base n°2 », cf. `categoriser`). Budget réparti entre
+    les types réellement constructibles selon `REPARTITION_BUDGET_PAR_DEFAUT`
+    (Simple Placé 35 %, 2 sur 4 25 %, Simple Gagnant 20 %, Couplé Placé 15 %,
+    Couplé Gagnant 5 % — pondération choisie pour optimiser les gains fréquents
+    plutôt que les gros gains rares, décision explicite de l'utilisateur) ; un
+    type non constructible redistribue sa part aux autres. Quinté Flexi reste
+    hors périmètre (structure de rapport multi-paliers + mise fractionnée
+    disproportionnée par rapport aux 5 autres types).
+  - **Vérifié réellement (2026-07-08)** contre une course Quinté+ déjà arrivée
+    (R1C8, 07/07/2026) : Couplé Gagnant/Placé et 2 sur 4 ne sont exposés par PMU
+    (`rapports-definitifs`) que sur les courses Quinté+ (une course ordinaire
+    n'expose que `COUPLE_ORDRE`, à ordre exigé, un pari PMU différent) — un pari
+    de ce type généré sur une course ordinaire ne trouvera donc jamais de
+    rapport PMU correspondant, journalisé et ignoré par `ControleRoiService`
+    plutôt que deviné.
+  - `src/collecte/pmu/mappers.py` : `extraire_rapport_simple` (Simple
+    Gagnant/Placé, un dividende par cheval gagnant), `extraire_rapport_couple`
+    (Couplé Gagnant/Placé, `frozenset` de 2 numéros — ordre indifférent, à ne pas
+    confondre avec `COUPLE_ORDRE`), `extraire_rapport_deux_sur_quatre` (2 sur 4,
+    reconstruit les 4 premiers arrivés par union des paires PMU, teste
+    « au moins 2 des 4 numéros joués en commun », pas une paire exacte) —
+    `TYPES_PARI_PMU` fait la correspondance type_pari TurfIA -> code PMU.
+    `src/algorithms/controle_roi.py` : `calculer_gains_simple/couple/
+    deux_sur_quatre`, fonctions pures correspondantes.
   - `ControleRoiService.calculer_controles_manquants()` résout `pari.combinaison`
-    (le `partant_id` interne) vers le vrai numéro de course, compare au rapport
-    PMU, persiste dans `controle_roi` (table déjà prévue au schéma, jusque-là
-    inutilisée) — best-effort par analyse (rapport pas encore disponible ou type
-    de pari non pris en charge : journalisé, analyse suivante poursuivie).
+    (1 ou plusieurs `partant_id` internes séparés par `-`) vers les vrais
+    numéros de course, compare au rapport PMU du type correspondant, persiste un
+    contrôle agrégé (mise/gains sommés sur tous les paris de l'analyse) dans
+    `controle_roi` (table déjà prévue au schéma, jusque-là inutilisée) —
+    best-effort par pari (rapport pas encore disponible pour ce type précis, ou
+    type de pari non pris en charge : journalisé, pari suivant poursuivi, jamais
+    toute l'analyse abandonnée).
+  - **Correction du bug de régression sur `statistique_pari` (2026-07-08)** :
+    nouvelle table `controle_roi_pari` (migration
+    `20260708_1600_ajout_controle_roi_pari.sql`, cf. `sql/schema/03_analyses.sql`)
+    — une ligne par **pari** (mise/gains/valide), en plus de `controle_roi` qui
+    reste l'agrégat par **analyse** (inchangé, toujours utilisé par
+    statistique_globale/score/hippodrome/discipline). `ControleRoiService`
+    persiste désormais les deux (`create_controle_roi_pari` en plus de
+    `create_controle_roi`, cf. `src/repositories/analyse_repository.py`).
+    `StatistiqueRepository.calculer_paris()` regroupe maintenant sur
+    `controle_roi_pari JOIN pari`, sans jointure vers l'agrégat par analyse —
+    vérifié réellement contre une instance PostgreSQL locale (2 paris de types
+    différents dans la même analyse : mises/gains par type corrects et non
+    dupliqués, alors que l'ancienne requête aurait donné 11,00 €/81,60 € pour
+    les deux types au lieu de 10,00 €/14,00 € et 1,00 €/67,60 € respectivement).
   - `StatistiqueService.calculer_toutes()` agrège `controle_roi` en 6 tables
     (globale/score/hippodrome/discipline/pari/modèle, cf. L030.4) — toujours une
     nouvelle ligne, jamais une mise à jour (cf. L030.4 §10). Les tranches de score
@@ -177,13 +219,16 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   - Vérifié contre une instance PostgreSQL locale réelle (3 courses, 2 contrôlées
     dont 1 gagnante/1 perdante, 1 analysée mais non jouée → agrégats corrects sur
     les 6 tables) et contre l'API PMU réelle (rapport Simple Gagnant d'une course
-    déjà arrivée le jour même).
+    déjà arrivée le jour même). L'extension à 5 types de pari a été rejouée en
+    mémoire (pas PostgreSQL) contre les rapports réels capturés de R1C8
+    (07/07/2026) : gains recalculés identiques aux dividendes PMU réels pour
+    Simple Gagnant/Placé, Couplé Gagnant/Placé et 2 sur 4.
   - **Limites assumées** (cf. ci-dessous) : le remboursement réglementaire PMU
     pour un partant devenu non-partant après l'analyse n'est pas modélisé ;
     `statistique_modele` agrège les analyses déjà faites par version, ce n'est
     **pas** le moteur de rejeu/backtesting complet décrit en L031.7 §4 (comparer
     des versions du modèle sur un historique identique) — resterait à construire
-    si un jour plusieurs types de pari ou plusieurs jeux de pondérations coexistent.
+    si un jour plusieurs jeux de pondérations coexistent.
 - **PATCH/DELETE** : PATCH partiel (`exclude_unset`) sur réunion/course/partant/
   cheval/jockey/entraineur ; pas de PUT (avec des FK obligatoires immuables et des
   champs presque tous optionnels, un remplacement complet n'apporte rien de plus
@@ -191,14 +236,15 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   FK `ON DELETE RESTRICT` (déjà en place, cf. L011 §9) est traduite en 409 plutôt
   que vérifiée à l'avance (évite une fenêtre de concurrence). **Jamais** de PATCH/
   DELETE sur résultat/cote/analyse et dérivés (historisés, cf. L011 §15).
-- **Tests** : 134 tests unitaires (algorithmes dont ROI réel, configuration,
-  mappers PMU/Canalturf/Zone-Turf, sécurité — hachage mot de passe/jeton,
-  limiteur de débit, dépendances RBAC) + 81 tests d'intégration (API courses/
-  analyses/résultats/cotes/PATCH/DELETE/statistiques, AuthService,
+- **Tests** : 165 tests unitaires (algorithmes dont ROI réel des 5 types de
+  pari, configuration, mappers PMU/Canalturf/Zone-Turf, sécurité — hachage mot
+  de passe/jeton, limiteur de débit, dépendances RBAC) + 86 tests d'intégration
+  (API courses/analyses/résultats/cotes/PATCH/DELETE/statistiques, AuthService,
   authentification API bout en bout, branchement presse combinée
-  Canalturf+Zone-Turf, Professionnels/Historique/Aptitude, ControleRoiService,
-  StatistiqueService — repositories/services en mémoire, `tests/integration/`),
-  tous verts (215 au total).
+  Canalturf+Zone-Turf, Professionnels/Historique/Aptitude, ControleRoiService
+  (5 types de pari + détail par pari `controle_roi_pari`), StatistiqueService —
+  repositories/services en mémoire, `tests/integration/`), tous verts (251 au
+  total).
 
 ## Correction notable apportée au SAD pendant l'implémentation
 
@@ -257,17 +303,19 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
 
 ## Limites connues du module Statistiques (documentées, pas cachées)
 
-- Seul le pari « Simple Gagnant » est contrôlé contre un rapport réel (le seul
-  type que `AnalyseService` génère aujourd'hui) — un autre type de pari
-  rencontré serait journalisé et ignoré, pas deviné.
-- Le remboursement réglementaire PMU quand le partant choisi devient non-partant
+- 5 types de pari sont contrôlés contre un rapport réel (Simple Gagnant/Placé,
+  Couplé Gagnant/Placé, 2 sur 4, cf. ci-dessus) ; Quinté Flexi ou tout autre
+  type rencontré est journalisé et ignoré, pas deviné. Couplé Gagnant/Placé et
+  2 sur 4 ne sont réellement disponibles côté PMU que sur les courses Quinté+
+  (vérifié le 2026-07-08) — un pari de ce type généré sur une course ordinaire
+  ne trouve jamais de rapport correspondant, journalisé et ignoré.
+- Le remboursement réglementaire PMU quand un partant joué devient non-partant
   après l'analyse n'est pas modélisé (règles pari-mutuel non triviales, non
-  vérifiées) : traité simplement comme un pari perdant si son numéro ne
-  correspond pas à la combinaison gagnante.
-- `statistique_pari` regroupe par `type_pari` via une jointure sur `controle_roi`
-  (niveau analyse, pas niveau pari) — correct tant qu'une analyse ne produit
-  qu'un seul pari ; à revoir si plusieurs types de pari coexistent un jour dans
-  une même analyse (double-comptage possible des mises/gains).
+  vérifiées) : traité simplement comme un pari perdant si son numéro/sa
+  combinaison ne correspond à aucune combinaison gagnante.
+- `statistique_pari` s'appuie sur `controle_roi_pari` (une ligne par pari, cf.
+  ci-dessus) — corrigé le 2026-07-08, plus de double-comptage même quand une
+  analyse produit plusieurs types de pari.
 - `statistique_modele` est peuplée par simple agrégation des analyses déjà
   faites, groupées par `version` — ce n'est pas le moteur de rejeu/backtesting
   complet décrit en L031.7 §4 (recalculer tout un historique avec de nouveaux
@@ -326,16 +374,16 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
 ## Prochaine étape
 
 L'essentiel de la surface API, l'authentification/RBAC réelle, une deuxième
-source de consensus presse et le module Statistiques (ROI réel + 6 tables
-agrégées) sont désormais en place. Pistes possibles : moteur de rejeu/
-backtesting L031.7 §4 (comparer des versions du modèle sur un historique
-identique — débloquerait aussi la vraie définition L031.2 de « Historique » et
-les familles Value/Contexte), générer d'autres types de pari que Simple Gagnant
-(Couplé, Quinté...) pour enrichir `statistique_pari`, audit systématique des
-écritures (au-delà des seuls événements d'authentification), administration
-des utilisateurs via l'API, exploration d'une source niveau 1 (France Galop)
-pour sortir du mono-source PMU, sortir du Quinté+-only pour la Presse, interface
-HTML (L018).
+source de consensus presse, le module Statistiques (ROI réel + 6 tables
+agrégées, granularité par pari via `controle_roi_pari`) et 5 types de pari
+(Simple Gagnant/Placé, Couplé Gagnant/Placé, 2 sur 4) sont désormais en place.
+Pistes possibles : moteur de rejeu/backtesting L031.7 §4 (comparer des versions
+du modèle sur un historique identique — débloquerait aussi la vraie définition
+L031.2 de « Historique » et les familles Value/Contexte), Quinté Flexi, audit
+systématique des écritures (au-delà des
+seuls événements d'authentification), administration des utilisateurs via
+l'API, exploration d'une source niveau 1 (France Galop) pour sortir du
+mono-source PMU, sortir du Quinté+-only pour la Presse, interface HTML (L018).
 
 ## Conventions de développement
 
