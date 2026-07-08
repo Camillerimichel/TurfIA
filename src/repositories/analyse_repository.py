@@ -149,6 +149,22 @@ class AnalyseRepository:
             )
             return cur.fetchall()
 
+    def list_analyses_sans_controle_roi(self) -> list[Analyse]:
+        """Analyses ayant au moins un pari (donc une mise réellement engagée) mais
+        pas encore de `controle_roi` — cf. `ControleRoiService`."""
+        with self._conn.cursor(row_factory=class_row(Analyse)) as cur:
+            cur.execute(
+                """
+                SELECT a.id, a.course_id, a.version, a.date_calcul, a.score_confiance, a.risque,
+                       a.roi_theorique, a.decision, a.budget, a.commentaire
+                FROM analyses a
+                LEFT JOIN controle_roi cr ON cr.analyse_id = a.id
+                WHERE cr.id IS NULL AND EXISTS (SELECT 1 FROM pari p WHERE p.analyse_id = a.id)
+                ORDER BY a.id
+                """
+            )
+            return cur.fetchall()
+
     def create_controle_roi(self, controle: ControleRoi) -> ControleRoi:
         with self._conn.cursor(row_factory=class_row(ControleRoi)) as cur:
             cur.execute(

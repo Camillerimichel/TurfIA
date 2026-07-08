@@ -11,7 +11,7 @@ import dataclasses
 import itertools
 from datetime import datetime, timezone
 
-from src.core.exceptions import BusinessRuleError
+from src.core.exceptions import BusinessRuleError, ImportationError
 
 
 class _AutoId:
@@ -240,6 +240,7 @@ class FakeAnalyseRepository:
         self.analyse_partants: dict[int, list] = {}
         self.selections: dict[int, list] = {}
         self.paris: dict[int, list] = {}
+        self.controle_rois: dict[int, object] = {}  # keyed by analyse_id
 
     def create_analyse(self, analyse):
         analyse = dataclasses.replace(analyse, id=self._ids.next())
@@ -278,6 +279,33 @@ class FakeAnalyseRepository:
 
     def list_paris_by_analyse(self, analyse_id: int):
         return list(self.paris.get(analyse_id, []))
+
+    def list_analyses_sans_controle_roi(self):
+        return [
+            a
+            for a in self.analyses.values()
+            if a.id not in self.controle_rois and self.paris.get(a.id)
+        ]
+
+    def create_controle_roi(self, controle):
+        controle = dataclasses.replace(controle, id=self._ids.next())
+        self.controle_rois[controle.analyse_id] = controle
+        return controle
+
+
+class FakePMUClient:
+    """Remplace PMUClient dans les tests d'intégration — aucun accès réseau (cf.
+    L020 §2.2). `rapports_par_course` associe (numero_reunion, numero_course) à la
+    réponse brute simulée de /rapports-definitifs."""
+
+    def __init__(self, rapports_par_course: dict | None = None) -> None:
+        self.rapports_par_course = rapports_par_course or {}
+
+    def recuperer_rapports_definitifs(self, jour, num_reunion: int, num_course: int) -> list[dict]:
+        cle = (num_reunion, num_course)
+        if cle not in self.rapports_par_course:
+            raise ImportationError(f"Rapports non disponibles pour R{num_reunion}C{num_course} (simulé).")
+        return self.rapports_par_course[cle]
 
 
 class FakeUtilisateurRepository:
