@@ -7,6 +7,7 @@ from src.collecte.pmu.mappers import (
     extraire_classement,
     extraire_cote_directe,
     extraire_etat_piste_libelle,
+    extraire_rapport_simple_gagnant,
     horodatage_depuis_epoch_ms,
     mapper_discipline_code,
     mapper_surface_code,
@@ -29,6 +30,11 @@ def participants_echantillon():
 @pytest.fixture
 def premiere_course(programme_echantillon):
     return programme_echantillon["programme"]["reunions"][0]["courses"][0]
+
+
+@pytest.fixture
+def rapports_definitifs_echantillon():
+    return json.loads((FIXTURES / "pmu_rapports_definitifs_echantillon.json").read_text(encoding="utf-8"))
 
 
 def test_mapper_discipline_code_connu():
@@ -94,3 +100,23 @@ def test_echantillon_reel_a_la_forme_attendue(programme_echantillon):
     reunion = programme_echantillon["programme"]["reunions"][0]
     assert reunion["hippodrome"]["libelleLong"] == "HIPPODROME DE CHANTILLY"
     assert len(reunion["courses"]) == 2
+
+
+def test_extraire_rapport_simple_gagnant_depuis_echantillon_reel(rapports_definitifs_echantillon):
+    assert extraire_rapport_simple_gagnant(rapports_definitifs_echantillon) == ("4", 1.4, False)
+
+
+def test_extraire_rapport_simple_gagnant_absent_leve_erreur():
+    with pytest.raises(ImportationError):
+        extraire_rapport_simple_gagnant([{"typePari": "SIMPLE_PLACE", "rapports": []}])
+
+
+def test_extraire_rapport_simple_gagnant_rembourse():
+    rapports = [{"typePari": "SIMPLE_GAGNANT", "rembourse": True, "rapports": []}]
+    assert extraire_rapport_simple_gagnant(rapports) == ("", 0.0, True)
+
+
+def test_extraire_rapport_simple_gagnant_illisible_leve_erreur():
+    rapports = [{"typePari": "SIMPLE_GAGNANT", "rembourse": False, "rapports": []}]
+    with pytest.raises(ImportationError):
+        extraire_rapport_simple_gagnant(rapports)

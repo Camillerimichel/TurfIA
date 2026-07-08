@@ -79,3 +79,27 @@ def extraire_classement(participant_brut: dict) -> int | None:
     `resultat`).
     """
     return participant_brut.get("ordreArrivee")
+
+
+def extraire_rapport_simple_gagnant(rapports_bruts: list[dict]) -> tuple[str, float, bool]:
+    """Rapport officiel réel « Simple Gagnant » (cf. L011 §8.7 table `controle_roi`) :
+    `(combinaison_gagnante, dividende_pour_un_euro, rembourse)`. `dividendePourUnEuro`
+    est fourni par PMU en centimes (ex. 140 -> 1,40 € par € misé) ; converti ici en
+    euros pour que l'appelant fasse `mise * dividende_pour_un_euro` directement.
+
+    Lève `ImportationError` si aucune entrée `SIMPLE_GAGNANT` n'est présente —
+    structurellement inattendu une fois `rapportsDefinitifsDisponibles` vrai côté PMU.
+    """
+    entree = next((r for r in rapports_bruts if r.get("typePari") == "SIMPLE_GAGNANT"), None)
+    if entree is None:
+        raise ImportationError("Aucun rapport 'SIMPLE_GAGNANT' trouvé dans les rapports définitifs PMU.")
+
+    rembourse = bool(entree.get("rembourse", False))
+    if rembourse:
+        return "", 0.0, True
+
+    rapport = (entree.get("rapports") or [None])[0]
+    if rapport is None or "combinaison" not in rapport or "dividendePourUnEuro" not in rapport:
+        raise ImportationError("Rapport 'SIMPLE_GAGNANT' trouvé mais sans combinaison/dividende exploitable.")
+
+    return rapport["combinaison"], rapport["dividendePourUnEuro"] / 100, False

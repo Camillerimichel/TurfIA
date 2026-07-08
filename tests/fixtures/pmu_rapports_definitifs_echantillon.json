@@ -1,0 +1,49 @@
+[
+  {
+    "typePari": "SIMPLE_GAGNANT",
+    "miseBase": 200,
+    "rembourse": false,
+    "rapports": [
+      {
+        "libelle": "Simple gagnant",
+        "dividende": 140,
+        "dividendePourUnEuro": 140,
+        "combinaison": "4",
+        "nombreGagnants": 37460.69,
+        "dividendePourUneMiseDeBase": 280,
+        "dividendeUnite": "PourUnEuro"
+      }
+    ],
+    "audience": "NATIONAL",
+    "dividendeUnite": "PourUnEuro",
+    "famillePari": "Simple"
+  },
+  {
+    "typePari": "SIMPLE_PLACE",
+    "miseBase": 200,
+    "rembourse": false,
+    "rapports": [
+      {
+        "libelle": "Simple placé 4 à 7 partants",
+        "dividende": 105,
+        "dividendePourUnEuro": 105,
+        "combinaison": "4",
+        "nombreGagnants": 29738.93,
+        "dividendePourUneMiseDeBase": 210,
+        "dividendeUnite": "PourUnEuro"
+      },
+      {
+        "libelle": "Simple placé 4 à 7 partants",
+        "dividende": 110,
+        "dividendePourUnEuro": 110,
+        "combinaison": "1",
+        "nombreGagnants": 4659.16,
+        "dividendePourUneMiseDeBase": 220,
+        "dividendeUnite": "PourUnEuro"
+      }
+    ],
+    "audience": "NATIONAL",
+    "dividendeUnite": "PourUnEuro",
+    "famillePari": "Simple"
+  }
+]

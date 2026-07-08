@@ -44,7 +44,7 @@ class PMUClient:
                 time.sleep(self._delai - ecoule)
         self._dernier_appel = time.monotonic()
 
-    def _get(self, url: str) -> dict:
+    def _get(self, url: str) -> dict | list:
         self._patienter()
         try:
             reponse = self._client.get(url)
@@ -61,3 +61,6 @@ class PMUClient:
 
     def recuperer_participants(self, jour: date, num_reunion: int, num_course: int) -> dict:
         return self._get(f"{BASE_URL}/programme/{jour:%d%m%Y}/R{num_reunion}/C{num_course}/participants")
+
+    def recuperer_rapports_definitifs(self, jour: date, num_reunion: int, num_course: int) -> list[dict]:
+        return self._get(f"{BASE_URL}/programme/{jour:%d%m%Y}/R{num_reunion}/C{num_course}/rapports-definitifs")
