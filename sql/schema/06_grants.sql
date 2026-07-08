@@ -6,7 +6,7 @@ GRANT USAGE ON SCHEMA public TO turfia_app, turfia_readonly;
 GRANT SELECT, INSERT, UPDATE ON
     corde, hippodrome, discipline, surface, etat_piste, type_course, distance, meteo,
     reunion, course, cheval, jockey, entraineur, partant, cote, resultat,
-    analyses, analyse_partant, selection, pari, controle_roi,
+    analyses, analyse_partant, selection, pari, controle_roi, controle_roi_pari,
     statistique_globale, statistique_score, statistique_hippodrome, statistique_discipline,
     statistique_pari, statistique_modele,
     parametre, tache, journal,

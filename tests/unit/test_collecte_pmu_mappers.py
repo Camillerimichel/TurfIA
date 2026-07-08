@@ -7,7 +7,9 @@ from src.collecte.pmu.mappers import (
     extraire_classement,
     extraire_cote_directe,
     extraire_etat_piste_libelle,
-    extraire_rapport_simple_gagnant,
+    extraire_rapport_couple,
+    extraire_rapport_deux_sur_quatre,
+    extraire_rapport_simple,
     horodatage_depuis_epoch_ms,
     mapper_discipline_code,
     mapper_surface_code,
@@ -35,6 +37,11 @@ def premiere_course(programme_echantillon):
 @pytest.fixture
 def rapports_definitifs_echantillon():
     return json.loads((FIXTURES / "pmu_rapports_definitifs_echantillon.json").read_text(encoding="utf-8"))
+
+
+@pytest.fixture
+def rapports_couple_2sur4_echantillon():
+    return json.loads((FIXTURES / "pmu_rapports_couple_2sur4_echantillon.json").read_text(encoding="utf-8"))
 
 
 def test_mapper_discipline_code_connu():
@@ -103,20 +110,66 @@ def test_echantillon_reel_a_la_forme_attendue(programme_echantillon):
 
 
 def test_extraire_rapport_simple_gagnant_depuis_echantillon_reel(rapports_definitifs_echantillon):
-    assert extraire_rapport_simple_gagnant(rapports_definitifs_echantillon) == ("4", 1.4, False)
+    dividendes, rembourse = extraire_rapport_simple(rapports_definitifs_echantillon, "SIMPLE_GAGNANT")
+    assert dividendes == {"4": 1.4}
+    assert rembourse is False
 
 
-def test_extraire_rapport_simple_gagnant_absent_leve_erreur():
+def test_extraire_rapport_simple_place_plusieurs_chevaux_dividendes_differents(rapports_definitifs_echantillon):
+    dividendes, rembourse = extraire_rapport_simple(rapports_definitifs_echantillon, "SIMPLE_PLACE")
+    assert dividendes == {"4": 1.05, "1": 1.10}
+    assert rembourse is False
+
+
+def test_extraire_rapport_simple_absent_leve_erreur():
     with pytest.raises(ImportationError):
-        extraire_rapport_simple_gagnant([{"typePari": "SIMPLE_PLACE", "rapports": []}])
+        extraire_rapport_simple([{"typePari": "SIMPLE_PLACE", "rapports": []}], "SIMPLE_GAGNANT")
 
 
-def test_extraire_rapport_simple_gagnant_rembourse():
+def test_extraire_rapport_simple_rembourse():
     rapports = [{"typePari": "SIMPLE_GAGNANT", "rembourse": True, "rapports": []}]
-    assert extraire_rapport_simple_gagnant(rapports) == ("", 0.0, True)
+    assert extraire_rapport_simple(rapports, "SIMPLE_GAGNANT") == ({}, True)
 
 
-def test_extraire_rapport_simple_gagnant_illisible_leve_erreur():
+def test_extraire_rapport_simple_illisible_leve_erreur():
     rapports = [{"typePari": "SIMPLE_GAGNANT", "rembourse": False, "rapports": []}]
     with pytest.raises(ImportationError):
-        extraire_rapport_simple_gagnant(rapports)
+        extraire_rapport_simple(rapports, "SIMPLE_GAGNANT")
+
+
+def test_extraire_rapport_couple_gagnant_depuis_echantillon_reel(rapports_couple_2sur4_echantillon):
+    dividendes, rembourse = extraire_rapport_couple(rapports_couple_2sur4_echantillon, "COUPLE_GAGNANT")
+    assert dividendes == {frozenset({"5", "3"}): 67.60}
+    assert rembourse is False
+
+
+def test_extraire_rapport_couple_place_plusieurs_paires_depuis_echantillon_reel(rapports_couple_2sur4_echantillon):
+    dividendes, rembourse = extraire_rapport_couple(rapports_couple_2sur4_echantillon, "COUPLE_PLACE")
+    assert dividendes == {
+        frozenset({"5", "3"}): 18.40,
+        frozenset({"5", "7"}): 13.80,
+        frozenset({"3", "7"}): 15.10,
+    }
+    assert rembourse is False
+
+
+def test_extraire_rapport_couple_ignore_les_entrees_non_partant(rapports_couple_2sur4_echantillon):
+    dividendes, _ = extraire_rapport_couple(rapports_couple_2sur4_echantillon, "COUPLE_GAGNANT")
+    assert not any("NP" in combinaison for combinaison in dividendes)
+
+
+def test_extraire_rapport_couple_absent_leve_erreur():
+    with pytest.raises(ImportationError):
+        extraire_rapport_couple([], "COUPLE_GAGNANT")
+
+
+def test_extraire_rapport_deux_sur_quatre_depuis_echantillon_reel(rapports_couple_2sur4_echantillon):
+    numeros_arrivee, dividende, rembourse = extraire_rapport_deux_sur_quatre(rapports_couple_2sur4_echantillon)
+    assert numeros_arrivee == frozenset({"5", "3", "7", "10"})
+    assert dividende == 10.30
+    assert rembourse is False
+
+
+def test_extraire_rapport_deux_sur_quatre_absent_leve_erreur():
+    with pytest.raises(ImportationError):
+        extraire_rapport_deux_sur_quatre([])

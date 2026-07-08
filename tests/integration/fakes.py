@@ -241,6 +241,7 @@ class FakeAnalyseRepository:
         self.selections: dict[int, list] = {}
         self.paris: dict[int, list] = {}
         self.controle_rois: dict[int, object] = {}  # keyed by analyse_id
+        self.controle_roi_paris: dict[int, object] = {}  # keyed by pari_id
 
     def create_analyse(self, analyse):
         analyse = dataclasses.replace(analyse, id=self._ids.next())
@@ -290,6 +291,11 @@ class FakeAnalyseRepository:
     def create_controle_roi(self, controle):
         controle = dataclasses.replace(controle, id=self._ids.next())
         self.controle_rois[controle.analyse_id] = controle
+        return controle
+
+    def create_controle_roi_pari(self, controle):
+        controle = dataclasses.replace(controle, id=self._ids.next())
+        self.controle_roi_paris[controle.pari_id] = controle
         return controle
 
 

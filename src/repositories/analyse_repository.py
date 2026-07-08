@@ -9,7 +9,7 @@ from __future__ import annotations
 import psycopg
 from psycopg.rows import class_row
 
-from src.models.analyse import Analyse, AnalysePartant, ControleRoi, Pari, Selection
+from src.models.analyse import Analyse, AnalysePartant, ControleRoi, ControleRoiPari, Pari, Selection
 
 
 class AnalyseRepository:
@@ -182,5 +182,17 @@ class AnalyseRepository:
                     controle.valide,
                     controle.commentaire,
                 ),
+            )
+            return cur.fetchone()
+
+    def create_controle_roi_pari(self, controle: ControleRoiPari) -> ControleRoiPari:
+        with self._conn.cursor(row_factory=class_row(ControleRoiPari)) as cur:
+            cur.execute(
+                """
+                INSERT INTO controle_roi_pari (pari_id, mise, gains, profit, roi, valide)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id, pari_id, mise, gains, profit, roi, valide
+                """,
+                (controle.pari_id, controle.mise, controle.gains, controle.profit, controle.roi, controle.valide),
             )
             return cur.fetchone()

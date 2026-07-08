@@ -197,17 +197,18 @@ class StatistiqueRepository:
             return cur.fetchone()
 
     def calculer_paris(self) -> list[StatistiquePari]:
-        """Regroupe par `pari.type_pari` — mise/gains viennent de `controle_roi`
-        (niveau analyse). Correct tant qu'une analyse ne produit qu'un seul pari
-        (cf. AnalyseService aujourd'hui) ; à revoir si plusieurs types de pari
-        peuvent un jour coexister dans une même analyse (double-comptage possible)."""
+        """Regroupe par `pari.type_pari` — mise/gains/validité viennent de
+        `controle_roi_pari` (une ligne par pari, cf. L011 §8.7), pas de
+        `controle_roi` (un agrégat par analyse, insuffisant depuis qu'une analyse
+        produit plusieurs types de pari, cf. `construire_paris` — corrigé le
+        2026-07-08, cf. PROJECT_STATE.md)."""
         with self._conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT p.type_pari, COUNT(*), COUNT(*) FILTER (WHERE cr.valide),
-                       COALESCE(SUM(cr.mise), 0), COALESCE(SUM(cr.gains), 0)
-                FROM controle_roi cr
-                JOIN pari p ON p.analyse_id = cr.analyse_id
+                SELECT p.type_pari, COUNT(*), COUNT(*) FILTER (WHERE crp.valide),
+                       COALESCE(SUM(crp.mise), 0), COALESCE(SUM(crp.gains), 0)
+                FROM controle_roi_pari crp
+                JOIN pari p ON p.id = crp.pari_id
                 GROUP BY p.type_pari
                 """
             )

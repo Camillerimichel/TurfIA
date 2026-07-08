@@ -21,6 +21,7 @@ from src.algorithms.classement import (
     calculer_budget,
     calculer_score_final,
     categoriser,
+    construire_paris,
     trier_partants,
     verifier_absence_martingale,
 )
@@ -168,15 +169,15 @@ class AnalyseService:
                 )
                 selections.append(selection)
 
-            if budget > 0:
-                base = partants_classes[0]
+            for type_pari, chevaux, mise in construire_paris(partants_classes, budget):
+                roi_estime = sum(c.roi_theorique for c in chevaux) / len(chevaux)
                 pari = self._repo.create_pari(
                     Pari(
                         analyse_id=analyse.id,
-                        type_pari="Simple Gagnant",
-                        combinaison=str(base.partant_id),
-                        mise=budget,
-                        roi_estime=round(base.roi_theorique, 2),
+                        type_pari=type_pari,
+                        combinaison="-".join(str(c.partant_id) for c in chevaux),
+                        mise=mise,
+                        roi_estime=round(roi_estime, 2),
                     )
                 )
                 paris.append(pari)
