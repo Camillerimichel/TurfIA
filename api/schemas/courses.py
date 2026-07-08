@@ -83,6 +83,36 @@ class ChevalOut(BaseModel):
     actif: bool
 
 
+class JockeyIn(BaseModel):
+    nom: str
+    prenom: str | None = None
+    licence: str | None = None
+
+
+class JockeyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    nom: str
+    prenom: str | None = None
+    licence: str | None = None
+    actif: bool
+
+
+class EntraineurIn(BaseModel):
+    nom: str
+    prenom: str | None = None
+
+
+class EntraineurOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    nom: str
+    prenom: str | None = None
+    actif: bool
+
+
 class PartantIn(BaseModel):
     cheval_id: int
     numero: int = Field(gt=0)

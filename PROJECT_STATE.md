@@ -31,11 +31,14 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   (L032.1 §6), gestion d'erreurs centralisée y compris 404/422 (L023 §4.1, L016 §7).
   Endpoints : `/system/health`, `/system/version`, `GET /hippodromes`,
   `POST/GET /reunions`, `POST/GET /reunions/{id}/courses`, `GET /courses/{id}`,
-  `POST /chevaux`, `POST/GET /courses/{id}/partants`,
-  `POST/GET /courses/{id}/analyses`, `POST /courses/{id}/analyses/auto`,
-  `GET /analyses/{id}` — le flux complet réunion → course → chevaux → partants →
-  déclenchement d'analyse (manuel ou automatique depuis la collecte) → relecture est
-  pilotable de bout en bout via HTTP.
+  `POST/GET /chevaux/{id}`, `POST/GET /jockeys/{id}`, `POST/GET /entraineurs/{id}`,
+  `POST/GET /courses/{id}/partants`, `POST/GET /courses/{id}/analyses`,
+  `POST /courses/{id}/analyses/auto`, `GET /analyses/{id}` — le flux complet
+  réunion → course → chevaux/jockeys/entraîneurs → partants → déclenchement
+  d'analyse (manuel ou automatique depuis la collecte) → relecture est pilotable de
+  bout en bout via HTTP. La création d'un partant vérifie l'existence de
+  `cheval_id`, `jockey_id` et `entraineur_id` (404 ciblé, jamais une violation de
+  contrainte SQL brute).
 - **Collecte** (`src/collecte/`) : architecture multi-sources en 4 niveaux (données
   officielles, marché, consensus presse, base TurfIA propriétaire). Registre
   déclaratif de 12 sources (`src/collecte/registre.py`) avec statut vérifié par accès
@@ -93,10 +96,10 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   aucune autre course de la page Canalturf.
 - **Tests** : 61 tests unitaires (algorithmes + configuration) + 14 tests unitaires
   (mappers PMU) + 9 tests unitaires (mappers Canalturf) + 23 tests unitaires
-  (indicateurs Marché/Forme/Presse/Professionnels-Historique-Aptitude/risque) + 12
+  (indicateurs Marché/Forme/Presse/Professionnels-Historique-Aptitude/risque) + 19
   tests d'intégration API + 3 tests d'intégration du branchement presse + 5 tests
   d'intégration du branchement Professionnels/Historique/Aptitude (repositories/
-  services en mémoire, `tests/integration/`), tous verts (134 au total).
+  services en mémoire, `tests/integration/`), tous verts (141 au total).
 
 ## Correction notable apportée au SAD pendant l'implémentation
 
@@ -159,8 +162,10 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
   squelette vide.
 - Interface HTML (L018) — `html/` est un squelette vide.
 - Surface API encore partielle : pas de mise à jour/suppression (PUT/PATCH/DELETE)
-  sur aucune ressource ; pas d'endpoints pour jockeys/entraineurs/résultats/cotes/
-  statistiques/administration (cf. L032.2/L032.3 pour la liste complète cible).
+  sur aucune ressource ; jockeys/entraineurs/chevaux ont désormais un POST/GET, mais
+  pas encore d'endpoints pour résultats/cotes/statistiques/administration (L032.2/
+  L032.3 ne fixent qu'un regroupement par domaine, pas une liste d'URLs figée — les
+  routes suivent les conventions déjà en place, cf. `api/routes/courses.py`).
 - Authentification/RBAC réels (L021/L034) — aucune vérification d'identité n'est
   implémentée ; toutes les routes actuelles sont non protégées.
 - Module statistiques (L030.4, L031.7) — aucun code. La vraie définition L031.2 de
