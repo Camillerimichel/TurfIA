@@ -1,8 +1,9 @@
 """Routes du domaine Courses — cf. L007 §4.2, L030.2.
 
 Chaque création vérifie l'existence de ses dépendances directes (réunion, course,
-cheval) et répond 404 sinon, plutôt que de laisser remonter une violation de
-contrainte SQL brute (cf. L016 §7, aucun détail technique interne exposé).
+cheval, jockey, entraîneur) et répond 404 sinon, plutôt que de laisser remonter une
+violation de contrainte SQL brute (cf. L016 §7, aucun détail technique interne
+exposé).
 """
 
 from __future__ import annotations
@@ -81,6 +82,10 @@ def create_partant(
         raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
     if repo.get_cheval(payload.cheval_id) is None:
         raise HTTPException(status_code=404, detail=f"Cheval {payload.cheval_id} introuvable.")
+    if payload.jockey_id is not None and repo.get_jockey(payload.jockey_id) is None:
+        raise HTTPException(status_code=404, detail=f"Jockey {payload.jockey_id} introuvable.")
+    if payload.entraineur_id is not None and repo.get_entraineur(payload.entraineur_id) is None:
+        raise HTTPException(status_code=404, detail=f"Entraîneur {payload.entraineur_id} introuvable.")
     partant = repo.create_partant(Partant(course_id=course_id, **payload.model_dump()))
     return Enveloppe(data=PartantOut.model_validate(partant))
 

@@ -93,10 +93,10 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   aucune autre course de la page Canalturf.
 - **Tests** : 61 tests unitaires (algorithmes + configuration) + 14 tests unitaires
   (mappers PMU) + 9 tests unitaires (mappers Canalturf) + 23 tests unitaires
-  (indicateurs Marché/Forme/Presse/Professionnels-Historique-Aptitude/risque) + 10
+  (indicateurs Marché/Forme/Presse/Professionnels-Historique-Aptitude/risque) + 12
   tests d'intégration API + 3 tests d'intégration du branchement presse + 5 tests
   d'intégration du branchement Professionnels/Historique/Aptitude (repositories/
-  services en mémoire, `tests/integration/`), tous verts (132 au total).
+  services en mémoire, `tests/integration/`), tous verts (134 au total).
 
 ## Correction notable apportée au SAD pendant l'implémentation
 
@@ -178,10 +178,6 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
 - Les requêtes `compter_performances_*` s'exécutent une par une par partant (jusqu'à
   5 requêtes SQL par partant) — proportionné au volume actuel (déclenchement manuel),
   non optimisé (pas de requête groupée/matérialisée) si le volume devait augmenter.
-- Validation d'existence incomplète sur les FK optionnelles : `jockey_id` et
-  `entraineur_id` d'un partant ne sont pas vérifiés avant insertion (contrairement à
-  `cheval_id`) ; une valeur invalide remonte aujourd'hui en erreur 500 générique
-  plutôt qu'en 404 ciblé.
 - CI/CD ; le `Dockerfile`/`docker-compose.yml` sont un socle minimal, non durcis pour
   la production (mots de passe par défaut, pas de secrets management réel).
 

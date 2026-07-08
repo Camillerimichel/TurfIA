@@ -86,6 +86,40 @@ def test_creation_partant_cheval_inconnu_retourne_404(client):
     assert reponse.status_code == 404
 
 
+def test_creation_partant_jockey_inconnu_retourne_404(client):
+    reunion = client.post(
+        "/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": 1, "numero": 1}
+    ).json()["data"]
+    course = client.post(
+        f"/api/v1/reunions/{reunion['id']}/courses", json={"numero": 1, "nom": "Test"}
+    ).json()["data"]
+    cheval = client.post("/api/v1/chevaux", json={"nom": "Cheval Test"}).json()["data"]
+
+    reponse = client.post(
+        f"/api/v1/courses/{course['id']}/partants",
+        json={"cheval_id": cheval["id"], "numero": 1, "jockey_id": 999},
+    )
+    assert reponse.status_code == 404
+    assert reponse.json()["error"]["code"] == "RESSOURCE_INTROUVABLE"
+
+
+def test_creation_partant_entraineur_inconnu_retourne_404(client):
+    reunion = client.post(
+        "/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": 1, "numero": 1}
+    ).json()["data"]
+    course = client.post(
+        f"/api/v1/reunions/{reunion['id']}/courses", json={"numero": 1, "nom": "Test"}
+    ).json()["data"]
+    cheval = client.post("/api/v1/chevaux", json={"nom": "Cheval Test"}).json()["data"]
+
+    reponse = client.post(
+        f"/api/v1/courses/{course['id']}/partants",
+        json={"cheval_id": cheval["id"], "numero": 1, "entraineur_id": 999},
+    )
+    assert reponse.status_code == 404
+    assert reponse.json()["error"]["code"] == "RESSOURCE_INTROUVABLE"
+
+
 def test_validation_pydantic_retourne_enveloppe_422(client):
     reponse = client.post("/api/v1/reunions", json={"hippodrome_id": 1, "numero": 1})
     assert reponse.status_code == 422
