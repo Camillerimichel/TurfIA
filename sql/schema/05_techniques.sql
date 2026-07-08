@@ -20,6 +20,22 @@ CREATE TABLE IF NOT EXISTS utilisateur (
     cree_le               TIMESTAMP NOT NULL DEFAULT now(),
     modifie_le            TIMESTAMP
 );
+
+-- Sessions d'authentification (cf. L021 §3.3) : jeton de session opaque, seul son
+-- hash est stocké (cf. L021 §5.1, un identifiant est une donnée sensible) — jamais
+-- le jeton en clair, jamais un JWT auto-porteur (l'invalidation à la déconnexion
+-- exige un état côté serveur de toute façon, cf. PROJECT_STATE.md).
+CREATE TABLE IF NOT EXISTS session (
+    id                     BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    utilisateur_id         BIGINT NOT NULL REFERENCES utilisateur(id) ON DELETE RESTRICT,
+    jeton_hache            VARCHAR(64) NOT NULL UNIQUE,
+    cree_le                TIMESTAMP NOT NULL DEFAULT now(),
+    expire_le              TIMESTAMP NOT NULL,
+    revoque_le             TIMESTAMP,
+    derniere_utilisation   TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_session_jeton ON session (jeton_hache);
+CREATE INDEX IF NOT EXISTS idx_session_utilisateur ON session (utilisateur_id);
 CREATE INDEX IF NOT EXISTS idx_utilisateur_role ON utilisateur (role_id);
 
 CREATE TABLE IF NOT EXISTS audit (

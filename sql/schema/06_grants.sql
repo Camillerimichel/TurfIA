@@ -9,7 +9,8 @@ GRANT SELECT, INSERT, UPDATE ON
     analyses, analyse_partant, selection, pari, controle_roi,
     statistique_globale, statistique_score, statistique_hippodrome, statistique_discipline,
     statistique_pari, statistique_modele,
-    parametre, tache, journal
+    parametre, tache, journal,
+    role, utilisateur, session, audit
 TO turfia_app;
 
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO turfia_readonly;
