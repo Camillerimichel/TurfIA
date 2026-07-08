@@ -92,11 +92,11 @@ def calculer_indicateurs_marche(cotes: list[float | None]) -> list[float]:
 
 def calculer_indicateur_presse(classement_numeros: list[int], numero_partant: int) -> float:
     """Sous-score « Presse » (cf. L031.2 §Presse, consensus multi-journaux) : rang du
-    partant dans le classement consensus Canalturf (1er cité -> proche de 100),
-    normalisé sur le nombre de chevaux cités. Un partant non cité par la presse
-    reçoit le rang « pire que le dernier cité » (`len(classement_numeros) + 1`) :
-    approximation faute de disposer d'un nombre de citations par cheval (cf.
-    src/collecte/canalturf/mappers.py, `extraire_consensus_presse`).
+    partant dans un classement consensus (Canalturf ou Zone-Turf, cf.
+    `calculer_indicateur_presse_combine`), 1er cité -> proche de 100, normalisé sur
+    le nombre de chevaux cités. Un partant non cité par la presse reçoit le rang
+    « pire que le dernier cité » (`len(classement_numeros) + 1`) : approximation
+    faute de disposer d'un nombre de citations par cheval.
 
     Précondition : `classement_numeros` non vide (l'appelant ne doit invoquer cette
     fonction que lorsqu'un classement a effectivement été obtenu).
@@ -107,6 +107,20 @@ def calculer_indicateur_presse(classement_numeros: list[int], numero_partant: in
     except ValueError:
         rang = pire_rang
     return normaliser(rang, minimum=1, maximum=pire_rang, inverse=True)
+
+
+def calculer_indicateur_presse_combine(classements: list[list[int]], numero_partant: int) -> float:
+    """Combine les sous-scores Presse de plusieurs sources de consensus
+    (aujourd'hui Canalturf et Zone-Turf, cf. `src/services/consensus_presse_service.py`) :
+    moyenne simple des scores individuels, même logique que
+    `calculer_indicateur_professionnels` — aucune source ne domine les autres,
+    aucune pondération distincte entre elles n'est documentée.
+
+    Précondition : `classements` non vide (l'appelant ne l'invoque que si au moins
+    une source a répondu).
+    """
+    scores = [calculer_indicateur_presse(classement, numero_partant) for classement in classements]
+    return sum(scores) / len(scores)
 
 
 def calculer_indicateur_reussite(nb_victoires: int, nb_courses: int, minimum_courses: int = 3) -> float:

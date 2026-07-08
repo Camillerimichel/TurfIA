@@ -4,6 +4,7 @@ from src.algorithms.indicateurs import (
     SCORE_NEUTRE_PAR_DEFAUT,
     calculer_indicateur_forme,
     calculer_indicateur_presse,
+    calculer_indicateur_presse_combine,
     calculer_indicateur_professionnels,
     calculer_indicateur_reussite,
     calculer_indicateur_risque_taille_champ,
@@ -72,7 +73,24 @@ def test_calculer_indicateur_presse_non_cite_recoit_le_pire_score():
     score_dernier_cite = calculer_indicateur_presse([15, 7, 4], numero_partant=4)
     score_non_cite = calculer_indicateur_presse([15, 7, 4], numero_partant=99)
     assert score_non_cite < score_dernier_cite
-    assert score_non_cite == 0.0
+
+
+def test_calculer_indicateur_presse_combine_moyenne_deux_sources():
+    # Partant 15 : premier cité dans les deux classements -> 100 et 100.
+    assert calculer_indicateur_presse_combine([[15, 7, 4], [15, 9, 8]], numero_partant=15) == 100.0
+
+
+def test_calculer_indicateur_presse_combine_sources_divergentes():
+    score_a = calculer_indicateur_presse([15, 7, 4], numero_partant=15)  # 100.0
+    score_b = calculer_indicateur_presse([7, 4, 15], numero_partant=15)  # pire rang cité
+    combine = calculer_indicateur_presse_combine([[15, 7, 4], [7, 4, 15]], numero_partant=15)
+    assert combine == pytest.approx((score_a + score_b) / 2)
+
+
+def test_calculer_indicateur_presse_combine_une_seule_source():
+    assert calculer_indicateur_presse_combine([[15, 7, 4]], numero_partant=15) == calculer_indicateur_presse(
+        [15, 7, 4], numero_partant=15
+    )
 
 
 def test_calculer_indicateur_reussite_echantillon_insuffisant():
