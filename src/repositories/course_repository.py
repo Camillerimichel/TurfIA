@@ -5,6 +5,7 @@ from __future__ import annotations
 import psycopg
 from psycopg.rows import class_row
 
+from src.core.exceptions import BusinessRuleError
 from src.models.course import Cheval, Cote, Course, Entraineur, Jockey, Partant, Resultat, Reunion
 
 
@@ -31,6 +32,41 @@ class CourseRepository:
                 valeurs,
             )
             return cur.fetchone()
+
+    def _supprimer(self, table: str, nom_ressource: str, ressource_id: int) -> bool:
+        """Supprime la ligne si elle existe et si rien ne la référence. `table` est
+        toujours un littéral fourni par le code appelant. Les contraintes FK `ON
+        DELETE RESTRICT` (cf. L011 §9) protègent déjà l'intégrité : plutôt que de
+        vérifier nous-mêmes à l'avance (risque de TOCTOU sous concurrence), on
+        laisse Postgres refuser et on traduit sa violation de contrainte en
+        `BusinessRuleError` (409, cf. api/middlewares/error_handler.py) — jamais un
+        500 brut. Retourne False si l'id était inconnu (0 ligne supprimée)."""
+        try:
+            with self._conn.cursor() as cur:
+                cur.execute(f"DELETE FROM {table} WHERE id = %s", (ressource_id,))
+                return cur.rowcount > 0
+        except psycopg.errors.ForeignKeyViolation as exc:
+            raise BusinessRuleError(
+                f"Impossible de supprimer {nom_ressource} {ressource_id} : des données y sont rattachées."
+            ) from exc
+
+    def delete_reunion(self, reunion_id: int) -> bool:
+        return self._supprimer("reunion", "la réunion", reunion_id)
+
+    def delete_course(self, course_id: int) -> bool:
+        return self._supprimer("course", "la course", course_id)
+
+    def delete_partant(self, partant_id: int) -> bool:
+        return self._supprimer("partant", "le partant", partant_id)
+
+    def delete_cheval(self, cheval_id: int) -> bool:
+        return self._supprimer("cheval", "le cheval", cheval_id)
+
+    def delete_jockey(self, jockey_id: int) -> bool:
+        return self._supprimer("jockey", "le jockey", jockey_id)
+
+    def delete_entraineur(self, entraineur_id: int) -> bool:
+        return self._supprimer("entraineur", "l'entraîneur", entraineur_id)
 
     def create_reunion(self, reunion: Reunion) -> Reunion:
         with self._conn.cursor(row_factory=class_row(Reunion)) as cur:

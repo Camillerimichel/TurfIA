@@ -78,6 +78,17 @@ def update_reunion(
     return Enveloppe(data=ReunionOut.model_validate(reunion))
 
 
+@router.delete("/reunions/{reunion_id}", response_model=Enveloppe[dict])
+def delete_reunion(
+    reunion_id: int,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+) -> Enveloppe[dict]:
+    if not repo.delete_reunion(reunion_id):
+        raise HTTPException(status_code=404, detail=f"Réunion {reunion_id} introuvable.")
+    return Enveloppe(data={"supprime": True})
+
+
 @router.post("/reunions/{reunion_id}/courses", response_model=Enveloppe[CourseOut], status_code=201)
 def create_course(
     reunion_id: int, payload: CourseIn, repo: CourseRepository = Depends(get_course_repository)
@@ -119,6 +130,17 @@ def update_course(
     return Enveloppe(data=CourseOut.model_validate(course))
 
 
+@router.delete("/courses/{course_id}", response_model=Enveloppe[dict])
+def delete_course(
+    course_id: int,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+) -> Enveloppe[dict]:
+    if not repo.delete_course(course_id):
+        raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
+    return Enveloppe(data={"supprime": True})
+
+
 @router.post("/chevaux", response_model=Enveloppe[ChevalOut], status_code=201)
 def create_cheval(payload: ChevalIn, repo: CourseRepository = Depends(get_course_repository)) -> Enveloppe[ChevalOut]:
     cheval = repo.create_cheval(Cheval(**payload.model_dump()))
@@ -146,6 +168,17 @@ def update_cheval(
     return Enveloppe(data=ChevalOut.model_validate(cheval))
 
 
+@router.delete("/chevaux/{cheval_id}", response_model=Enveloppe[dict])
+def delete_cheval(
+    cheval_id: int,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+) -> Enveloppe[dict]:
+    if not repo.delete_cheval(cheval_id):
+        raise HTTPException(status_code=404, detail=f"Cheval {cheval_id} introuvable.")
+    return Enveloppe(data={"supprime": True})
+
+
 @router.post("/jockeys", response_model=Enveloppe[JockeyOut], status_code=201)
 def create_jockey(payload: JockeyIn, repo: CourseRepository = Depends(get_course_repository)) -> Enveloppe[JockeyOut]:
     jockey = repo.create_jockey(Jockey(**payload.model_dump()))
@@ -171,6 +204,17 @@ def update_jockey(
     if jockey is None:
         raise HTTPException(status_code=404, detail=f"Jockey {jockey_id} introuvable.")
     return Enveloppe(data=JockeyOut.model_validate(jockey))
+
+
+@router.delete("/jockeys/{jockey_id}", response_model=Enveloppe[dict])
+def delete_jockey(
+    jockey_id: int,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+) -> Enveloppe[dict]:
+    if not repo.delete_jockey(jockey_id):
+        raise HTTPException(status_code=404, detail=f"Jockey {jockey_id} introuvable.")
+    return Enveloppe(data={"supprime": True})
 
 
 @router.post("/entraineurs", response_model=Enveloppe[EntraineurOut], status_code=201)
@@ -202,6 +246,17 @@ def update_entraineur(
     if entraineur is None:
         raise HTTPException(status_code=404, detail=f"Entraîneur {entraineur_id} introuvable.")
     return Enveloppe(data=EntraineurOut.model_validate(entraineur))
+
+
+@router.delete("/entraineurs/{entraineur_id}", response_model=Enveloppe[dict])
+def delete_entraineur(
+    entraineur_id: int,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+) -> Enveloppe[dict]:
+    if not repo.delete_entraineur(entraineur_id):
+        raise HTTPException(status_code=404, detail=f"Entraîneur {entraineur_id} introuvable.")
+    return Enveloppe(data={"supprime": True})
 
 
 @router.post("/courses/{course_id}/partants", response_model=Enveloppe[PartantOut], status_code=201)
@@ -258,6 +313,17 @@ def update_partant(
     if partant is None:
         raise HTTPException(status_code=404, detail=f"Partant {partant_id} introuvable.")
     return Enveloppe(data=PartantOut.model_validate(partant))
+
+
+@router.delete("/partants/{partant_id}", response_model=Enveloppe[dict])
+def delete_partant(
+    partant_id: int,
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
+) -> Enveloppe[dict]:
+    if not repo.delete_partant(partant_id):
+        raise HTTPException(status_code=404, detail=f"Partant {partant_id} introuvable.")
+    return Enveloppe(data={"supprime": True})
 
 
 @router.post("/courses/{course_id}/resultats", response_model=Enveloppe[ResultatOut], status_code=201)

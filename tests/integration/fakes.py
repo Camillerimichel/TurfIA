@@ -11,6 +11,8 @@ import dataclasses
 import itertools
 from datetime import datetime, timezone
 
+from src.core.exceptions import BusinessRuleError
+
 
 class _AutoId:
     def __init__(self) -> None:
@@ -65,6 +67,20 @@ class FakeCourseRepository:
         store[resource_id] = mis_a_jour
         return mis_a_jour
 
+    @staticmethod
+    def _supprimer(store: dict, ressource_id: int, nom_ressource: str, references: bool) -> bool:
+        """Simule la contrainte FK ON DELETE RESTRICT réelle (cf.
+        CourseRepository._supprimer) : `references` est calculé par l'appelant à
+        partir des autres stores en mémoire."""
+        if ressource_id not in store:
+            return False
+        if references:
+            raise BusinessRuleError(
+                f"Impossible de supprimer {nom_ressource} {ressource_id} : des données y sont rattachées."
+            )
+        del store[ressource_id]
+        return True
+
     def create_reunion(self, reunion):
         reunion = dataclasses.replace(reunion, id=self._ids.next())
         self.reunions[reunion.id] = reunion
@@ -76,6 +92,10 @@ class FakeCourseRepository:
     def update_reunion(self, reunion_id: int, champs: dict):
         return self._appliquer_patch(self.reunions, reunion_id, champs)
 
+    def delete_reunion(self, reunion_id: int) -> bool:
+        references = any(c.reunion_id == reunion_id for c in self.courses.values())
+        return self._supprimer(self.reunions, reunion_id, "la réunion", references)
+
     def create_course(self, course):
         course = dataclasses.replace(course, id=self._ids.next())
         self.courses[course.id] = course
@@ -86,6 +106,12 @@ class FakeCourseRepository:
 
     def update_course(self, course_id: int, champs: dict):
         return self._appliquer_patch(self.courses, course_id, champs)
+
+    def delete_course(self, course_id: int) -> bool:
+        references = any(p.course_id == course_id for p in self.partants.values()) or any(
+            r.course_id == course_id for r in self.resultats.values()
+        )
+        return self._supprimer(self.courses, course_id, "la course", references)
 
     def list_courses_by_reunion(self, reunion_id: int):
         return [c for c in self.courses.values() if c.reunion_id == reunion_id]
@@ -101,6 +127,10 @@ class FakeCourseRepository:
     def update_cheval(self, cheval_id: int, champs: dict):
         return self._appliquer_patch(self.chevaux, cheval_id, champs)
 
+    def delete_cheval(self, cheval_id: int) -> bool:
+        references = any(p.cheval_id == cheval_id for p in self.partants.values())
+        return self._supprimer(self.chevaux, cheval_id, "le cheval", references)
+
     def create_jockey(self, jockey):
         jockey = dataclasses.replace(jockey, id=self._ids.next())
         self.jockeys[jockey.id] = jockey
@@ -111,6 +141,10 @@ class FakeCourseRepository:
 
     def update_jockey(self, jockey_id: int, champs: dict):
         return self._appliquer_patch(self.jockeys, jockey_id, champs)
+
+    def delete_jockey(self, jockey_id: int) -> bool:
+        references = any(p.jockey_id == jockey_id for p in self.partants.values())
+        return self._supprimer(self.jockeys, jockey_id, "le jockey", references)
 
     def create_entraineur(self, entraineur):
         entraineur = dataclasses.replace(entraineur, id=self._ids.next())
@@ -123,6 +157,10 @@ class FakeCourseRepository:
     def update_entraineur(self, entraineur_id: int, champs: dict):
         return self._appliquer_patch(self.entraineurs, entraineur_id, champs)
 
+    def delete_entraineur(self, entraineur_id: int) -> bool:
+        references = any(p.entraineur_id == entraineur_id for p in self.partants.values())
+        return self._supprimer(self.entraineurs, entraineur_id, "l'entraîneur", references)
+
     def create_partant(self, partant):
         partant = dataclasses.replace(partant, id=self._ids.next())
         self.partants[partant.id] = partant
@@ -133,6 +171,12 @@ class FakeCourseRepository:
 
     def update_partant(self, partant_id: int, champs: dict):
         return self._appliquer_patch(self.partants, partant_id, champs)
+
+    def delete_partant(self, partant_id: int) -> bool:
+        references = any(r.partant_id == partant_id for r in self.resultats.values()) or (
+            partant_id in self.cotes_historique and len(self.cotes_historique[partant_id]) > 0
+        )
+        return self._supprimer(self.partants, partant_id, "le partant", references)
 
     def list_partants_by_course(self, course_id: int):
         return [p for p in self.partants.values() if p.course_id == course_id]
