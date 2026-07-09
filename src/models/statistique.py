@@ -78,4 +78,5 @@ class StatistiqueModele:
     nb_courses: int = 0
     roi: float | None = None
     taux_reussite: float | None = None
+    parametres: str | None = None
     commentaire: str | None = None

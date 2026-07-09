@@ -117,6 +117,15 @@ class FakeCourseRepository:
     def list_courses_by_reunion(self, reunion_id: int):
         return [c for c in self.courses.values() if c.reunion_id == reunion_id]
 
+    def list_courses_avec_resultat(self, date_debut, date_fin):
+        courses_avec_resultat = {r.course_id for r in self.resultats.values()}
+        courses = [
+            c
+            for c in self.courses.values()
+            if c.id in courses_avec_resultat and date_debut <= self.reunions[c.reunion_id].date <= date_fin
+        ]
+        return sorted(courses, key=lambda c: (self.reunions[c.reunion_id].date, c.numero))
+
     def create_cheval(self, cheval):
         cheval = dataclasses.replace(cheval, id=self._ids.next())
         self.chevaux[cheval.id] = cheval

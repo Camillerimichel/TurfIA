@@ -142,7 +142,6 @@ class AnalyseService:
         )
 
         selections: list[Selection] = []
-        paris: list[Pari] = []
 
         if persister:
             analyse = self._repo.create_analyse(analyse)
@@ -169,17 +168,21 @@ class AnalyseService:
                 )
                 selections.append(selection)
 
-            for type_pari, chevaux, mise in construire_paris(partants_classes, budget):
-                roi_estime = sum(c.roi_theorique for c in chevaux) / len(chevaux)
-                pari = self._repo.create_pari(
-                    Pari(
-                        analyse_id=analyse.id,
-                        type_pari=type_pari,
-                        combinaison="-".join(str(c.partant_id) for c in chevaux),
-                        mise=mise,
-                        roi_estime=round(roi_estime, 2),
-                    )
-                )
-                paris.append(pari)
+        # Toujours construits en mémoire (y compris `persister=False`, cf. moteur de
+        # rejeu L031.7 §4 qui a besoin des paris sans les persister) ; seule leur
+        # écriture en base est conditionnée par `persister`.
+        paris: list[Pari] = []
+        for type_pari, chevaux, mise in construire_paris(partants_classes, budget):
+            roi_estime = sum(c.roi_theorique for c in chevaux) / len(chevaux)
+            pari = Pari(
+                analyse_id=analyse.id,
+                type_pari=type_pari,
+                combinaison="-".join(str(c.partant_id) for c in chevaux),
+                mise=mise,
+                roi_estime=round(roi_estime, 2),
+            )
+            if persister:
+                pari = self._repo.create_pari(pari)
+            paris.append(pari)
 
         return ResultatAnalyse(analyse=analyse, partants_classes=partants_classes, selections=selections, paris=paris)

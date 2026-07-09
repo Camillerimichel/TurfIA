@@ -264,12 +264,59 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
     (07/07/2026) : gains recalculés identiques aux dividendes PMU réels pour
     Simple Gagnant/Placé, Couplé Gagnant/Placé, 2 sur 4 et Quinté Flexi (y
     compris un champ de 6 chevaux, 1 désordre exact + 5 Bonus 4sur5 simultanés).
-  - **Limites assumées** (cf. ci-dessous) : le remboursement réglementaire PMU
-    pour un partant devenu non-partant après l'analyse n'est pas modélisé ;
-    `statistique_modele` agrège les analyses déjà faites par version, ce n'est
-    **pas** le moteur de rejeu/backtesting complet décrit en L031.7 §4 (comparer
-    des versions du modèle sur un historique identique) — resterait à construire
-    si un jour plusieurs jeux de pondérations coexistent.
+  - **Limite assumée** : le remboursement réglementaire PMU pour un partant
+    devenu non-partant après l'analyse n'est pas modélisé.
+- **Moteur de rejeu/backtesting (2026-07-09)** (`src/algorithms/rejeu.py`,
+  `scripts/rejouer_versions.py`, L031.7 §4) : compare le ROI/taux de réussite
+  de plusieurs jeux de `poids_score`/`poids_risque` sur un même historique de
+  courses réelles déjà arrivées, à budget constant.
+  - **Découverte réelle en explorant le SAD** : `analyses.version` (cf. L030.3)
+    n'est **pas** une version de modèle — c'est le statut Pré/Finale d'une même
+    exécution. `StatistiqueRepository.calculer_modeles()` (agrégation
+    existante) groupait déjà par cette colonne, un flou pré-existant
+    indépendant de ce chantier, désormais documenté dans son docstring plutôt
+    que laissé implicite. Le rejeu utilise sa propre notion de
+    `version_modele` (chaîne libre décrivant le jeu de poids testé), sans lien
+    avec `analyses.version` — les deux alimentent `statistique_modele` avec des
+    sémantiques différentes.
+  - **Persistance légère (décision de conception explicite)** : le rejeu
+    recalcule tout en mémoire (`AnalyseService.analyser_course(...,
+    persister=False)`, corrigé pour construire les paris même sans les
+    persister — jusque-là mort dans ce mode) et ne persiste **qu'une** ligne de
+    synthèse par version testée dans `statistique_modele` (`version_modele`
+    élargi à `VARCHAR(60)`, nouvelle colonne `parametres` JSON pour la
+    traçabilité L031.7 §7/§9) — aucune ligne dans `analyses`/`pari`/
+    `controle_roi`. Comparer des versions = exécuter le script plusieurs fois
+    puis lire `GET /statistiques/modeles`.
+  - `ControleRoiService._calculer_gains_pari` rendue publique
+    (`calculer_gains_pari`) et réutilisée telle quelle par le script — aucune
+    duplication du dispatch par type de pari déjà testé.
+  - Nouvelle méthode `CourseRepository.list_courses_avec_resultat(date_debut,
+    date_fin)` (courses déjà arrivées, résultat connu) — périmètre du rejeu.
+  - **Limites explicites** : le consensus Presse n'est pas rejouable
+    (`ConsensusPresseService` scrape Canalturf/Zone-Turf en direct, uniquement
+    le Quinté+ du jour même) — non branché dans le rejeu, comme dans
+    `scripts/analyser_course.py`. Les familles Value/Contexte ne sont jamais
+    produites (limite déjà existante, héritée telle quelle). Les seuils de
+    décision (`determiner_decision`) ne sont pas paramétrables dans
+    `AnalyseService`, seuls les poids le sont — non rejouables. Les
+    indicateurs L031.7 §5 au-delà de ROI global/taux de réussite (par tranche
+    de score/hippodrome/type de pari, drawdown, stabilité) ne sont pas
+    calculés — `statistique_modele` ne porte que ces deux-là aujourd'hui, un
+    second incrément possible. La validation hors-échantillon (L031.7 §6.1)
+    n'est pas automatisée : le script prend une fenêtre de dates en paramètre,
+    à l'opérateur de choisir une fenêtre distincte de celle utilisée pour
+    calibrer les poids testés. La décision finale (adopter/rejeter une
+    version) reste une lecture humaine des résultats, jamais automatisée.
+  - **Vérifié réellement (2026-07-09)** contre PostgreSQL local : migration
+    appliquée (`version_modele` élargi, colonne `parametres` ajoutée),
+    exécution du script contre une course réelle déjà arrivée (R1C8,
+    07/07/2026, rapports réels) avec deux jeux de poids différents — deux
+    lignes distinctes persistées dans `statistique_modele` avec `parametres`
+    correctement tracés (ROI identique entre les deux runs dans ce cas précis :
+    artefact attendu du jeu de données synthétique n'exposant qu'une seule
+    famille de sous-score, pas un bug — cf. `calculer_score`, une moyenne
+    pondérée à un seul terme est invariante au poids utilisé).
 - **PATCH/DELETE** : PATCH partiel (`exclude_unset`) sur réunion/course/partant/
   cheval/jockey/entraineur ; pas de PUT (avec des FK obligatoires immuables et des
   champs presque tous optionnels, un remplacement complet n'apporte rien de plus
@@ -277,15 +324,16 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   FK `ON DELETE RESTRICT` (déjà en place, cf. L011 §9) est traduite en 409 plutôt
   que vérifiée à l'avance (évite une fenêtre de concurrence). **Jamais** de PATCH/
   DELETE sur résultat/cote/analyse et dérivés (historisés, cf. L011 §15).
-- **Tests** : 183 tests unitaires (algorithmes dont ROI réel des 6 types de
-  pari, configuration, mappers PMU/Canalturf/Zone-Turf, sécurité — hachage mot
-  de passe/jeton, limiteur de débit, dépendances RBAC, sérialisation d'audit)
-  + 94 tests d'intégration (API courses/analyses/résultats/cotes/PATCH/DELETE/
-  statistiques/audit, AuthService, authentification API bout en bout,
-  branchement presse combinée Canalturf+Zone-Turf, Professionnels/Historique/
-  Aptitude, ControleRoiService (6 types de pari + détail par pari
-  `controle_roi_pari`), StatistiqueService — repositories/services en mémoire,
-  `tests/integration/`), tous verts (277 au total).
+- **Tests** : 187 tests unitaires (algorithmes dont ROI réel des 6 types de
+  pari et agrégation du rejeu, configuration, mappers PMU/Canalturf/Zone-Turf,
+  sécurité — hachage mot de passe/jeton, limiteur de débit, dépendances RBAC,
+  sérialisation d'audit) + 97 tests d'intégration (API courses/analyses/
+  résultats/cotes/PATCH/DELETE/statistiques/audit, AuthService, authentification
+  API bout en bout, branchement presse combinée Canalturf+Zone-Turf,
+  Professionnels/Historique/Aptitude, AnalyseService (`persister=False`),
+  ControleRoiService (6 types de pari + détail par pari `controle_roi_pari`),
+  StatistiqueService — repositories/services en mémoire, `tests/integration/`),
+  tous verts (284 au total).
 
 ## Correction notable apportée au SAD pendant l'implémentation
 
@@ -302,10 +350,12 @@ L031.2 §3 définit la famille « Historique » comme « performances TurfIA pas
 sans détail. L031.1 §5 (tableau des familles, cohérent avec le code) précise
 « Historique → Hippodrome » : interprété comme la performance passée du cheval à cet
 hippodrome précis, pas comme une méta-mesure de la performance passée du moteur
-TurfIA lui-même (qui relèverait du futur module Statistiques, L031.7, non
-implémenté). Aptitude est bornée à distance/surface/état de piste (le facteur
-hippodrome de L031.2 étant déjà couvert par Historique, pour éviter un double
-comptage).
+TurfIA lui-même (qui relèverait du moteur de rejeu/backtesting, L031.7 §4,
+désormais implémenté — cf. `scripts/rejouer_versions.py` — mais pas encore
+rebranché pour redéfinir la famille « Historique » elle-même, qui resterait un
+second incrément). Aptitude est bornée à distance/surface/état de piste (le
+facteur hippodrome de L031.2 étant déjà couvert par Historique, pour éviter un
+double comptage).
 
 ## Cadrage sur la collecte PMU (transparence, pas un refus)
 
@@ -360,10 +410,15 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
 - `statistique_pari` s'appuie sur `controle_roi_pari` (une ligne par pari, cf.
   ci-dessus) — corrigé le 2026-07-08, plus de double-comptage même quand une
   analyse produit plusieurs types de pari.
-- `statistique_modele` est peuplée par simple agrégation des analyses déjà
-  faites, groupées par `version` — ce n'est pas le moteur de rejeu/backtesting
-  complet décrit en L031.7 §4 (recalculer tout un historique avec de nouveaux
-  paramètres pour comparer des versions), qui reste à construire.
+- `statistique_modele` est alimentée par **deux** mécanismes distincts avec des
+  sémantiques différentes de `version_modele` : `calculer_modeles()` (agrégation
+  des analyses déjà persistées, groupées par `analyses.version` — un statut
+  Pré/Finale, pas une version de modèle) et `scripts/rejouer_versions.py` (vrai
+  rejeu multi-versions L031.7 §4, `version_modele` = chaîne libre décrivant le
+  jeu de poids testé) — cf. « Moteur de rejeu/backtesting » ci-dessus pour le
+  détail et les limites du second (Presse non rejouable, Value/Contexte non
+  produites, seuils de décision non rejouables, indicateurs L031.7 §5 limités à
+  ROI global/taux de réussite, pas de validation hors-échantillon automatisée).
 - Pas de purge/archivage des lignes historisées dans les 6 tables statistiques —
   chaque exécution de `scripts/calculer_statistiques.py` ajoute une nouvelle
   ligne par table (cf. L030.4 §10, volontaire), mais rien ne limite leur nombre
@@ -395,13 +450,14 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
   squelette vide.
 - Interface HTML (L018) — `html/` est un squelette vide.
 - Endpoints résultats/cotes en écriture, PATCH/DELETE sur les ressources
-  référentielles/métier, authentification/RBAC réels et module Statistiques
-  (ROI réel + 6 tables agrégées) sont désormais implémentés (cf. ci-dessus).
-  Reste hors périmètre : administration des utilisateurs via l'API, moteur de
-  rejeu/backtesting L031.7 §4 (cf. « Limites connues du module Statistiques »).
+  référentielles/métier, authentification/RBAC réels, module Statistiques
+  (ROI réel + 6 tables agrégées) et moteur de rejeu/backtesting L031.7 §4 sont
+  désormais implémentés (cf. ci-dessus). Reste hors périmètre : administration
+  des utilisateurs via l'API.
 - La vraie définition L031.2 de « Historique » (performance passée du moteur
-  TurfIA lui-même, pas du cheval) dépendrait de ce moteur de rejeu ; seule
-  l'interprétation L031.1 (hippodrome) est implémentée (cf. ci-dessus).
+  TurfIA lui-même, pas du cheval) pourrait maintenant s'appuyer sur le moteur
+  de rejeu, mais ce rebranchement n'est pas fait ; seule l'interprétation
+  L031.1 (hippodrome) est implémentée (cf. ci-dessus).
 - Collecte de niveau 1/2 partiellement implémentée (PMU uniquement, cf. ci-dessus).
 - Tous les sous-scores de `src/algorithms/score.py` sont désormais calculés
   automatiquement depuis les données collectées, à l'exception de Value et Contexte
@@ -421,17 +477,20 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
 L'essentiel de la surface API, l'authentification/RBAC réelle, une deuxième
 source de consensus presse, le module Statistiques (ROI réel + 6 tables
 agrégées, granularité par pari via `controle_roi_pari`), les 6 types de pari
-(Simple Gagnant/Placé, Couplé Gagnant/Placé, 2 sur 4, Quinté Flexi) et l'audit
+(Simple Gagnant/Placé, Couplé Gagnant/Placé, 2 sur 4, Quinté Flexi), l'audit
 systématique des écritures (au-delà des seuls événements d'authentification)
-sont désormais en place. France Galop (niveau 1) a été explorée réellement le
-2026-07-08 et écartée (cf. tableau des sources ci-dessus) : robots.txt n'y
-autorise que des listes sommaires, tout le détail exploitable est interdit —
-le mono-source PMU reste donc la seule source niveau 1 exploitable en l'état.
-Pistes possibles : moteur de rejeu/backtesting L031.7 §4 (comparer des
-versions du modèle sur un historique identique — débloquerait aussi la vraie
-définition L031.2 de « Historique » et les familles Value/Contexte), sortir du
-Quinté+-only pour la Presse, interface HTML (L018), administration des
-utilisateurs via l'API.
+et le moteur de rejeu/backtesting L031.7 §4 (`scripts/rejouer_versions.py`,
+persistance légère dans `statistique_modele`) sont désormais en place. France
+Galop (niveau 1) a été explorée réellement le 2026-07-08 et écartée (cf.
+tableau des sources ci-dessus) : robots.txt n'y autorise que des listes
+sommaires, tout le détail exploitable est interdit — le mono-source PMU reste
+donc la seule source niveau 1 exploitable en l'état. Pistes possibles :
+rebrancher le rejeu pour définir la vraie famille L031.2 « Historique »
+(performance passée du moteur) et les familles Value/Contexte, étendre
+`statistique_modele` aux indicateurs L031.7 §5 non couverts (par tranche de
+score/hippodrome/type de pari, drawdown, stabilité), sortir du Quinté+-only
+pour la Presse, interface HTML (L018), administration des utilisateurs via
+l'API.
 
 ## Conventions de développement
 

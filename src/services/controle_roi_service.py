@@ -83,7 +83,7 @@ class ControleRoiService:
         mise_totale = 0.0
         gains_totaux = 0.0
         for pari in self._analyses.list_paris_by_analyse(analyse.id):
-            gains = self._calculer_gains_pari(pari, rapports_bruts, cache, analyse.id)
+            gains = self.calculer_gains_pari(pari, rapports_bruts, cache, analyse.id)
             if gains is None:
                 continue
             mise = float(pari.mise)
@@ -131,9 +131,14 @@ class ControleRoiService:
             numeros.append(str(partant.numero))
         return numeros
 
-    def _calculer_gains_pari(
+    def calculer_gains_pari(
         self, pari: Pari, rapports_bruts: list[dict], cache: dict[str, tuple], analyse_id: int | None
     ) -> float | None:
+        """Dispatch par type de pari (Simple/Couplé/2 sur 4/Quinté Flexi), déjà
+        testé pour le contrôle ROI a posteriori — méthode publique pour être
+        réutilisée telle quelle par le moteur de rejeu (`scripts/
+        rejouer_versions.py`) sur des `Pari` en mémoire, jamais persistés
+        (`id=None`, utilisé seulement dans les messages de log ci-dessous)."""
         type_pari = pari.type_pari
         if type_pari not in TYPES_PARI_PMU:
             logger.warning(

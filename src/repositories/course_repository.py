@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 import psycopg
 from psycopg.rows import class_row
 
@@ -217,6 +219,26 @@ class CourseRepository:
                 FROM course WHERE reunion_id = %s ORDER BY numero
                 """,
                 (reunion_id,),
+            )
+            return cur.fetchall()
+
+    def list_courses_avec_resultat(self, date_debut: date, date_fin: date) -> list[Course]:
+        """Courses déjà arrivées (résultat officiel connu) dans une fenêtre de
+        dates — périmètre du moteur de rejeu (cf. `scripts/rejouer_versions.py`,
+        L031.7 §4) : rejouer une course exige de connaître son arrivée réelle."""
+        with self._conn.cursor(row_factory=class_row(Course)) as cur:
+            cur.execute(
+                """
+                SELECT c.id, c.reunion_id, c.numero, c.nom, c.heure_depart, c.discipline_id,
+                       c.type_course_id, c.distance_id, c.surface_id, c.etat_piste_id,
+                       c.allocation, c.nb_partants, c.quinte
+                FROM course c
+                JOIN reunion re ON re.id = c.reunion_id
+                WHERE re.date BETWEEN %s AND %s
+                  AND EXISTS (SELECT 1 FROM resultat r WHERE r.course_id = c.id)
+                ORDER BY re.date, c.numero
+                """,
+                (date_debut, date_fin),
             )
             return cur.fetchall()
 
