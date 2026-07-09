@@ -548,9 +548,13 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
   des sélections mono-source, hors périmètre de la famille « Presse » telle que
   définie en L031.2/L031.3). Pour toute autre course, la clé `"presse"` est
   simplement absente du calcul (mécanisme déjà toléré par `calculer_score`).
-- `scripts/analyser_course.py` ne branche pas encore `ConsensusPresseService` (il
-  construit `PreparationDonneesService` sans ce collaborateur optionnel) —
-  uniquement `POST /courses/{id}/analyses/auto` en bénéficie pour l'instant.
+- **Corrigé (2026-07-09)** : `scripts/analyser_course.py` branche désormais
+  `ConsensusPresseService` (`CanalturfClient`/`ZoneTurfClient`, même câblage
+  que `api/dependencies/services.py::get_preparation_service`) — auparavant
+  seul `POST /courses/{id}/analyses/auto` en bénéficiait, le script CLI
+  passait toujours à côté du sous-score Presse, y compris le jour du
+  Quinté+. Vérifié réellement (course synthétique, script exécuté pour de
+  vrai contre PostgreSQL local, aucune régression).
 - `Course.quinte` (colonne existante en base) n'est pas encore alimentée par le
   collecteur PMU (`CollecteService`) — non nécessaire au fonctionnement du
   consensus presse actuel, qui s'appuie sur le `R{réunion}C{course}` extrait de
