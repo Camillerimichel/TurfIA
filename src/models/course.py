@@ -82,6 +82,36 @@ class Partant:
 
 
 @dataclass
+class PartantDetail:
+    """`Partant` enrichi d'une jointure (nom du cheval/jockey/entraîneur,
+    dernière cote) — évite les appels N+1 côté fiche course HTML (cf. L018
+    §7, `CourseRepository.list_partants_detail_by_course`). Jamais utilisé par
+    `PreparationDonneesService`, qui reste sur `Partant`/
+    `list_partants_by_course`, inchangés."""
+
+    id: int
+    course_id: int
+    cheval_id: int
+    numero: int
+    cheval_nom: str
+    jockey_id: int | None = None
+    jockey_nom: str | None = None
+    jockey_prenom: str | None = None
+    entraineur_id: int | None = None
+    entraineur_nom: str | None = None
+    entraineur_prenom: str | None = None
+    corde: int | None = None
+    poids: float | None = None
+    valeur: float | None = None
+    age: int | None = None
+    ferrure: str | None = None
+    musique: str | None = None
+    non_partant: bool = False
+    derniere_cote: float | None = None
+    derniere_cote_operateur: str | None = None
+
+
+@dataclass
 class Cote:
     partant_id: int
     operateur: str

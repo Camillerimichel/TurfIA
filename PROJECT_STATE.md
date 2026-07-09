@@ -376,12 +376,15 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
     construire « réunions du jour ». Ajout de
     `CourseRepository.list_reunions_by_date(jour)` +
     `GET /reunions?date=YYYY-MM-DD` (défaut : aujourd'hui).
-  - **Compromis assumé** : `PartantOut` n'expose que des id
-    (`cheval_id`/`jockey_id`/`entraineur_id`), pas les noms — la fiche course
-    fait donc un appel `GET /chevaux/{id}` (et jockey/entraineur) par
-    partant (N+1) plutôt qu'une jointure côté repository. Accepté pour ce
-    périmètre (volume local modeste, cf. L018 §14) ; optimisable plus tard si
-    ça devient sensible. Pas de pagination réelle non plus (même logique que
+  - **N+1 corrigé (2026-07-09)** : `GET /courses/{id}/partants` fait
+    désormais une seule jointure (`CourseRepository.
+    list_partants_detail_by_course`, nouveau modèle `PartantDetail`) — noms
+    cheval/jockey/entraîneur et dernière cote inclus directement dans
+    `PartantOut`, plus d'appel `GET /chevaux/{id}`/`/jockeys/{id}`/
+    `/entraineurs/{id}`/`/partants/{id}/cotes` par partant côté
+    `course.js`. `PreparationDonneesService`/`list_partants_by_course`
+    (utilisé pour le scoring) sont inchangés — la jointure ne concerne que
+    la lecture HTML. Pas de pagination réelle non plus (même logique que
     `GET /audit`).
   - Déclenchement d'analyse (`POST /courses/{id}/analyses/auto`) derrière une
     confirmation JS explicite (`window.confirm`, cf. L018 §10.1 — action qui
@@ -689,13 +692,20 @@ signal moteur (cf. « Rebranchement de la famille Historique » ci-dessus) —
 Value et Contexte restent hors périmètre (aucune formule SAD documentée pour
 elles non plus).
 
-Pistes possibles : enrichir la fiche partant côté HTML (noms cheval/jockey/
-entraineur par jointure plutôt que N+1 appels, cf. « Interface HTML locale »
-ci-dessus) ; formules pour Value/Contexte si une source documentaire apparaît
-(L031.5 Value Bet est un mécanisme de sélection distinct, pas une formule de
-sous-score) ; sortir du Quinté+-only pour la Presse ; un vrai scheduler si le
-besoin de planification réapparaît (actuellement redimensionné en
-déclenchements manuels, cf. ci-dessus).
+La fiche partant HTML a été enrichie le 2026-07-09 (jointure au lieu des
+appels N+1, cf. ci-dessus). **Presse hors Quinté+ : impasse réelle confirmée
+avec l'utilisateur (2026-07-09)**, pas une piste à rouvrir — Paris-Turf
+bloque le bot Anthropic, Geny/ZEturf bloquent tout robot sur le contenu
+utile (`Disallow` pronostics/fiches), et même Canalturf/Zone-Turf n'ont un
+vrai consensus multi-journaux que sur le Quinté+ du jour ; aucune source
+permise ne fournit de consensus presse ailleurs.
+
+Pistes restantes : formules pour Value/Contexte si une source documentaire
+apparaît un jour (L031.5 Value Bet est un mécanisme de sélection distinct,
+pas une formule de sous-score) ; un vrai scheduler si le besoin de
+planification réapparaît (actuellement redimensionné en déclenchements
+manuels, cf. ci-dessus) ; dette technique listée plus haut
+(`compter_performances_*` non groupé, CI/CD absent, Dockerfile non durci).
 
 ## Conventions de développement
 

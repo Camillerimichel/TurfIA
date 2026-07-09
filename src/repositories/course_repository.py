@@ -8,7 +8,7 @@ import psycopg
 from psycopg.rows import class_row
 
 from src.core.exceptions import BusinessRuleError
-from src.models.course import Cheval, Cote, Course, Entraineur, Jockey, Partant, Resultat, Reunion
+from src.models.course import Cheval, Cote, Course, Entraineur, Jockey, Partant, PartantDetail, Resultat, Reunion
 
 
 class CourseRepository:
@@ -346,6 +346,34 @@ class CourseRepository:
                 SELECT id, course_id, cheval_id, jockey_id, entraineur_id, numero,
                        corde, poids, valeur, age, ferrure, musique, non_partant
                 FROM partant WHERE course_id = %s ORDER BY numero
+                """,
+                (course_id,),
+            )
+            return cur.fetchall()
+
+    def list_partants_detail_by_course(self, course_id: int) -> list[PartantDetail]:
+        """Comme `list_partants_by_course`, enrichi d'une jointure (nom du
+        cheval/jockey/entraîneur, dernière cote) — évite les appels N+1 côté
+        fiche course HTML (cf. L018 §7). `PreparationDonneesService` continue
+        d'utiliser `list_partants_by_course`, qui n'a pas besoin de ces noms."""
+        with self._conn.cursor(row_factory=class_row(PartantDetail)) as cur:
+            cur.execute(
+                """
+                SELECT p.id, p.course_id, p.cheval_id, p.numero, ch.nom AS cheval_nom,
+                       p.jockey_id, j.nom AS jockey_nom, j.prenom AS jockey_prenom,
+                       p.entraineur_id, e.nom AS entraineur_nom, e.prenom AS entraineur_prenom,
+                       p.corde, p.poids, p.valeur, p.age, p.ferrure, p.musique, p.non_partant,
+                       co.cote AS derniere_cote, co.operateur AS derniere_cote_operateur
+                FROM partant p
+                JOIN cheval ch ON ch.id = p.cheval_id
+                LEFT JOIN jockey j ON j.id = p.jockey_id
+                LEFT JOIN entraineur e ON e.id = p.entraineur_id
+                LEFT JOIN (
+                    SELECT DISTINCT ON (partant_id) partant_id, cote, operateur
+                    FROM cote ORDER BY partant_id, date_maj DESC
+                ) co ON co.partant_id = p.id
+                WHERE p.course_id = %s
+                ORDER BY p.numero
                 """,
                 (course_id,),
             )

@@ -425,7 +425,7 @@ def list_partants(
 ) -> Enveloppe[list[PartantOut]]:
     if repo.get_course(course_id) is None:
         raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
-    partants = repo.list_partants_by_course(course_id)
+    partants = repo.list_partants_detail_by_course(course_id)
     return Enveloppe(data=[PartantOut.model_validate(p) for p in partants])
 
 
