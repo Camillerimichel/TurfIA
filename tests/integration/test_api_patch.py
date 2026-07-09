@@ -37,6 +37,30 @@ def test_patch_course_modifie_les_champs_fournis(client):
     assert corps["nom"] == "Prix Test"  # inchangé
 
 
+def test_patch_course_referentiel_inconnu_retourne_404(client):
+    reunion = client.post(
+        "/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": 1, "numero": 1}
+    ).json()["data"]
+    course = client.post(
+        f"/api/v1/reunions/{reunion['id']}/courses", json={"numero": 1, "nom": "Prix Test"}
+    ).json()["data"]
+
+    reponse = client.patch(f"/api/v1/courses/{course['id']}", json={"discipline_id": 999})
+    assert reponse.status_code == 404
+
+
+def test_post_course_referentiel_inconnu_retourne_404(client):
+    reunion = client.post(
+        "/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": 1, "numero": 1}
+    ).json()["data"]
+
+    reponse = client.post(
+        f"/api/v1/reunions/{reunion['id']}/courses",
+        json={"numero": 1, "nom": "Prix Test", "surface_id": 999},
+    )
+    assert reponse.status_code == 404
+
+
 def test_patch_cheval_toggle_actif(client):
     cheval = client.post("/api/v1/chevaux", json={"nom": "Cheval Test"}).json()["data"]
     reponse = client.patch(f"/api/v1/chevaux/{cheval['id']}", json={"actif": False})

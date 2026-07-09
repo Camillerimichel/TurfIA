@@ -44,20 +44,45 @@ class ReferentielRepository:
             cur.execute("SELECT id, libelle, description FROM discipline ORDER BY libelle")
             return cur.fetchall()
 
+    def get_discipline(self, discipline_id: int) -> Discipline | None:
+        with self._conn.cursor(row_factory=class_row(Discipline)) as cur:
+            cur.execute("SELECT id, libelle, description FROM discipline WHERE id = %s", (discipline_id,))
+            return cur.fetchone()
+
     def list_surfaces(self) -> list[Surface]:
         with self._conn.cursor(row_factory=class_row(Surface)) as cur:
             cur.execute("SELECT id, libelle, description FROM surface ORDER BY libelle")
             return cur.fetchall()
+
+    def get_surface(self, surface_id: int) -> Surface | None:
+        with self._conn.cursor(row_factory=class_row(Surface)) as cur:
+            cur.execute("SELECT id, libelle, description FROM surface WHERE id = %s", (surface_id,))
+            return cur.fetchone()
 
     def list_etats_piste(self) -> list[EtatPiste]:
         with self._conn.cursor(row_factory=class_row(EtatPiste)) as cur:
             cur.execute("SELECT id, libelle, indice FROM etat_piste ORDER BY indice")
             return cur.fetchall()
 
+    def get_etat_piste(self, etat_piste_id: int) -> EtatPiste | None:
+        with self._conn.cursor(row_factory=class_row(EtatPiste)) as cur:
+            cur.execute("SELECT id, libelle, indice FROM etat_piste WHERE id = %s", (etat_piste_id,))
+            return cur.fetchone()
+
     def list_types_course(self) -> list[TypeCourse]:
         with self._conn.cursor(row_factory=class_row(TypeCourse)) as cur:
             cur.execute("SELECT id, libelle, description FROM type_course ORDER BY libelle")
             return cur.fetchall()
+
+    def get_type_course(self, type_course_id: int) -> TypeCourse | None:
+        with self._conn.cursor(row_factory=class_row(TypeCourse)) as cur:
+            cur.execute("SELECT id, libelle, description FROM type_course WHERE id = %s", (type_course_id,))
+            return cur.fetchone()
+
+    def get_distance(self, distance_id: int) -> Distance | None:
+        with self._conn.cursor(row_factory=class_row(Distance)) as cur:
+            cur.execute("SELECT id, distance, unite FROM distance WHERE id = %s", (distance_id,))
+            return cur.fetchone()
 
     # -- get-or-create : cf. L013 §3.3 (idempotence), utilisées par la collecte -----
 

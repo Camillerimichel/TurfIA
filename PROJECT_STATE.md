@@ -357,12 +357,12 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   pari et agrégation du rejeu — ROI global + 7 indicateurs L031.7 §5,
   configuration, mappers PMU/Canalturf/Zone-Turf, sécurité — hachage mot de
   passe/jeton, limiteur de débit, dépendances RBAC, sérialisation d'audit)
-  + 97 tests d'intégration (API courses/analyses/résultats/cotes/PATCH/DELETE/
+  + 99 tests d'intégration (API courses/analyses/résultats/cotes/PATCH/DELETE/
   statistiques/audit, AuthService, authentification API bout en bout,
   branchement presse combinée Canalturf+Zone-Turf, Professionnels/Historique/
   Aptitude, AnalyseService (`persister=False`), ControleRoiService (6 types de
   pari + détail par pari `controle_roi_pari`), StatistiqueService —
-  repositories/services en mémoire, `tests/integration/`), tous verts (303 au
+  repositories/services en mémoire, `tests/integration/`), tous verts (305 au
   total).
 
 ## Correction notable apportée au SAD pendant l'implémentation
@@ -469,10 +469,15 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
   non atomique, etc.).
 - Pas de route de gestion des utilisateurs (création/désactivation) via l'API :
   uniquement `scripts/creer_utilisateur.py`, en ligne de commande.
-- Un PATCH sur `course` référençant un `distance_id`/`surface_id`/`etat_piste_id`
-  référentiel inconnu n'est pas validé avant l'écriture (contrairement à
-  `jockey_id`/`entraineur_id` sur un partant) : remonte en violation de
-  contrainte FK brute (500), pas en 404 ciblé.
+- **Corrigé (2026-07-09)** : POST/PATCH sur `course` référençant un
+  `discipline_id`/`type_course_id`/`distance_id`/`surface_id`/`etat_piste_id`
+  inconnu retourne désormais un 404 ciblé (`_valider_referentiels_course`,
+  cf. `api/routes/courses.py`) plutôt qu'une violation de contrainte FK brute
+  (500) — même principe que `jockey_id`/`entraineur_id` sur un partant.
+  Nouvelles méthodes `get_discipline/get_type_course/get_distance/get_surface/
+  get_etat_piste` sur `ReferentielRepository` (vérifiées réellement contre
+  PostgreSQL). Fait en préalable à l'interface HTML locale (meilleurs messages
+  d'erreur dans les futurs formulaires).
 
 ## Explicitement hors périmètre (travail futur, non implémenté)
 
@@ -529,10 +534,8 @@ HTML (L018), mais **strictement locale** (tourne uniquement sur la machine de
 l'utilisateur, un seul compte) — en conséquence, l'administration des
 utilisateurs via l'API et un vrai scheduler générique (« Automatisations
 planifiées ») sont volontairement écartés (cf. ci-dessus), pas de simple
-report. Avant de construire l'HTML : corriger le PATCH sur `course` avec un
-référentiel inconnu (500 brut → 404 ciblé, cf. « Limites connues de
-l'authentification/RBAC ») pour de meilleurs messages d'erreur dans les futurs
-formulaires.
+report. Le correctif préalable (PATCH/POST `course` avec référentiel inconnu
+→ 404 ciblé) est fait (cf. « Limites connues de l'authentification/RBAC »).
 
 Pistes possibles au-delà de l'HTML : rebrancher le rejeu pour définir la vraie
 famille L031.2 « Historique » (performance passée du moteur) et les familles

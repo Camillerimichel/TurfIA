@@ -27,6 +27,11 @@ class FakeReferentielRepository:
     def __init__(self) -> None:
         self._ids = _AutoId()
         self.hippodromes: dict[int, object] = {}
+        self.disciplines: dict[int, object] = {}
+        self.types_course: dict[int, object] = {}
+        self.distances: dict[int, object] = {}
+        self.surfaces: dict[int, object] = {}
+        self.etats_piste: dict[int, object] = {}
 
     def seed_hippodrome(self, hippodrome) -> object:
         hippodrome = dataclasses.replace(hippodrome, id=self._ids.next())
@@ -38,6 +43,46 @@ class FakeReferentielRepository:
 
     def list_hippodromes(self):
         return list(self.hippodromes.values())
+
+    def seed_discipline(self, discipline) -> object:
+        discipline = dataclasses.replace(discipline, id=self._ids.next())
+        self.disciplines[discipline.id] = discipline
+        return discipline
+
+    def get_discipline(self, discipline_id: int):
+        return self.disciplines.get(discipline_id)
+
+    def seed_type_course(self, type_course) -> object:
+        type_course = dataclasses.replace(type_course, id=self._ids.next())
+        self.types_course[type_course.id] = type_course
+        return type_course
+
+    def get_type_course(self, type_course_id: int):
+        return self.types_course.get(type_course_id)
+
+    def seed_distance(self, distance) -> object:
+        distance = dataclasses.replace(distance, id=self._ids.next())
+        self.distances[distance.id] = distance
+        return distance
+
+    def get_distance(self, distance_id: int):
+        return self.distances.get(distance_id)
+
+    def seed_surface(self, surface) -> object:
+        surface = dataclasses.replace(surface, id=self._ids.next())
+        self.surfaces[surface.id] = surface
+        return surface
+
+    def get_surface(self, surface_id: int):
+        return self.surfaces.get(surface_id)
+
+    def seed_etat_piste(self, etat_piste) -> object:
+        etat_piste = dataclasses.replace(etat_piste, id=self._ids.next())
+        self.etats_piste[etat_piste.id] = etat_piste
+        return etat_piste
+
+    def get_etat_piste(self, etat_piste_id: int):
+        return self.etats_piste.get(etat_piste_id)
 
 
 class FakeCourseRepository:
