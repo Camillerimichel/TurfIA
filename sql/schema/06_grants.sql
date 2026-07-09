@@ -9,9 +9,16 @@ GRANT SELECT, INSERT, UPDATE ON
     analyses, analyse_partant, selection, pari, controle_roi, controle_roi_pari,
     statistique_globale, statistique_score, statistique_hippodrome, statistique_discipline,
     statistique_pari, statistique_modele,
-    parametre, tache, journal,
+    parametre, tache, journal, version,
     role, utilisateur, session, audit
 TO turfia_app;
+
+-- SELECT seule (jamais INSERT/UPDATE, réservé à turfia_migration) : nécessaire
+-- pour que `pg_dump` exécuté avec turfia_app (cf. scripts/sauvegarder_base.py,
+-- L018 §10 « vérifier les sauvegardes ») puisse verrouiller/lire TOUTES les
+-- tables du schéma, `migration` y compris (sinon `pg_dump` échoue avec
+-- "permission denied for table migration").
+GRANT SELECT ON migration TO turfia_app;
 
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO turfia_readonly;
 

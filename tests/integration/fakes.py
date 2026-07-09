@@ -13,6 +13,10 @@ from datetime import datetime, timezone
 
 from src.core.exceptions import BusinessRuleError, ImportationError
 from src.models.audit import Audit
+from src.models.historique import HistoriqueLigne
+from src.models.technique import Journal, Tache
+from src.services.collecte_service import RapportCollecte
+from src.services.supervision_service import EtatSupervision
 
 
 class _AutoId:
@@ -558,3 +562,196 @@ class FakeStatistiqueRepository:
 
     def list_modeles(self):
         return list(self.modeles)
+
+
+class FakeHistoriqueRepository:
+    """Recompose en mémoire la jointure SQL réelle (reunion -> course -> analyses
+    -> pari -> controle_roi_pari) à partir des stores déjà exposés par
+    `FakeCourseRepository`/`FakeAnalyseRepository`/`FakeReferentielRepository`."""
+
+    def __init__(self, course_repo: FakeCourseRepository, analyse_repo: "FakeAnalyseRepository", referentiel_repo: FakeReferentielRepository) -> None:
+        self._courses = course_repo
+        self._analyses = analyse_repo
+        self._referentiels = referentiel_repo
+
+    def rechercher(self, filtres) -> list[HistoriqueLigne]:
+        lignes: list[HistoriqueLigne] = []
+        for reunion in self._courses.reunions.values():
+            if filtres.date_debut is not None and reunion.date < filtres.date_debut:
+                continue
+            if filtres.date_fin is not None and reunion.date > filtres.date_fin:
+                continue
+            if filtres.hippodrome_id is not None and reunion.hippodrome_id != filtres.hippodrome_id:
+                continue
+            hippodrome = self._referentiels.hippodromes.get(reunion.hippodrome_id)
+            hippodrome_nom = hippodrome.nom if hippodrome is not None else "?"
+
+            for course in self._courses.list_courses_by_reunion(reunion.id):
+                for analyse in self._analyses.list_analyses_by_course(course.id):
+                    if filtres.decision is not None and analyse.decision != filtres.decision:
+                        continue
+                    base = dict(
+                        date=reunion.date, hippodrome_id=reunion.hippodrome_id, hippodrome_nom=hippodrome_nom,
+                        course_id=course.id, course_numero=course.numero, course_nom=course.nom,
+                        analyse_id=analyse.id, version=analyse.version, decision=analyse.decision,
+                        score_confiance=analyse.score_confiance, risque=analyse.risque, budget=analyse.budget,
+                    )
+                    paris = self._analyses.list_paris_by_analyse(analyse.id)
+                    if not paris:
+                        if filtres.type_pari is not None:
+                            continue
+                        lignes.append(HistoriqueLigne(**base))
+                        continue
+                    for pari in paris:
+                        if filtres.type_pari is not None and pari.type_pari != filtres.type_pari:
+                            continue
+                        controle = self._analyses.controle_roi_paris.get(pari.id)
+                        lignes.append(HistoriqueLigne(
+                            **base, pari_id=pari.id, type_pari=pari.type_pari, mise=pari.mise,
+                            gain_estime=pari.gain_estime, roi_estime=pari.roi_estime,
+                            roi_reel=controle.roi if controle else None,
+                            profit_reel=controle.profit if controle else None,
+                            valide=controle.valide if controle else None,
+                        ))
+        lignes.sort(key=lambda l: (l.date, l.course_numero, l.version), reverse=True)
+        return lignes[: filtres.limite]
+
+
+class FakeJournalRepository:
+    def __init__(self) -> None:
+        self._ids = _AutoId()
+        self.journaux: list[Journal] = []
+
+    def enregistrer(self, niveau: str, message: str, composant=None, correlation_id=None, exception=None) -> Journal:
+        journal = Journal(
+            id=self._ids.next(), niveau=niveau, message=message, composant=composant,
+            correlation_id=correlation_id, exception=exception, date_evenement=datetime.now(timezone.utc),
+        )
+        self.journaux.append(journal)
+        return journal
+
+    def lister(self, niveau=None, composant=None, date_debut=None, date_fin=None, limite: int = 200) -> list[Journal]:
+        resultat = [
+            j for j in self.journaux
+            if (niveau is None or j.niveau == niveau)
+            and (composant is None or j.composant == composant)
+            and (date_debut is None or j.date_evenement.date() >= date_debut)
+            and (date_fin is None or j.date_evenement.date() <= date_fin)
+        ]
+        return list(reversed(resultat))[:limite]
+
+
+class FakeTacheRepository:
+    def __init__(self) -> None:
+        self._ids = _AutoId()
+        self.taches: dict[int, Tache] = {}
+
+    def demarrer(self, nom: str, categorie: str | None = None) -> Tache:
+        tache = Tache(id=self._ids.next(), nom=nom, categorie=categorie, debut=datetime.now(timezone.utc), statut="en_cours")
+        self.taches[tache.id] = tache
+        return tache
+
+    def terminer(self, tache_id: int, statut: str, commentaire: str | None = None) -> Tache | None:
+        tache = self.taches.get(tache_id)
+        if tache is None:
+            return None
+        fin = datetime.now(timezone.utc)
+        duree_ms = int((fin - tache.debut).total_seconds() * 1000)
+        tache = dataclasses.replace(tache, fin=fin, duree_ms=duree_ms, statut=statut, commentaire=commentaire)
+        self.taches[tache_id] = tache
+        return tache
+
+    def lister(self, categorie: str | None = None, limite: int = 50) -> list[Tache]:
+        resultat = [t for t in self.taches.values() if categorie is None or t.categorie == categorie]
+        return sorted(resultat, key=lambda t: t.debut, reverse=True)[:limite]
+
+    def compter_echecs_recents(self, depuis, categorie: str | None = None) -> int:
+        return len([
+            t for t in self.taches.values()
+            if t.statut == "echec" and t.debut >= depuis and (categorie is None or t.categorie == categorie)
+        ])
+
+
+class FakeParametreRepository:
+    def __init__(self) -> None:
+        self._ids = _AutoId()
+        self.parametres: dict[str, object] = {}  # keyed by cle
+
+    def seed(self, parametre):
+        if parametre.id is None:
+            parametre = dataclasses.replace(parametre, id=self._ids.next())
+        if parametre.date_modification is None:
+            parametre = dataclasses.replace(parametre, date_modification=datetime.now(timezone.utc))
+        self.parametres[parametre.cle] = parametre
+        return parametre
+
+    def lister(self):
+        return sorted(self.parametres.values(), key=lambda p: p.cle)
+
+    def get_parametre(self, cle: str):
+        return self.parametres.get(cle)
+
+    def update_parametre(self, cle: str, valeur: str):
+        parametre = self.parametres.get(cle)
+        if parametre is None:
+            return None
+        parametre = dataclasses.replace(parametre, valeur=valeur, date_modification=datetime.now(timezone.utc))
+        self.parametres[cle] = parametre
+        return parametre
+
+    def obtenir_poids(self, prefixe: str) -> dict[str, float]:
+        return {
+            p.cle.removeprefix(f"{prefixe}."): float(p.valeur)
+            for p in self.parametres.values()
+            if p.cle.startswith(f"{prefixe}.")
+        }
+
+
+class FakeVersionRepository:
+    def __init__(self) -> None:
+        self._ids = _AutoId()
+        self.versions: dict[int, object] = {}
+
+    def creer(self, version):
+        version = dataclasses.replace(version, id=self._ids.next(), date_publication=datetime.now(timezone.utc))
+        self.versions[version.id] = version
+        return version
+
+    def lister(self, limite: int = 20):
+        return sorted(self.versions.values(), key=lambda v: v.date_publication, reverse=True)[:limite]
+
+
+class FakeCollecteService:
+    """Remplace CollecteService dans les tests d'intégration — aucun accès réseau
+    PMU (cf. L020 §2.2). `rapport` configurable par le test."""
+
+    def __init__(self, rapport: RapportCollecte | None = None) -> None:
+        self.rapport = rapport if rapport is not None else RapportCollecte()
+
+    def collecter_programme_du_jour(self, jour):
+        return self.rapport
+
+
+class FakeControleRoiService:
+    """Remplace ControleRoiService dans les tests d'intégration — `controles`
+    configurable par le test (liste de `ControleRoi` déjà calculés)."""
+
+    def __init__(self, controles: list | None = None) -> None:
+        self.controles = controles if controles is not None else []
+
+    def calculer_controles_manquants(self):
+        return self.controles
+
+
+class FakeSupervisionService:
+    """Remplace SupervisionService — pas de connexion DB réelle ni de
+    `shutil.disk_usage` en test ; `etat_configure` configurable par le test."""
+
+    def __init__(self, etat: EtatSupervision | None = None) -> None:
+        self.etat_configure = etat if etat is not None else EtatSupervision(
+            base_de_donnees_ok=True, latence_db_ms=1.0, espace_disque_disponible_octets=1_000_000_000,
+            taches_en_echec_24h=0, demarrage_processus=datetime.now(timezone.utc), uptime_secondes=1.0,
+        )
+
+    def etat(self) -> EtatSupervision:
+        return self.etat_configure

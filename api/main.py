@@ -7,20 +7,39 @@ requêtes.
 
 from __future__ import annotations
 
+import logging
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
 from starlette.staticfiles import StaticFiles
 
 from api.middlewares.error_handler import register_error_handlers
-from api.routes import analyses, audit, auth, courses, referentiels, statistiques, system
+from api.routes import (
+    administration,
+    analyses,
+    audit,
+    auth,
+    courses,
+    historique,
+    referentiels,
+    statistiques,
+    system,
+)
 from src.core.config import get_settings
+from src.core.log_db_handler import DbLogHandler
 from src.core.logging import configure_logging
 
 RACINE_PROJET = Path(__file__).resolve().parent.parent
 
 settings = get_settings()
 configure_logging(settings.log_level)
+
+# Persiste les logs WARNING+ dans la table `journal` (cf. L022, L018 §10) — en
+# plus du flux stdout JSON existant, jamais à sa place. Désactivable
+# (LOG_JOURNAL_DB_ACTIF=false) pour les tests, qui n'ont pas de base réelle.
+if os.environ.get("LOG_JOURNAL_DB_ACTIF", "true").lower() != "false":
+    logging.getLogger().addHandler(DbLogHandler(settings.database_url, niveau=settings.log_niveau_db))
 
 app = FastAPI(
     title="TurfIA API",
@@ -38,6 +57,8 @@ app.include_router(courses.router, prefix=settings.api_prefix)
 app.include_router(analyses.router, prefix=settings.api_prefix)
 app.include_router(statistiques.router, prefix=settings.api_prefix)
 app.include_router(audit.router, prefix=settings.api_prefix)
+app.include_router(historique.router, prefix=settings.api_prefix)
+app.include_router(administration.router, prefix=settings.api_prefix)
 
 # Interface HTML locale (cf. L018) — montée après les routeurs API pour que
 # `/api/v1/*` reste prioritaire. Pas de moteur de gabarits (Jinja2) : tout le

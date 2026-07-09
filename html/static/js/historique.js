@@ -1,0 +1,114 @@
+// Page Historique (cf. L018 §8) — recherche transversale sur analyses/paris/ROI.
+
+initialiserEntete();
+
+function formaterValeur(valeur) {
+  if (valeur === null || valeur === undefined) return "—";
+  if (typeof valeur === "number") return Number.isInteger(valeur) ? valeur : valeur.toFixed(2);
+  return valeur;
+}
+
+function construireTableau(lignes, colonnes) {
+  const table = document.createElement("table");
+  const entete = document.createElement("thead");
+  const ligneEntete = document.createElement("tr");
+  for (const colonne of colonnes) {
+    const cellule = document.createElement("th");
+    cellule.textContent = colonne.libelle;
+    ligneEntete.appendChild(cellule);
+  }
+  entete.appendChild(ligneEntete);
+  table.appendChild(entete);
+
+  const corps = document.createElement("tbody");
+  if (lignes.length === 0) {
+    const ligneVide = document.createElement("tr");
+    const cellule = document.createElement("td");
+    cellule.colSpan = colonnes.length;
+    cellule.textContent = "Aucune donnée.";
+    ligneVide.appendChild(cellule);
+    corps.appendChild(ligneVide);
+  }
+  for (const ligne of lignes) {
+    const tr = document.createElement("tr");
+    for (const colonne of colonnes) {
+      const cellule = document.createElement("td");
+      if (colonne.cle === "course_nom") {
+        const lien = document.createElement("a");
+        lien.href = `/course.html?id=${ligne.course_id}`;
+        lien.textContent = `${ligne.course_numero} — ${ligne.course_nom}`;
+        cellule.appendChild(lien);
+      } else {
+        cellule.textContent = formaterValeur(ligne[colonne.cle]);
+      }
+      tr.appendChild(cellule);
+    }
+    corps.appendChild(tr);
+  }
+  table.appendChild(corps);
+  return table;
+}
+
+const COLONNES = [
+  { libelle: "Date", cle: "date" },
+  { libelle: "Hippodrome", cle: "hippodrome_nom" },
+  { libelle: "Course", cle: "course_nom" },
+  { libelle: "Version", cle: "version" },
+  { libelle: "Décision", cle: "decision" },
+  { libelle: "Score", cle: "score_confiance" },
+  { libelle: "Risque", cle: "risque" },
+  { libelle: "Type de pari", cle: "type_pari" },
+  { libelle: "Mise €", cle: "mise" },
+  { libelle: "ROI estimé %", cle: "roi_estime" },
+  { libelle: "ROI réel %", cle: "roi_reel" },
+  { libelle: "Profit réel €", cle: "profit_reel" },
+  { libelle: "Validé", cle: "valide" },
+];
+
+async function chargerHippodromes() {
+  const select = document.getElementById("filtre-hippodrome");
+  try {
+    const hippodromes = await apiFetch("/hippodromes");
+    for (const hippodrome of hippodromes) {
+      const option = document.createElement("option");
+      option.value = hippodrome.id;
+      option.textContent = hippodrome.nom;
+      select.appendChild(option);
+    }
+  } catch (erreur) {
+    // Filtre non bloquant : la recherche reste utilisable sans la liste des hippodromes.
+  }
+}
+
+async function rechercherHistorique() {
+  const conteneur = document.getElementById("section-historique");
+  conteneur.textContent = "Chargement…";
+
+  const parametres = new URLSearchParams();
+  const dateDebut = document.getElementById("filtre-date-debut").value;
+  const dateFin = document.getElementById("filtre-date-fin").value;
+  const hippodromeId = document.getElementById("filtre-hippodrome").value;
+  const typePari = document.getElementById("filtre-type-pari").value;
+  const decision = document.getElementById("filtre-decision").value;
+  if (dateDebut) parametres.set("date_debut", dateDebut);
+  if (dateFin) parametres.set("date_fin", dateFin);
+  if (hippodromeId) parametres.set("hippodrome_id", hippodromeId);
+  if (typePari) parametres.set("type_pari", typePari);
+  if (decision) parametres.set("decision", decision);
+
+  try {
+    const lignes = await apiFetch(`/historique?${parametres.toString()}`);
+    conteneur.innerHTML = "";
+    conteneur.appendChild(construireTableau(lignes, COLONNES));
+  } catch (erreur) {
+    conteneur.textContent = `Erreur : ${erreur.message}`;
+  }
+}
+
+document.getElementById("formulaire-filtres").addEventListener("submit", (evenement) => {
+  evenement.preventDefault();
+  rechercherHistorique();
+});
+
+chargerHippodromes();
+rechercherHistorique();

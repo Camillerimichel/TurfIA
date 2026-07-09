@@ -9,6 +9,9 @@ api:
 
 logging:
   format: json
+  # Niveau minimal des évènements écrits dans la table `journal` (cf. L022,
+  # module Administration L018 §10) — INFO/DEBUG restent stdout-only.
+  niveau_db: WARNING
 
 securite:
   # Durée de validité d'une session (cf. L021 §3.3) — au-delà, le jeton est
@@ -18,3 +21,7 @@ securite:
     # Limitation de débit sur POST /auth/login (cf. L021 §7.2.1).
     max_tentatives: 5
     fenetre_secondes: 300
+
+administration:
+  # Répertoire des sauvegardes pg_dump (cf. L018 §10, scripts/sauvegarder_base.py).
+  chemin_sauvegardes: data/sauvegardes

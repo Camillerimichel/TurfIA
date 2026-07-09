@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TurfIA — Historique</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <header class="entete">
+    <h1><a href="/">TurfIA</a></h1>
+    <nav>
+      <a href="/">Accueil</a>
+      <a href="/historique.html" class="actif">Historique</a>
+      <a href="/statistiques.html">Statistiques</a>
+      <a href="/administration.html">Administration</a>
+    </nav>
+    <div class="info-utilisateur">
+      <span id="nom-utilisateur"></span>
+      <button id="bouton-deconnexion">Déconnexion</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="carte">
+      <h2>Filtres</h2>
+      <form id="formulaire-filtres">
+        <label for="filtre-date-debut">Du</label>
+        <input type="date" id="filtre-date-debut" />
+
+        <label for="filtre-date-fin">Au</label>
+        <input type="date" id="filtre-date-fin" />
+
+        <label for="filtre-hippodrome">Hippodrome</label>
+        <select id="filtre-hippodrome">
+          <option value="">Tous</option>
+        </select>
+
+        <label for="filtre-type-pari">Type de pari</label>
+        <select id="filtre-type-pari">
+          <option value="">Tous</option>
+          <option value="Simple Gagnant">Simple Gagnant</option>
+          <option value="Simple Placé">Simple Placé</option>
+          <option value="Couplé Gagnant">Couplé Gagnant</option>
+          <option value="Couplé Placé">Couplé Placé</option>
+          <option value="2 sur 4">2 sur 4</option>
+          <option value="Quinté Flexi">Quinté Flexi</option>
+        </select>
+
+        <label for="filtre-decision">Décision</label>
+        <select id="filtre-decision">
+          <option value="">Toutes</option>
+          <option value="Ne pas jouer">Ne pas jouer</option>
+          <option value="Jeu prudent">Jeu prudent</option>
+          <option value="Jeu normal">Jeu normal</option>
+          <option value="Forte opportunité">Forte opportunité</option>
+        </select>
+
+        <button type="submit">Rechercher</button>
+      </form>
+    </section>
+
+    <section class="carte">
+      <h2>Résultats</h2>
+      <div class="tableau-scroll" id="section-historique">Chargement…</div>
+    </section>
+  </main>
+
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/historique.js"></script>
+</body>
+</html>
