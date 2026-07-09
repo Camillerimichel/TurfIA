@@ -238,6 +238,15 @@ class StatistiqueRepository:
             return cur.fetchone()
 
     def calculer_modeles(self) -> list[StatistiqueModele]:
+        """Agrège les analyses déjà persistées par `analyses.version` — **pas**
+        une vraie version de modèle : cette colonne désigne le statut Pré/Finale
+        d'une même exécution (cf. L030.3), pas un jeu de paramètres différent.
+        Le vrai rejeu multi-versions (L031.7 §4) vit dans `scripts/
+        rejouer_versions.py` (`version_modele` y est une chaîne libre décrivant
+        le jeu de poids testé, sans lien avec `analyses.version`) — les deux
+        alimentent la même table avec des sémantiques différentes, à ne pas
+        confondre en lisant `GET /statistiques/modeles` (limite documentée,
+        cf. PROJECT_STATE.md, non corrigée ici, hors périmètre)."""
         with self._conn.cursor() as cur:
             cur.execute(
                 """
@@ -267,9 +276,9 @@ class StatistiqueRepository:
             cur.execute(
                 """
                 INSERT INTO statistique_modele
-                    (version_modele, date_debut, date_fin, nb_courses, roi, taux_reussite, commentaire)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING id, version_modele, date_debut, date_fin, nb_courses, roi, taux_reussite, commentaire
+                    (version_modele, date_debut, date_fin, nb_courses, roi, taux_reussite, parametres, commentaire)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, version_modele, date_debut, date_fin, nb_courses, roi, taux_reussite, parametres, commentaire
                 """,
                 (
                     stat.version_modele,
@@ -278,6 +287,7 @@ class StatistiqueRepository:
                     stat.nb_courses,
                     stat.roi,
                     stat.taux_reussite,
+                    stat.parametres,
                     stat.commentaire,
                 ),
             )

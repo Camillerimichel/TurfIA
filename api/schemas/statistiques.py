@@ -85,4 +85,5 @@ class StatistiqueModeleOut(BaseModel):
     nb_courses: int
     roi: float | None = None
     taux_reussite: float | None = None
+    parametres: str | None = None
     commentaire: str | None = None
