@@ -577,25 +577,6 @@ class CourseRepository:
             )
             return cur.fetchone()
 
-    def compter_performances_cheval_hippodrome(
-        self, cheval_id: int, hippodrome_id: int, exclure_course_id: int
-    ) -> tuple[int, int]:
-        """(victoires, courses) du cheval à cet hippodrome hors course en cours
-        d'analyse — cf. L031.2 famille Historique (cf. L031.1 §5 : Historique = Hippodrome)."""
-        with self._conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT COUNT(*) FILTER (WHERE r.classement = 1 AND NOT r.disqualification), COUNT(*)
-                FROM partant p
-                JOIN resultat r ON r.partant_id = p.id
-                JOIN course c ON c.id = p.course_id
-                JOIN reunion re ON re.id = c.reunion_id
-                WHERE p.cheval_id = %s AND re.hippodrome_id = %s AND p.course_id != %s AND NOT r.non_partant
-                """,
-                (cheval_id, hippodrome_id, exclure_course_id),
-            )
-            return cur.fetchone()
-
     def compter_performances_cheval_conditions(
         self, cheval_id: int, distance_id: int, surface_id: int, etat_piste_id: int, exclure_course_id: int
     ) -> tuple[int, int]:

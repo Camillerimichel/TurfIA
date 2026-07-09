@@ -69,9 +69,10 @@ def get_consensus_presse_service() -> Generator[ConsensusPresseService, None, No
 
 def get_preparation_service(
     repo: CourseRepository = Depends(get_course_repository),
+    statistiques: StatistiqueRepository = Depends(get_statistique_repository),
     presse: ConsensusPresseService = Depends(get_consensus_presse_service),
 ) -> PreparationDonneesService:
-    return PreparationDonneesService(repo, presse)
+    return PreparationDonneesService(repo, statistiques, presse)
 
 
 def get_automatisation_service(

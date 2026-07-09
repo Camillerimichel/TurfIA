@@ -22,8 +22,12 @@ résultats.
 
 Hors périmètre (limites déjà existantes, héritées telles quelles) : le
 consensus Presse n'est pas rejouable (`ConsensusPresseService` scrape en
-direct, uniquement le Quinté+ du jour même) — non branché ici. Les familles
-Value/Contexte ne sont jamais produites comme sous-scores. Les seuils de
+direct, uniquement le Quinté+ du jour même) — non branché ici. La famille
+Historique (cf. `calculer_indicateur_historique_moteur`) reflète l'état
+*actuel* de `statistique_hippodrome`, pas un instantané au moment de la
+course rejouée — même limite que Marché/Presse/Professionnels, qui lisent
+déjà tous des données à leur état présent plutôt qu'un instantané historique.
+Les familles Value/Contexte ne sont jamais produites comme sous-scores. Les seuils de
 décision (`determiner_decision`) ne sont pas paramétrables dans
 `AnalyseService`, seuls les poids le sont — non rejouables.
 """
@@ -72,10 +76,10 @@ def run() -> int:
     with PMUClient() as pmu_client, session() as conn:
         course_repo = CourseRepository(conn)
         analyse_repo = AnalyseRepository(conn)
-        preparation = PreparationDonneesService(course_repo)
+        statistique_repo = StatistiqueRepository(conn)
+        preparation = PreparationDonneesService(course_repo, statistique_repo)
         analyse_service = AnalyseService(analyse_repo, poids_score=args.poids_score, poids_risque=args.poids_risque)
         controle_roi_service = ControleRoiService(pmu_client, analyse_repo, course_repo)
-        statistique_repo = StatistiqueRepository(conn)
 
         courses = course_repo.list_courses_avec_resultat(args.date_debut, args.date_fin)
         print(f"{len(courses)} course(s) éligible(s) au rejeu entre {args.date_debut} et {args.date_fin}.")

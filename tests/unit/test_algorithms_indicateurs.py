@@ -3,6 +3,7 @@ import pytest
 from src.algorithms.indicateurs import (
     SCORE_NEUTRE_PAR_DEFAUT,
     calculer_indicateur_forme,
+    calculer_indicateur_historique_moteur,
     calculer_indicateur_presse,
     calculer_indicateur_presse_combine,
     calculer_indicateur_professionnels,
@@ -119,3 +120,28 @@ def test_calculer_indicateur_risque_taille_champ_petit_champ():
 
 def test_calculer_indicateur_risque_taille_champ_grand_champ():
     assert calculer_indicateur_risque_taille_champ(20) == 100.0
+
+
+def test_calculer_indicateur_historique_moteur_neutre_si_roi_absent():
+    assert calculer_indicateur_historique_moteur(roi=None, nb_courses=10) == SCORE_NEUTRE_PAR_DEFAUT
+
+
+def test_calculer_indicateur_historique_moteur_neutre_si_echantillon_insuffisant():
+    assert calculer_indicateur_historique_moteur(roi=25.0, nb_courses=2, minimum_courses=3) == SCORE_NEUTRE_PAR_DEFAUT
+
+
+def test_calculer_indicateur_historique_moteur_roi_nul_est_neutre():
+    assert calculer_indicateur_historique_moteur(roi=0.0, nb_courses=10) == 50.0
+
+
+def test_calculer_indicateur_historique_moteur_roi_positif():
+    assert calculer_indicateur_historique_moteur(roi=15.0, nb_courses=10) == 75.0
+
+
+def test_calculer_indicateur_historique_moteur_roi_negatif():
+    assert calculer_indicateur_historique_moteur(roi=-15.0, nb_courses=10) == 25.0
+
+
+def test_calculer_indicateur_historique_moteur_clamp_au_dela_des_bornes():
+    assert calculer_indicateur_historique_moteur(roi=1000.0, nb_courses=10) == 100.0
+    assert calculer_indicateur_historique_moteur(roi=-1000.0, nb_courses=10) == 0.0

@@ -160,6 +160,20 @@ class StatistiqueRepository:
             )
             return cur.fetchone()
 
+    def get_dernier_hippodrome(self, hippodrome_id: int) -> StatistiqueHippodrome | None:
+        """Dernière ligne calculée pour cet hippodrome (table historisée, jamais
+        mise à jour en place) — alimente la famille Score « Historique » (cf.
+        L031.2 §3, `src/algorithms/indicateurs.py::calculer_indicateur_historique_moteur`)."""
+        with self._conn.cursor(row_factory=class_row(StatistiqueHippodrome)) as cur:
+            cur.execute(
+                """
+                SELECT id, hippodrome_id, nb_courses, mises, gains, profit, roi
+                FROM statistique_hippodrome WHERE hippodrome_id = %s ORDER BY id DESC LIMIT 1
+                """,
+                (hippodrome_id,),
+            )
+            return cur.fetchone()
+
     def calculer_disciplines(self) -> list[StatistiqueDiscipline]:
         with self._conn.cursor() as cur:
             cur.execute(

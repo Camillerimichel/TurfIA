@@ -2,10 +2,13 @@
 (familles Marché, Forme, Presse, Professionnels, Historique et Aptitude), fonctions
 pures (cf. L006 §4.2).
 
-« Historique » et « Aptitude » sont interprétées selon L031.1 §5 (performance passée
-du cheval à l'hippodrome, respectivement dans les mêmes distance/surface/état de
-piste) — la définition littérale de L031.2 (« performances TurfIA passées ») relève
-du futur module Statistiques (L031.7), non construit ici (cf. PROJECT_STATE.md).
+« Aptitude » est interprétée selon L031.1 §5 (performance passée du cheval dans les
+mêmes distance/surface/état de piste). « Historique » suit désormais la définition
+littérale de L031.2 (« performances TurfIA passées ») plutôt que L031.1 §5
+(« Hippodrome » = performance du cheval) : cf. `calculer_indicateur_historique_moteur`,
+alimentée par `statistique_hippodrome` (moteur de rejeu/statistiques, L031.7)
+plutôt que par l'historique du cheval — décision actée le 2026-07-09 (cf.
+PROJECT_STATE.md), les deux définitions étant contradictoires dans le SAD.
 """
 
 from __future__ import annotations
@@ -124,10 +127,10 @@ def calculer_indicateur_presse_combine(classements: list[list[int]], numero_part
 
 
 def calculer_indicateur_reussite(nb_victoires: int, nb_courses: int, minimum_courses: int = 3) -> float:
-    """Sous-score de réussite (victoires / courses disputées), utilisé pour les
-    familles Historique (performance du cheval à l'hippodrome, cf. L031.1 §5) et
-    Aptitude (mêmes distance/surface/état de piste, cf. L031.2 §Aptitude), ainsi que
-    pour chacune des 3 variables de Professionnels (cf. `calculer_indicateur_professionnels`).
+    """Sous-score de réussite (victoires / courses disputées), utilisé pour la
+    famille Aptitude (mêmes distance/surface/état de piste, cf. L031.2 §Aptitude),
+    ainsi que pour chacune des 3 variables de Professionnels (cf.
+    `calculer_indicateur_professionnels`).
 
     Retourne un score neutre si l'échantillon est trop petit (`nb_courses <
     minimum_courses`) pour être statistiquement significatif, plutôt que de faire
@@ -136,6 +139,29 @@ def calculer_indicateur_reussite(nb_victoires: int, nb_courses: int, minimum_cou
     if nb_courses < minimum_courses:
         return SCORE_NEUTRE_PAR_DEFAUT
     return normaliser(nb_victoires / nb_courses, minimum=0.0, maximum=1.0)
+
+
+def calculer_indicateur_historique_moteur(
+    roi: float | None, nb_courses: int, minimum_courses: int = 3, roi_min: float = -30.0, roi_max: float = 30.0
+) -> float:
+    """Sous-score « Historique » (cf. L031.2 §3 : « performances TurfIA passées »)
+    — le ROI réel du moteur à l'hippodrome de la course en cours (cf.
+    `statistique_hippodrome`, alimentée par les vrais `controle_roi`), pas la
+    performance du cheval (interprétation L031.1 §5 abandonnée, cf.
+    PROJECT_STATE.md).
+
+    Retourne un score neutre si aucune statistique n'est encore disponible
+    (`roi is None`) ou si l'échantillon est trop petit (`nb_courses <
+    minimum_courses`), même politique que `calculer_indicateur_reussite`.
+    `roi_min`/`roi_max` (±30 % par défaut) bornent la normalisation : un ROI
+    hippodrome au-delà est clampé plutôt que de saturer le score de façon
+    disproportionnée — hypothèse assumée, aucune formule n'étant documentée
+    dans le SAD pour cette famille (cf. L031.2 §5, muet sur Historique/Value/
+    Contexte).
+    """
+    if roi is None or nb_courses < minimum_courses:
+        return SCORE_NEUTRE_PAR_DEFAUT
+    return normaliser(roi, minimum=roi_min, maximum=roi_max)
 
 
 def calculer_indicateur_professionnels(score_jockey: float, score_entraineur: float, score_couple: float) -> float:
