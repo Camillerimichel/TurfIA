@@ -651,10 +651,19 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
   documentés (volatilité du marché, désaccord presse, changement de terrain, cf.
   L031.3 §3) restent hors périmètre.
 - Les requêtes `compter_performances_*` s'exécutent une par une par partant (jusqu'à
-  5 requêtes SQL par partant) — proportionné au volume actuel (déclenchement manuel),
-  non optimisé (pas de requête groupée/matérialisée) si le volume devait augmenter.
-- CI/CD ; le `Dockerfile`/`docker-compose.yml` sont un socle minimal, non durcis pour
-  la production (mots de passe par défaut, pas de secrets management réel).
+  4 requêtes SQL par partant, cf. rebranchement de la famille Historique
+  ci-dessous qui en a retiré une 5e) — proportionné au volume actuel
+  (déclenchement manuel), non optimisé (pas de requête groupée/matérialisée)
+  si le volume devait augmenter.
+- **CI/CD ajouté le 2026-07-09** (`.github/workflows/tests.yml`, GitHub
+  Actions) : `pytest tests/ -q` sur chaque push/PR vers `main`/`develop` —
+  aucun secret nécessaire (la suite tourne entièrement sur des repositories
+  en mémoire, `tests/integration/conftest.py` fournit déjà des valeurs
+  `DATABASE_URL`/`SECRET_KEY` factices). Le `Dockerfile`/`docker-compose.yml`
+  restent un socle minimal — **décision explicite (2026-07-09)** : les
+  durcir "pour la production" n'a plus de sens, l'app tourne strictement en
+  local mono-utilisateur (cf. décisions déjà actées sur l'interface HTML/
+  l'administration des utilisateurs) ; pas un report, un non-objectif.
 
 ## Prochaine étape
 
@@ -700,12 +709,17 @@ utile (`Disallow` pronostics/fiches), et même Canalturf/Zone-Turf n'ont un
 vrai consensus multi-journaux que sur le Quinté+ du jour ; aucune source
 permise ne fournit de consensus presse ailleurs.
 
+CI/CD ajouté le 2026-07-09 (GitHub Actions, cf. ci-dessus) ; le durcissement
+du Dockerfile "pour la production" est désormais un non-objectif assumé
+(app strictement locale).
+
 Pistes restantes : formules pour Value/Contexte si une source documentaire
 apparaît un jour (L031.5 Value Bet est un mécanisme de sélection distinct,
 pas une formule de sous-score) ; un vrai scheduler si le besoin de
 planification réapparaît (actuellement redimensionné en déclenchements
-manuels, cf. ci-dessus) ; dette technique listée plus haut
-(`compter_performances_*` non groupé, CI/CD absent, Dockerfile non durci).
+manuels, cf. ci-dessus) ; grouper les requêtes `compter_performances_*` si
+le volume analysé augmente un jour (aucun signe actuel que ce soit
+nécessaire).
 
 ## Conventions de développement
 
