@@ -8,7 +8,7 @@ from datetime import date
 
 from src.models.course import Cheval, Course, Partant, Reunion
 from src.services.preparation_service import PreparationDonneesService
-from tests.integration.fakes import FakeConsensusPresseService, FakeCourseRepository
+from tests.integration.fakes import FakeConsensusPresseService, FakeCourseRepository, FakeStatistiqueRepository
 
 
 def _preparer_course_avec_partants(course_repo: FakeCourseRepository) -> Course:
@@ -25,7 +25,7 @@ def test_presse_ajoutee_quand_une_source_repond():
     course_repo = FakeCourseRepository()
     course = _preparer_course_avec_partants(course_repo)
     presse = FakeConsensusPresseService(classements=[[2, 1, 3]])
-    service = PreparationDonneesService(course_repo, presse)
+    service = PreparationDonneesService(course_repo, FakeStatistiqueRepository(), presse)
 
     donnees_partants, _ = service.preparer_donnees_partants(course.id)
 
@@ -36,7 +36,7 @@ def test_presse_combine_deux_sources_quand_les_deux_repondent():
     course_repo = FakeCourseRepository()
     course = _preparer_course_avec_partants(course_repo)
     presse = FakeConsensusPresseService(classements=[[2, 1, 3], [1, 2, 3]])
-    service = PreparationDonneesService(course_repo, presse)
+    service = PreparationDonneesService(course_repo, FakeStatistiqueRepository(), presse)
 
     donnees_partants, _ = service.preparer_donnees_partants(course.id)
 
@@ -47,7 +47,7 @@ def test_presse_absente_quand_aucune_source_ne_repond():
     course_repo = FakeCourseRepository()
     course = _preparer_course_avec_partants(course_repo)
     presse = FakeConsensusPresseService(classements=[])  # aucune source n'a confirmé le Quinté+ du jour
-    service = PreparationDonneesService(course_repo, presse)
+    service = PreparationDonneesService(course_repo, FakeStatistiqueRepository(), presse)
 
     donnees_partants, _ = service.preparer_donnees_partants(course.id)
 
@@ -57,7 +57,7 @@ def test_presse_absente_quand_aucune_source_ne_repond():
 def test_presse_absente_sans_service_configure():
     course_repo = FakeCourseRepository()
     course = _preparer_course_avec_partants(course_repo)
-    service = PreparationDonneesService(course_repo)  # pas de service presse (comportement par défaut)
+    service = PreparationDonneesService(course_repo, FakeStatistiqueRepository())  # pas de service presse (comportement par défaut)
 
     donnees_partants, _ = service.preparer_donnees_partants(course.id)
 

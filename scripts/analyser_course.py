@@ -12,6 +12,7 @@ import sys
 from src.database.connection import session
 from src.repositories.analyse_repository import AnalyseRepository
 from src.repositories.course_repository import CourseRepository
+from src.repositories.statistique_repository import StatistiqueRepository
 from src.services.analyse_service import AnalyseService
 from src.services.preparation_service import PreparationDonneesService
 
@@ -23,7 +24,7 @@ def run() -> int:
     args = parser.parse_args()
 
     with session() as conn:
-        preparation = PreparationDonneesService(CourseRepository(conn))
+        preparation = PreparationDonneesService(CourseRepository(conn), StatistiqueRepository(conn))
         donnees_partants, sous_risques_course = preparation.preparer_donnees_partants(args.course_id)
 
         service = AnalyseService(AnalyseRepository(conn))

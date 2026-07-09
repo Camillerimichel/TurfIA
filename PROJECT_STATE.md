@@ -86,13 +86,15 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   (`src/services/preparation_service.py`) construit ces indicateurs à partir des
   données déjà collectées et les met en forme pour `AnalyseService` — exclut les
   non-partants et les partants sans cote collectée plutôt que d'inventer une valeur.
-  Professionnels/Historique/Aptitude s'appuient sur 5 requêtes d'agrégation SQL
-  ajoutées à `CourseRepository` (`compter_performances_*`, victoires/courses en
-  excluant la course en cours), transformées en score via
-  `calculer_indicateur_reussite` (score neutre si l'échantillon a moins de 3
-  courses). Professionnels est absente si ni jockey ni entraîneur ne sont connus ;
-  Aptitude est absente si la course ne connaît pas ses distance/surface/état de
-  piste ; Historique est toujours calculée (hippodrome toujours connu).
+  Professionnels/Aptitude s'appuient sur des requêtes d'agrégation SQL ajoutées à
+  `CourseRepository` (`compter_performances_*`, victoires/courses en excluant la
+  course en cours), transformées en score via `calculer_indicateur_reussite`
+  (score neutre si l'échantillon a moins de 3 courses). Professionnels est
+  absente si ni jockey ni entraîneur ne sont connus ; Aptitude est absente si
+  la course ne connaît pas ses distance/surface/état de piste ; Historique est
+  toujours calculée (hippodrome toujours connu) mais **rebranchée sur le vrai
+  signal moteur depuis le 2026-07-09** (cf. « Rebranchement de la famille
+  Historique » ci-dessous) — plus une performance de cheval.
   Le sous-score Presse est best-effort : `ConsensusPresseService`
   (`src/services/consensus_presse_service.py`) est un collaborateur optionnel (défaut
   `None`) et l'indisponibilité de chaque source (`ImportationError`) est journalisée
@@ -486,16 +488,35 @@ conceptuel et les colonnes `analyse_id` sont inchangés.
 `src/collecte/` n'était pas anticipé dans L014 (arborescence) — ajouté avec une note
 explicite dans L014 §6.1.1.
 
-L031.2 §3 définit la famille « Historique » comme « performances TurfIA passées »,
-sans détail. L031.1 §5 (tableau des familles, cohérent avec le code) précise
-« Historique → Hippodrome » : interprété comme la performance passée du cheval à cet
-hippodrome précis, pas comme une méta-mesure de la performance passée du moteur
-TurfIA lui-même (qui relèverait du moteur de rejeu/backtesting, L031.7 §4,
-désormais implémenté — cf. `scripts/rejouer_versions.py` — mais pas encore
-rebranché pour redéfinir la famille « Historique » elle-même, qui resterait un
-second incrément). Aptitude est bornée à distance/surface/état de piste (le
-facteur hippodrome de L031.2 étant déjà couvert par Historique, pour éviter un
-double comptage).
+**Rebranchement de la famille Historique (2026-07-09)** : le SAD est
+contradictoire — L031.2 §3 définit « Historique » comme « performances TurfIA
+passées », sans formule (recherche réelle : L031.2 §5 ne détaille que 5
+familles sur 8, Historique/Value/Contexte n'ont aucune sous-section) ; L031.1
+§5 (tableau des familles) dit « Historique → Hippodrome », interprété jusqu'ici
+comme la performance du **cheval** à cet hippodrome. Décision actée avec
+l'utilisateur : **remplacer** cette interprétation par le vrai signal moteur
+(la lettre de L031.2), désormais que le moteur de rejeu/statistiques (L031.7
+§4) est implémenté. `calculer_indicateur_historique_moteur`
+(`src/algorithms/indicateurs.py`) lit le ROI réel du moteur à l'hippodrome de
+la course via `StatistiqueRepository.get_dernier_hippodrome` (dernière ligne
+de `statistique_hippodrome`, alimentée par les vrais `controle_roi` via
+`scripts/calculer_statistiques.py`) : score neutre (50) si aucune statistique
+ou échantillon `< 3` courses, sinon ROI normalisé sur `[-30 %, +30 %]`
+(bornes assumées, clampées au-delà — aucune formule SAD pour ces bornes).
+`PreparationDonneesService` prend désormais un `StatistiqueRepository` requis
+(pas optionnel : préserve l'invariant « Historique toujours calculée »).
+`CourseRepository.compter_performances_cheval_hippodrome` (performance du
+cheval à l'hippodrome) a été **supprimée** (plus aucun appelant) — cette
+information n'est plus calculée nulle part après ce changement, elle n'était
+pas exposée telle quelle par l'API/HTML. **Limite héritée pour le rejeu**
+(`scripts/rejouer_versions.py`) : le signal lu pendant un rejeu reflète l'état
+*actuel* de `statistique_hippodrome`, pas un instantané au moment de la course
+rejouée — même limite déjà assumée pour Marché/Presse/Professionnels dans ce
+moteur, pas une régression nouvelle. Aptitude reste bornée à distance/
+surface/état de piste (le facteur hippodrome étant désormais couvert par
+Historique-moteur, pas par le cheval, mais toujours pour éviter un double
+comptage). Value et Contexte restent hors périmètre (aucune formule SAD non
+plus, cf. ci-dessous).
 
 ## Cadrage sur la collecte PMU (transparence, pas un refus)
 
@@ -615,9 +636,9 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
   `scripts/creer_utilisateur.py`), pas de gestion multi-utilisateurs à
   construire.
 - La vraie définition L031.2 de « Historique » (performance passée du moteur
-  TurfIA lui-même, pas du cheval) pourrait maintenant s'appuyer sur le moteur
-  de rejeu, mais ce rebranchement n'est pas fait ; seule l'interprétation
-  L031.1 (hippodrome) est implémentée (cf. ci-dessus).
+  TurfIA lui-même, par hippodrome) est désormais implémentée (2026-07-09, cf.
+  « Rebranchement de la famille Historique » ci-dessus) — l'ancienne
+  interprétation L031.1 (performance du cheval à l'hippodrome) a été retirée.
 - Collecte de niveau 1/2 partiellement implémentée (PMU uniquement, cf. ci-dessus).
 - Tous les sous-scores de `src/algorithms/score.py` sont désormais calculés
   automatiquement depuis les données collectées, à l'exception de Value et Contexte
@@ -663,11 +684,16 @@ et `20260709_2000_grant_migration_table.sql`) : à surveiller si de nouvelles
 tables techniques sont ajoutées, le GRANT de `sql/schema/06_grants.sql` doit
 systématiquement être étendu en même temps que le schéma.
 
+La famille Score « Historique » a été rebranchée le 2026-07-09 sur le vrai
+signal moteur (cf. « Rebranchement de la famille Historique » ci-dessus) —
+Value et Contexte restent hors périmètre (aucune formule SAD documentée pour
+elles non plus).
+
 Pistes possibles : enrichir la fiche partant côté HTML (noms cheval/jockey/
 entraineur par jointure plutôt que N+1 appels, cf. « Interface HTML locale »
-ci-dessus) ; rebrancher le rejeu pour définir la vraie famille L031.2
-« Historique » (performance passée du moteur) et les familles Value/
-Contexte ; sortir du Quinté+-only pour la Presse ; un vrai scheduler si le
+ci-dessus) ; formules pour Value/Contexte si une source documentaire apparaît
+(L031.5 Value Bet est un mécanisme de sélection distinct, pas une formule de
+sous-score) ; sortir du Quinté+-only pour la Presse ; un vrai scheduler si le
 besoin de planification réapparaît (actuellement redimensionné en
 déclenchements manuels, cf. ci-dessus).
 

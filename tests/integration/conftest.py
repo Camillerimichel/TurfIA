@@ -106,7 +106,7 @@ def client(repos):
     app.dependency_overrides[get_analyse_repository] = lambda: repos["analyse"]
     app.dependency_overrides[get_analyse_service] = lambda: AnalyseService(repos["analyse"])
     app.dependency_overrides[get_preparation_service] = lambda: PreparationDonneesService(
-        repos["course"], repos["presse"]
+        repos["course"], repos["statistiques"], repos["presse"]
     )
     app.dependency_overrides[get_statistique_repository] = lambda: repos["statistiques"]
     app.dependency_overrides[get_audit_repository] = lambda: repos["audit"]
@@ -120,7 +120,7 @@ def client(repos):
     app.dependency_overrides[get_supervision_service] = lambda: repos["supervision"]
     app.dependency_overrides[get_automatisation_service] = lambda: AutomatisationService(
         repos["course"],
-        PreparationDonneesService(repos["course"], repos["presse"]),
+        PreparationDonneesService(repos["course"], repos["statistiques"], repos["presse"]),
         AnalyseService(repos["analyse"]),
     )
     app.dependency_overrides[get_statistique_service] = lambda: StatistiqueService(repos["statistiques"])

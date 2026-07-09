@@ -6,8 +6,9 @@ cf. plan d'indicateurs Professionnels/Historique/Aptitude.
 from datetime import date
 
 from src.models.course import Cheval, Course, Entraineur, Jockey, Partant, Reunion
+from src.models.statistique import StatistiqueHippodrome
 from src.services.preparation_service import PreparationDonneesService
-from tests.integration.fakes import FakeCourseRepository
+from tests.integration.fakes import FakeCourseRepository, FakeStatistiqueRepository
 
 HIPPODROME_ID = 1
 DISTANCE_ID = 10
@@ -49,18 +50,47 @@ def test_historique_toujours_present():
     course_repo = FakeCourseRepository()
     course = _preparer_course(course_repo)
     partant, _ = _ajouter_partant(course_repo, course, "Cheval A")
-    service = PreparationDonneesService(course_repo)
+    service = PreparationDonneesService(course_repo, FakeStatistiqueRepository())
 
     donnees_partants, _ = service.preparer_donnees_partants(course.id)
 
     assert all("historique" in dp.sous_scores for dp in donnees_partants)
 
 
+def test_historique_neutre_sans_statistique_hippodrome():
+    course_repo = FakeCourseRepository()
+    course = _preparer_course(course_repo)
+    partant, _ = _ajouter_partant(course_repo, course, "Cheval A")
+    service = PreparationDonneesService(course_repo, FakeStatistiqueRepository())
+
+    donnees_partants, _ = service.preparer_donnees_partants(course.id)
+
+    dp = next(d for d in donnees_partants if d.partant_id == partant.id)
+    assert dp.sous_scores["historique"] == 50.0
+
+
+def test_historique_reflete_le_roi_reel_du_moteur_a_hippodrome():
+    course_repo = FakeCourseRepository()
+    course = _preparer_course(course_repo)
+    partant, _ = _ajouter_partant(course_repo, course, "Cheval A")
+    statistique_repo = FakeStatistiqueRepository()
+    statistique_repo.create_hippodrome(
+        StatistiqueHippodrome(hippodrome_id=HIPPODROME_ID, nb_courses=10, mises=100.0, gains=115.0, profit=15.0, roi=15.0)
+    )
+    service = PreparationDonneesService(course_repo, statistique_repo)
+
+    donnees_partants, _ = service.preparer_donnees_partants(course.id)
+
+    # roi=15.0 normalisé sur [-30, 30] -> 75.0 (cf. calculer_indicateur_historique_moteur)
+    dp = next(d for d in donnees_partants if d.partant_id == partant.id)
+    assert dp.sous_scores["historique"] == 75.0
+
+
 def test_aptitude_absente_si_conditions_course_inconnues():
     course_repo = FakeCourseRepository()
     course = _preparer_course(course_repo, avec_conditions=False)
     _ajouter_partant(course_repo, course, "Cheval A")
-    service = PreparationDonneesService(course_repo)
+    service = PreparationDonneesService(course_repo, FakeStatistiqueRepository())
 
     donnees_partants, _ = service.preparer_donnees_partants(course.id)
 
@@ -71,7 +101,7 @@ def test_aptitude_presente_si_conditions_course_connues():
     course_repo = FakeCourseRepository()
     course = _preparer_course(course_repo, avec_conditions=True)
     _ajouter_partant(course_repo, course, "Cheval A")
-    service = PreparationDonneesService(course_repo)
+    service = PreparationDonneesService(course_repo, FakeStatistiqueRepository())
 
     donnees_partants, _ = service.preparer_donnees_partants(course.id)
 
@@ -82,7 +112,7 @@ def test_professionnels_absente_sans_jockey_ni_entraineur():
     course_repo = FakeCourseRepository()
     course = _preparer_course(course_repo)
     _ajouter_partant(course_repo, course, "Cheval A")
-    service = PreparationDonneesService(course_repo)
+    service = PreparationDonneesService(course_repo, FakeStatistiqueRepository())
 
     donnees_partants, _ = service.preparer_donnees_partants(course.id)
 
@@ -101,7 +131,7 @@ def test_professionnels_reflete_le_taux_de_reussite_configure():
     course_repo.performances_entraineur[entraineur.id] = (3, 3)
     course_repo.performances_couple[(jockey.id, entraineur.id)] = (3, 3)
 
-    service = PreparationDonneesService(course_repo)
+    service = PreparationDonneesService(course_repo, FakeStatistiqueRepository())
     donnees_partants, _ = service.preparer_donnees_partants(course.id)
 
     dp = next(d for d in donnees_partants if d.partant_id == partant.id)

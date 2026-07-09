@@ -11,6 +11,7 @@ from __future__ import annotations
 from src.algorithms.indicateurs import (
     SCORE_NEUTRE_PAR_DEFAUT,
     calculer_indicateur_forme,
+    calculer_indicateur_historique_moteur,
     calculer_indicateur_presse_combine,
     calculer_indicateur_professionnels,
     calculer_indicateur_reussite,
@@ -20,6 +21,7 @@ from src.algorithms.indicateurs import (
 from src.core.exceptions import ValidationError
 from src.core.logging import get_logger
 from src.repositories.course_repository import CourseRepository
+from src.repositories.statistique_repository import StatistiqueRepository
 from src.services.analyse_service import DonneesPartant
 from src.services.consensus_presse_service import ConsensusPresseService
 
@@ -30,9 +32,11 @@ class PreparationDonneesService:
     def __init__(
         self,
         course_repository: CourseRepository,
+        statistique_repository: StatistiqueRepository,
         consensus_presse_service: ConsensusPresseService | None = None,
     ) -> None:
         self._courses = course_repository
+        self._statistiques = statistique_repository
         self._presse = consensus_presse_service
 
     def preparer_donnees_partants(self, course_id: int) -> tuple[list[DonneesPartant], dict[str, float]]:
@@ -64,6 +68,19 @@ class PreparationDonneesService:
 
         conditions_connues = (
             course.distance_id is not None and course.surface_id is not None and course.etat_piste_id is not None
+        )
+
+        # Identique pour tous les partants de la course (dépend de l'hippodrome, pas
+        # du cheval) : calculé une seule fois hors boucle. `roi` vient d'une colonne
+        # DECIMAL (psycopg le retourne en `Decimal`, pas `float`) : conversion
+        # explicite avant tout calcul arithmétique pur-Python (cf. `normaliser`).
+        stat_hippodrome = self._statistiques.get_dernier_hippodrome(reunion.hippodrome_id)
+        roi_hippodrome = (
+            float(stat_hippodrome.roi) if stat_hippodrome and stat_hippodrome.roi is not None else None
+        )
+        score_historique = calculer_indicateur_historique_moteur(
+            roi_hippodrome,
+            stat_hippodrome.nb_courses if stat_hippodrome else 0,
         )
 
         donnees_partants: list[DonneesPartant] = []
@@ -98,9 +115,7 @@ class PreparationDonneesService:
                     score_jockey, score_entraineur, score_couple
                 )
 
-            sous_scores["historique"] = calculer_indicateur_reussite(
-                *self._courses.compter_performances_cheval_hippodrome(partant.cheval_id, reunion.hippodrome_id, course_id)
-            )
+            sous_scores["historique"] = score_historique
 
             if conditions_connues:
                 sous_scores["aptitude"] = calculer_indicateur_reussite(

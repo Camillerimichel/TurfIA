@@ -105,7 +105,6 @@ class FakeCourseRepository:
         self.performances_jockey: dict[int, tuple[int, int]] = {}
         self.performances_entraineur: dict[int, tuple[int, int]] = {}
         self.performances_couple: dict[tuple[int, int], tuple[int, int]] = {}
-        self.performances_hippodrome: dict[tuple[int, int], tuple[int, int]] = {}
         self.performances_conditions: dict[tuple[int, int, int, int], tuple[int, int]] = {}
 
     @staticmethod
@@ -283,11 +282,6 @@ class FakeCourseRepository:
 
     def compter_performances_couple(self, jockey_id: int, entraineur_id: int, exclure_course_id: int) -> tuple[int, int]:
         return self.performances_couple.get((jockey_id, entraineur_id), (0, 0))
-
-    def compter_performances_cheval_hippodrome(
-        self, cheval_id: int, hippodrome_id: int, exclure_course_id: int
-    ) -> tuple[int, int]:
-        return self.performances_hippodrome.get((cheval_id, hippodrome_id), (0, 0))
 
     def compter_performances_cheval_conditions(
         self, cheval_id: int, distance_id: int, surface_id: int, etat_piste_id: int, exclure_course_id: int
@@ -520,6 +514,10 @@ class FakeStatistiqueRepository:
         stat = dataclasses.replace(stat, id=self._ids.next())
         self.hippodromes.append(stat)
         return stat
+
+    def get_dernier_hippodrome(self, hippodrome_id: int):
+        candidats = [h for h in self.hippodromes if h.hippodrome_id == hippodrome_id]
+        return candidats[-1] if candidats else None
 
     def calculer_disciplines(self):
         return self.a_calculer_disciplines
