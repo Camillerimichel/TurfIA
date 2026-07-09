@@ -473,12 +473,13 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
       PostgreSQL local (latence ~9 ms, ~96 Go disponibles).
 - **Tests** : 215 tests unitaires (dont `AutomatisationService`,
   `DbLogHandler` — anti-réentrance/absence de crash sur DB indisponible,
-  `SupervisionService`) + 139 tests d'intégration (dont Historique — filtres
+  `SupervisionService`) + 140 tests d'intégration (dont Historique — filtres
   date/hippodrome/type de pari/décision —, Administration — RBAC,
   journaux, les 3 automatisations, sauvegarde réussie/échouée, versions,
-  paramètres, supervision —, `CollecteService` et `ConsensusPresseService`,
-  cf. ci-dessous) — repositories/services en mémoire, `tests/integration/`),
-  tous verts (354 au total).
+  paramètres, supervision —, `CollecteService`, `ConsensusPresseService` et
+  la suite de non-régression par déterminisme, cf. ci-dessous) —
+  repositories/services en mémoire, `tests/integration/`), tous verts (355
+  au total).
 - **Couverture de tests mesurée (2026-07-09, `pytest-cov`, cf. L020 §14.1
   cible ≥80 % sur `algorithms`/`services`)** : 90 % sur `src/algorithms`+
   `src/services` (81 % avant cette mesure). Deux vrais trous de couverture
@@ -503,6 +504,21 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   `requirements.txt` et à la CI (`--cov=src/algorithms --cov=src/services
   --cov-report=term-missing`, rapport seul, pas de seuil bloquant — cf.
   L020 §14.1 « une couverture élevée n'est pas une fin en soi »).
+- **Suite de non-régression par déterminisme (2026-07-09, L020 §8.3)** :
+  n'existait pas du tout jusqu'ici. Nouveau
+  `tests/integration/test_non_regression_determinisme.py` — rejoue un
+  scénario figé (3 partants, sans jockey/entraineur/consensus presse/
+  conditions de piste connues, pondérations par défaut, `persister=False`)
+  à travers `PreparationDonneesService` + `AnalyseService` et compare le
+  résultat à une référence gelée
+  (`tests/fixtures/reference_analyse_non_regression.json` : score de
+  confiance, risque, ROI théorique, décision, budget, classement/catégorie/
+  value bet par partant, paris générés). **Vérifié réellement que le test
+  détecte un vrai écart** : altération manuelle de la référence (échec
+  attendu) puis d'une pondération réelle (`marche` 1.0 -> 2.0, échec détecté
+  avec le bon écart chiffré) avant restauration. Tout écart futur doit être
+  expliqué et validé explicitement avant de régénérer la référence (cf.
+  L009 §5.1), jamais un ajustement silencieux.
 
 ## Correction notable apportée au SAD pendant l'implémentation
 
