@@ -276,9 +276,13 @@ class StatistiqueRepository:
             cur.execute(
                 """
                 INSERT INTO statistique_modele
-                    (version_modele, date_debut, date_fin, nb_courses, roi, taux_reussite, parametres, commentaire)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id, version_modele, date_debut, date_fin, nb_courses, roi, taux_reussite, parametres, commentaire
+                    (version_modele, date_debut, date_fin, nb_courses, roi, taux_reussite,
+                     roi_par_score, roi_par_hippodrome, roi_par_type_pari, drawdown, stabilite,
+                     parametres, commentaire)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, version_modele, date_debut, date_fin, nb_courses, roi, taux_reussite,
+                          roi_par_score, roi_par_hippodrome, roi_par_type_pari, drawdown, stabilite,
+                          parametres, commentaire
                 """,
                 (
                     stat.version_modele,
@@ -287,6 +291,11 @@ class StatistiqueRepository:
                     stat.nb_courses,
                     stat.roi,
                     stat.taux_reussite,
+                    stat.roi_par_score,
+                    stat.roi_par_hippodrome,
+                    stat.roi_par_type_pari,
+                    stat.drawdown,
+                    stat.stabilite,
                     stat.parametres,
                     stat.commentaire,
                 ),

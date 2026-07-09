@@ -64,14 +64,19 @@ CREATE TABLE IF NOT EXISTS statistique_pari (
 );
 
 CREATE TABLE IF NOT EXISTS statistique_modele (
-    id               BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    version_modele   VARCHAR(60) NOT NULL,
-    date_debut       DATE,
-    date_fin         DATE,
-    nb_courses       INTEGER NOT NULL DEFAULT 0,
-    roi              DECIMAL(8,2),
-    taux_reussite    DECIMAL(5,2),
-    parametres       TEXT,
-    commentaire      TEXT,
-    cree_le          TIMESTAMP NOT NULL DEFAULT now()
+    id                   BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    version_modele       VARCHAR(60) NOT NULL,
+    date_debut           DATE,
+    date_fin             DATE,
+    nb_courses           INTEGER NOT NULL DEFAULT 0,
+    roi                  DECIMAL(8,2),
+    taux_reussite        DECIMAL(5,2),
+    roi_par_score        TEXT,
+    roi_par_hippodrome   TEXT,
+    roi_par_type_pari    TEXT,
+    drawdown             DECIMAL(8,2),
+    stabilite            DECIMAL(8,2),
+    parametres           TEXT,
+    commentaire          TEXT,
+    cree_le              TIMESTAMP NOT NULL DEFAULT now()
 );

@@ -267,9 +267,38 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   - **Limite assumée** : le remboursement réglementaire PMU pour un partant
     devenu non-partant après l'analyse n'est pas modélisé.
 - **Moteur de rejeu/backtesting (2026-07-09)** (`src/algorithms/rejeu.py`,
-  `scripts/rejouer_versions.py`, L031.7 §4) : compare le ROI/taux de réussite
-  de plusieurs jeux de `poids_score`/`poids_risque` sur un même historique de
-  courses réelles déjà arrivées, à budget constant.
+  `scripts/rejouer_versions.py`, L031.7 §4-5) : compare les 7 indicateurs
+  L031.7 §5 (ROI global, ROI par tranche de score/hippodrome/type de pari,
+  taux de réussite, drawdown, stabilité) de plusieurs jeux de
+  `poids_score`/`poids_risque` sur un même historique de courses réelles déjà
+  arrivées, à budget constant.
+  - **Indicateurs étendus (2026-07-09)** : au départ seuls ROI global et taux
+    de réussite étaient calculés ; les 5 autres ont été ajoutés dans un second
+    temps, avant de construire l'interface HTML locale, pour que sa future
+    page de comparaison de versions parte d'un `statistique_modele` déjà
+    riche. ROI par tranche de score/hippodrome : agrégés au niveau de la
+    **course** rejouée (mise/gains sommés sur tous ses paris, comme
+    `controle_roi` pour l'agrégat par analyse) — le score de confiance et
+    l'hippodrome sont des attributs de la course, pas du pari. ROI par type de
+    pari : agrégé au niveau du **pari** individuel (comme `controle_roi_pari`).
+    Drawdown (perte maximale en euros absolus entre un sommet et un creux sur
+    la courbe de profit cumulé, dans l'ordre chronologique) et stabilité
+    (écart-type population du ROI par course) : formules assumées, L031.7 §5
+    ne les précise pas. Réutilise directement les dataclasses déjà existantes
+    `StatistiqueScore`/`StatistiqueHippodrome`/`StatistiquePari` comme forme en
+    mémoire des 3 répartitions, sérialisées en JSON (`roi_par_score`,
+    `roi_par_hippodrome`, `roi_par_type_pari`, colonnes `TEXT` nullable) —
+    réutilisable tel quel côté HTML plus tard, cohérent avec ce que les 3
+    tables statistiques principales exposent déjà. `drawdown`/`stabilite` :
+    colonnes `DECIMAL(8,2)` simples. **Point de vigilance découvert en
+    testant réellement** : `calculer_score_final` n'écrête pas le bonus value
+    bet, un score de confiance peut donc dépasser 100 (constaté : 102.5 sur
+    une course de test) — une telle course est omise de `roi_par_score`,
+    exactement comme `StatistiqueRepository.calculer_scores()` l'aurait déjà
+    fait (même limite pré-existante, pas une régression introduite ici).
+    `calculer_modeles()` (agrégation automatique existante, sans rapport avec
+    le rejeu) n'est pas étendue : ces 5 colonnes restent `NULL` pour ses
+    lignes, elle n'a pas la granularité par course/pari nécessaire.
   - **Découverte réelle en explorant le SAD** : `analyses.version` (cf. L030.3)
     n'est **pas** une version de modèle — c'est le statut Pré/Finale d'une même
     exécution. `StatistiqueRepository.calculer_modeles()` (agrégation
@@ -299,24 +328,24 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
     `scripts/analyser_course.py`. Les familles Value/Contexte ne sont jamais
     produites (limite déjà existante, héritée telle quelle). Les seuils de
     décision (`determiner_decision`) ne sont pas paramétrables dans
-    `AnalyseService`, seuls les poids le sont — non rejouables. Les
-    indicateurs L031.7 §5 au-delà de ROI global/taux de réussite (par tranche
-    de score/hippodrome/type de pari, drawdown, stabilité) ne sont pas
-    calculés — `statistique_modele` ne porte que ces deux-là aujourd'hui, un
-    second incrément possible. La validation hors-échantillon (L031.7 §6.1)
-    n'est pas automatisée : le script prend une fenêtre de dates en paramètre,
-    à l'opérateur de choisir une fenêtre distincte de celle utilisée pour
-    calibrer les poids testés. La décision finale (adopter/rejeter une
-    version) reste une lecture humaine des résultats, jamais automatisée.
-  - **Vérifié réellement (2026-07-09)** contre PostgreSQL local : migration
-    appliquée (`version_modele` élargi, colonne `parametres` ajoutée),
-    exécution du script contre une course réelle déjà arrivée (R1C8,
-    07/07/2026, rapports réels) avec deux jeux de poids différents — deux
-    lignes distinctes persistées dans `statistique_modele` avec `parametres`
-    correctement tracés (ROI identique entre les deux runs dans ce cas précis :
-    artefact attendu du jeu de données synthétique n'exposant qu'une seule
-    famille de sous-score, pas un bug — cf. `calculer_score`, une moyenne
-    pondérée à un seul terme est invariante au poids utilisé).
+    `AnalyseService`, seuls les poids le sont — non rejouables. La validation
+    hors-échantillon (L031.7 §6.1) n'est pas automatisée : le script prend une
+    fenêtre de dates en paramètre, à l'opérateur de choisir une fenêtre
+    distincte de celle utilisée pour calibrer les poids testés. La décision
+    finale (adopter/rejeter une version) reste une lecture humaine des
+    résultats, jamais automatisée.
+  - **Vérifié réellement (2026-07-09)** contre PostgreSQL local, à deux
+    reprises : d'abord ROI global/taux de réussite (migration `version_modele`
+    élargi + `parametres`, deux jeux de poids sur R1C8 du 07/07/2026 — deux
+    lignes distinctes persistées, ROI identique entre les deux runs dans ce
+    cas précis : artefact attendu du jeu de données synthétique n'exposant
+    qu'une seule famille de sous-score, pas un bug, cf. `calculer_score`, une
+    moyenne pondérée à un seul terme est invariante au poids utilisé) ; puis
+    les 5 indicateurs supplémentaires (migration des 5 nouvelles colonnes,
+    rejeu de la même course — `roi_par_hippodrome`/`roi_par_type_pari`/
+    `drawdown`/`stabilite` correctement peuplés, `roi_par_score` vide comme
+    attendu : score de confiance à 102.5 sur cette course de test, hors plage
+    0-100, cf. ci-dessus).
 - **PATCH/DELETE** : PATCH partiel (`exclude_unset`) sur réunion/course/partant/
   cheval/jockey/entraineur ; pas de PUT (avec des FK obligatoires immuables et des
   champs presque tous optionnels, un remplacement complet n'apporte rien de plus
@@ -324,16 +353,17 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   FK `ON DELETE RESTRICT` (déjà en place, cf. L011 §9) est traduite en 409 plutôt
   que vérifiée à l'avance (évite une fenêtre de concurrence). **Jamais** de PATCH/
   DELETE sur résultat/cote/analyse et dérivés (historisés, cf. L011 §15).
-- **Tests** : 187 tests unitaires (algorithmes dont ROI réel des 6 types de
-  pari et agrégation du rejeu, configuration, mappers PMU/Canalturf/Zone-Turf,
-  sécurité — hachage mot de passe/jeton, limiteur de débit, dépendances RBAC,
-  sérialisation d'audit) + 97 tests d'intégration (API courses/analyses/
-  résultats/cotes/PATCH/DELETE/statistiques/audit, AuthService, authentification
-  API bout en bout, branchement presse combinée Canalturf+Zone-Turf,
-  Professionnels/Historique/Aptitude, AnalyseService (`persister=False`),
-  ControleRoiService (6 types de pari + détail par pari `controle_roi_pari`),
-  StatistiqueService — repositories/services en mémoire, `tests/integration/`),
-  tous verts (284 au total).
+- **Tests** : 206 tests unitaires (algorithmes dont ROI réel des 6 types de
+  pari et agrégation du rejeu — ROI global + 7 indicateurs L031.7 §5,
+  configuration, mappers PMU/Canalturf/Zone-Turf, sécurité — hachage mot de
+  passe/jeton, limiteur de débit, dépendances RBAC, sérialisation d'audit)
+  + 97 tests d'intégration (API courses/analyses/résultats/cotes/PATCH/DELETE/
+  statistiques/audit, AuthService, authentification API bout en bout,
+  branchement presse combinée Canalturf+Zone-Turf, Professionnels/Historique/
+  Aptitude, AnalyseService (`persister=False`), ControleRoiService (6 types de
+  pari + détail par pari `controle_roi_pari`), StatistiqueService —
+  repositories/services en mémoire, `tests/integration/`), tous verts (303 au
+  total).
 
 ## Correction notable apportée au SAD pendant l'implémentation
 
@@ -414,11 +444,11 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
   sémantiques différentes de `version_modele` : `calculer_modeles()` (agrégation
   des analyses déjà persistées, groupées par `analyses.version` — un statut
   Pré/Finale, pas une version de modèle) et `scripts/rejouer_versions.py` (vrai
-  rejeu multi-versions L031.7 §4, `version_modele` = chaîne libre décrivant le
-  jeu de poids testé) — cf. « Moteur de rejeu/backtesting » ci-dessus pour le
-  détail et les limites du second (Presse non rejouable, Value/Contexte non
-  produites, seuils de décision non rejouables, indicateurs L031.7 §5 limités à
-  ROI global/taux de réussite, pas de validation hors-échantillon automatisée).
+  rejeu multi-versions L031.7 §4-5, `version_modele` = chaîne libre décrivant
+  le jeu de poids testé) — cf. « Moteur de rejeu/backtesting » ci-dessus pour
+  le détail et les limites du second (Presse non rejouable, Value/Contexte non
+  produites, seuils de décision non rejouables, pas de validation
+  hors-échantillon automatisée).
 - Pas de purge/archivage des lignes historisées dans les 6 tables statistiques —
   chaque exécution de `scripts/calculer_statistiques.py` ajoute une nouvelle
   ligne par table (cf. L030.4 §10, volontaire), mais rien ne limite leur nombre
@@ -447,13 +477,21 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
 ## Explicitement hors périmètre (travail futur, non implémenté)
 
 - Automatisations planifiées (L017/L033) — aucun scheduler, `automations/` est un
-  squelette vide.
+  squelette vide. **Redimensionné volontairement (2026-07-09)** : pour un usage
+  mono-utilisateur local, un vrai scheduler générique n'apporte rien — remplacé
+  dans les intentions par de simples déclenchements manuels (bouton dans
+  l'interface HTML à venir, ou tâche `launchd`/cron locale appelant les scripts
+  déjà existants), pas construit dans cette tranche.
 - Interface HTML (L018) — `html/` est un squelette vide.
 - Endpoints résultats/cotes en écriture, PATCH/DELETE sur les ressources
   référentielles/métier, authentification/RBAC réels, module Statistiques
-  (ROI réel + 6 tables agrégées) et moteur de rejeu/backtesting L031.7 §4 sont
-  désormais implémentés (cf. ci-dessus). Reste hors périmètre : administration
-  des utilisateurs via l'API.
+  (ROI réel + 6 tables agrégées) et moteur de rejeu/backtesting L031.7 §4-5
+  sont désormais implémentés (cf. ci-dessus). Reste hors périmètre :
+  administration des utilisateurs via l'API — **décidé volontairement hors
+  périmètre** (2026-07-09) : l'interface HTML à venir (cf. « Prochaine étape »)
+  tournera uniquement en local sur la machine de l'utilisateur, un seul
+  compte (déjà créable via `scripts/creer_utilisateur.py`), pas de gestion
+  multi-utilisateurs à construire.
 - La vraie définition L031.2 de « Historique » (performance passée du moteur
   TurfIA lui-même, pas du cheval) pourrait maintenant s'appuyer sur le moteur
   de rejeu, mais ce rebranchement n'est pas fait ; seule l'interprétation
@@ -479,18 +517,26 @@ source de consensus presse, le module Statistiques (ROI réel + 6 tables
 agrégées, granularité par pari via `controle_roi_pari`), les 6 types de pari
 (Simple Gagnant/Placé, Couplé Gagnant/Placé, 2 sur 4, Quinté Flexi), l'audit
 systématique des écritures (au-delà des seuls événements d'authentification)
-et le moteur de rejeu/backtesting L031.7 §4 (`scripts/rejouer_versions.py`,
-persistance légère dans `statistique_modele`) sont désormais en place. France
-Galop (niveau 1) a été explorée réellement le 2026-07-08 et écartée (cf.
-tableau des sources ci-dessus) : robots.txt n'y autorise que des listes
-sommaires, tout le détail exploitable est interdit — le mono-source PMU reste
-donc la seule source niveau 1 exploitable en l'état. Pistes possibles :
-rebrancher le rejeu pour définir la vraie famille L031.2 « Historique »
-(performance passée du moteur) et les familles Value/Contexte, étendre
-`statistique_modele` aux indicateurs L031.7 §5 non couverts (par tranche de
-score/hippodrome/type de pari, drawdown, stabilité), sortir du Quinté+-only
-pour la Presse, interface HTML (L018), administration des utilisateurs via
-l'API.
+et le moteur de rejeu/backtesting L031.7 §4-5 (`scripts/rejouer_versions.py`,
+7 indicateurs, persistance légère dans `statistique_modele`) sont désormais en
+place. France Galop (niveau 1) a été explorée réellement le 2026-07-08 et
+écartée (cf. tableau des sources ci-dessus) : robots.txt n'y autorise que des
+listes sommaires, tout le détail exploitable est interdit — le mono-source PMU
+reste donc la seule source niveau 1 exploitable en l'état.
+
+**Décision d'orientation (2026-07-09)** : la prochaine étape est l'interface
+HTML (L018), mais **strictement locale** (tourne uniquement sur la machine de
+l'utilisateur, un seul compte) — en conséquence, l'administration des
+utilisateurs via l'API et un vrai scheduler générique (« Automatisations
+planifiées ») sont volontairement écartés (cf. ci-dessus), pas de simple
+report. Avant de construire l'HTML : corriger le PATCH sur `course` avec un
+référentiel inconnu (500 brut → 404 ciblé, cf. « Limites connues de
+l'authentification/RBAC ») pour de meilleurs messages d'erreur dans les futurs
+formulaires.
+
+Pistes possibles au-delà de l'HTML : rebrancher le rejeu pour définir la vraie
+famille L031.2 « Historique » (performance passée du moteur) et les familles
+Value/Contexte, sortir du Quinté+-only pour la Presse.
 
 ## Conventions de développement
 
