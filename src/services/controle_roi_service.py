@@ -1,12 +1,12 @@
 """Contrôle ROI réel a posteriori (cf. L011 §8.7, L030.4) — ferme la boucle entre
 une analyse (pari théorique) et le résultat officiel réel de la course.
 
-Couvre les 5 types de pari construits par `AnalyseService` (cf.
+Couvre les 6 types de pari construits par `AnalyseService` (cf.
 src/algorithms/classement.py, `construire_paris`) : Simple Gagnant/Placé,
-Couplé Gagnant/Placé, 2 sur 4. Un autre type de pari rencontré (ex. Quinté
-Flexi, hors périmètre) est journalisé et ignoré plutôt que deviné, de même
-qu'un rapport PMU absent pour le type demandé (ex. Couplé Gagnant sur une
-course ordinaire qui ne le propose pas, cf. PROJECT_STATE.md).
+Couplé Gagnant/Placé, 2 sur 4, Quinté Flexi. Un type de pari inattendu est
+journalisé et ignoré plutôt que deviné, de même qu'un rapport PMU absent pour
+le type demandé (ex. Couplé Gagnant sur une course ordinaire qui ne le propose
+pas, cf. PROJECT_STATE.md).
 
 Persiste un agrégat par analyse dans `controle_roi` (mise/gains sommés sur tous
 les paris) ET un détail par pari dans `controle_roi_pari` — ce dernier est
@@ -18,12 +18,20 @@ PROJECT_STATE.md, bug corrigé le 2026-07-08).
 
 from __future__ import annotations
 
-from src.algorithms.controle_roi import calculer_gains_couple, calculer_gains_deux_sur_quatre, calculer_gains_simple
+import itertools
+
+from src.algorithms.controle_roi import (
+    calculer_gains_couple,
+    calculer_gains_deux_sur_quatre,
+    calculer_gains_quinte_flexi,
+    calculer_gains_simple,
+)
 from src.collecte.pmu.client import PMUClient
 from src.collecte.pmu.mappers import (
     TYPES_PARI_PMU,
     extraire_rapport_couple,
     extraire_rapport_deux_sur_quatre,
+    extraire_rapport_quinte,
     extraire_rapport_simple,
 )
 from src.core.exceptions import ImportationError
@@ -157,6 +165,19 @@ class ControleRoiService:
                     cache[type_pari] = extraire_rapport_deux_sur_quatre(rapports_bruts)
                 numeros_arrivee, dividende, rembourse = cache[type_pari]
                 return calculer_gains_deux_sur_quatre(mise, frozenset(numeros), numeros_arrivee, dividende, rembourse)
+
+            if type_pari == "Quinté Flexi":
+                if type_pari not in cache:
+                    cache[type_pari] = extraire_rapport_quinte(rapports_bruts)
+                rapport = cache[type_pari]
+                sous_combinaisons = [frozenset(c) for c in itertools.combinations(numeros, 5)]
+                if not sous_combinaisons:
+                    return None
+                mise_par_combinaison = mise / len(sous_combinaisons)
+                return calculer_gains_quinte_flexi(
+                    mise_par_combinaison, sous_combinaisons, rapport.numeros_arrivee, rapport.dividende_desordre,
+                    rapport.dividendes_bonus4, rapport.dividendes_bonus3, rapport.rembourse,
+                )
         except ImportationError as exc:
             logger.warning(
                 f"Rapport PMU '{type_pari}' indisponible pour le pari {pari.id} (analyse {analyse_id}) : {exc}",

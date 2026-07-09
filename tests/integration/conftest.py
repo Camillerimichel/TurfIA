@@ -9,6 +9,7 @@ os.environ.setdefault("SECRET_KEY", "dummy")
 from api.dependencies.auth import get_utilisateur_courant  # noqa: E402
 from api.dependencies.db import (  # noqa: E402
     get_analyse_repository,
+    get_audit_repository,
     get_course_repository,
     get_referentiel_repository,
     get_statistique_repository,
@@ -65,6 +66,7 @@ def client(repos):
         repos["course"], repos["presse"]
     )
     app.dependency_overrides[get_statistique_repository] = lambda: repos["statistiques"]
+    app.dependency_overrides[get_audit_repository] = lambda: repos["audit"]
     role_admin = Role(id=1, nom="Administrateur")
     utilisateur_test = Utilisateur(id=1, login="test", mot_de_passe="", role_id=1)
     app.dependency_overrides[get_utilisateur_courant] = lambda: (utilisateur_test, role_admin)

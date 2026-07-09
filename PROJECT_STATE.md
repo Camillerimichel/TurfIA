@@ -58,7 +58,7 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   | Source | Niveau | Statut |
   | --- | --- | --- |
   | PMU | 1 (officiel) + 2 (marché) | **Implémentée** (`src/collecte/pmu/`) |
-  | France Galop | 1 | Non implémentée — site atteignable (HTTP 301), structure non explorée |
+  | France Galop | 1 | Non implémentée — vérifiée réellement le 2026-07-08 : site atteignable, sans anti-bot, mais robots.txt n'autorise que des listes sommaires de réunions (`/fr/courses/aujourdhui` etc.) et interdit tout le détail exploitable (`/fr/courses/reunion/*`, `/fr/course/`, `/fr/cheval/`, `/fr/jockey/`, `/fr/entraineur/`) — strictement moins que PMU, aucun collecteur à construire |
   | LeTROT | 1 | Non implémentée — protection anti-bot (HTTP 403) |
   | ZEbet, Genybet, Unibet, Betclic | 2 | Non implémentées — non explorées |
   | Canalturf | 3 | **Implémentée** (`src/collecte/canalturf/`) — Quinté+ du jour uniquement, cf. ci-dessous |
@@ -141,12 +141,32 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   timing). RBAC (L021 §4.1) via `exiger_roles(*roles)` sur chaque route : matrice
   LECTURE (tout rôle, GET) / DECLENCHEMENT_ANALYSE (Administrateur/Analyste/
   Automatisation, déclenchement d'analyse) / ECRITURE_DONNEES (Administrateur/
-  Automatisation, POST/PATCH/DELETE). `POST /auth/login` limité en débit par
-  (login, IP) — L021 §7.2.1. Connexion/échec de connexion/déconnexion journalisés
-  dans `audit` (table déjà prévue au schéma, jusque-là inutilisée). Bootstrap des
-  comptes via `scripts/creer_utilisateur.py` (mot de passe saisi de façon
-  interactive, jamais en argument CLI) — l'API n'expose pas de route de création
+  Automatisation, POST/PATCH/DELETE) / ADMINISTRATION (Administrateur seul,
+  consultation de l'audit, cf. ci-dessous). `POST /auth/login` limité en débit
+  par (login, IP) — L021 §7.2.1. Bootstrap des comptes via
+  `scripts/creer_utilisateur.py` (mot de passe saisi de façon interactive,
+  jamais en argument CLI) — l'API n'expose pas de route de création
   d'utilisateurs.
+- **Audit systématique des écritures (2026-07-08)** (`src/core/audit.py`,
+  `src/repositories/audit_repository.py`, `api/routes/audit.py`) : en plus des
+  événements d'authentification déjà journalisés (connexion, échec, déconnexion),
+  chaque POST/PATCH/DELETE de `api/routes/courses.py` (réunion/course/cheval/
+  jockey/entraineur/partant/résultat/cote) et chaque déclenchement d'analyse
+  (`api/routes/analyses.py`) crée désormais une ligne dans `audit` — auteur,
+  action (`{creation,modification,suppression}_{ressource}` ou
+  `declenchement_analyse`), objet concerné, état avant/après sérialisé en JSON
+  (`serialiser_etat`, `dataclasses.asdict` + `json.dumps`). L'écriture métier et
+  son audit partagent la même transaction par requête (`src/database/
+  connection.py::session`, commit unique en fin de requête) : un échec de
+  l'insertion d'audit annule toute la transaction, y compris l'écriture — pas de
+  gestion d'erreur spécifique nécessaire, l'échec remonte comme n'importe quel
+  autre échec SQL (cf. `api/middlewares/error_handler.py`). `GET /audit`
+  (RBAC `ADMINISTRATION`, `?limite=200` par défaut) permet de la consulter.
+  Hors périmètre : les écritures des traitements planifiés (`ControleRoiService`,
+  `StatistiqueService`, `CollecteService`, hors requête API authentifiée, sans
+  utilisateur à attribuer) restent couvertes uniquement par la journalisation
+  structurée (`src/core/logging.py`, cf. L022), pas par `audit`. La gestion des
+  utilisateurs reste script-only, donc hors scope également.
 - **Statistiques et ROI réel** (`src/algorithms/controle_roi.py`,
   `src/services/controle_roi_service.py`, `src/services/statistique_service.py`,
   `src/repositories/statistique_repository.py`, `scripts/calculer_statistiques.py`,
@@ -157,19 +177,39 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
     officiel réel par type de pari une fois la course arrivée — permet de calculer
     un vrai ROI sans nouvelle source externe, juste une extension de l'adaptateur
     PMU déjà en place (`src/collecte/pmu/client.py`).
-  - **Extension (2026-07-08) : 5 types de pari** (cf. L031.6 §5) —
+  - **Extension (2026-07-08) : 6 types de pari** (cf. L031.6 §5) —
     `AnalyseService.analyser_course` génère désormais Simple Gagnant, Simple
-    Placé, Couplé Gagnant, Couplé Placé et 2 sur 4 par analyse (au lieu du seul
-    Simple Gagnant), via `construire_paris` (`src/algorithms/classement.py`) à
-    partir des catégories déjà assignées (Base élargie à `rang <= 2` pour
-    permettre « Base n°1 + Base n°2 », cf. `categoriser`). Budget réparti entre
-    les types réellement constructibles selon `REPARTITION_BUDGET_PAR_DEFAUT`
-    (Simple Placé 35 %, 2 sur 4 25 %, Simple Gagnant 20 %, Couplé Placé 15 %,
-    Couplé Gagnant 5 % — pondération choisie pour optimiser les gains fréquents
-    plutôt que les gros gains rares, décision explicite de l'utilisateur) ; un
-    type non constructible redistribue sa part aux autres. Quinté Flexi reste
-    hors périmètre (structure de rapport multi-paliers + mise fractionnée
-    disproportionnée par rapport aux 5 autres types).
+    Placé, Couplé Gagnant, Couplé Placé, 2 sur 4 et Quinté Flexi par analyse (au
+    lieu du seul Simple Gagnant), via `construire_paris` (`src/algorithms/
+    classement.py`) à partir des catégories déjà assignées (Base élargie à
+    `rang <= 2` pour permettre « Base n°1 + Base n°2 », cf. `categoriser`).
+    Budget réparti entre les types réellement constructibles selon
+    `REPARTITION_BUDGET_PAR_DEFAUT` (Simple Placé 30 %, 2 sur 4 25 %, Simple
+    Gagnant 20 %, Couplé Placé 15 %, Couplé Gagnant 5 %, Quinté Flexi 5 % —
+    pondération choisie pour optimiser les gains fréquents plutôt que les gros
+    gains rares, décision explicite de l'utilisateur ; Quinté Flexi reçoit la
+    plus petite part, variance la plus forte de tous) ; un type non
+    constructible redistribue sa part aux autres.
+  - **Quinté Flexi (2026-07-08)** : mécanique Flexi vérifiée réellement (champ
+    `valeursFlexiAutorisees` des pools PMU, programme du jour) — jouer à
+    100/50/25 % du prix plein (aucune valeur intermédiaire), et toucher la même
+    fraction du dividende si gagnant. Sélection (L031.6 §5, littéral) : Bases +
+    Chances régulières + Outsider principal + Tocard éventuel si son ROI propre
+    reste positif (`_construire_selection_quinte`). Si la sélection dépasse 5
+    chevaux, le Quinté+ joue automatiquement toutes les combinaisons de 5
+    (C(n,5)) au tarif Flexi le plus élevé qui tient dans le budget alloué
+    (`_calculer_mise_quinte_flexi` — 100 puis 50 puis 25 % ; si même 25 %
+    dépasse le budget alloué, le pari est simplement omis, sa part de budget
+    reste non engagée plutôt que redistribuée, cas rare). Contrôle réel : les
+    C(n,5) sous-combinaisons sont recalculées à partir du nombre de chevaux
+    résolus (pas de colonne dédiée, pas de migration), et chacune est comparée
+    indépendamment à 3 paliers de gain (désordre exact, Bonus 4sur5, Bonus 3,
+    cf. `extraire_rapport_quinte`, `calculer_gains_quinte_flexi`) — une même
+    sélection peut gagner sur plusieurs sous-combinaisons à la fois. Vérifié :
+    le Flexi n'est pas exclusif au Quinté+ (aussi présent sur 2 sur 4/Multi/
+    Mini Multi/Pick5 dans le JSON réel, contrairement à une affirmation trouvée
+    dans une source secondaire non fiable) — non exploité pour les 5 autres
+    types dans cette tranche (hors périmètre, pas demandé).
   - **Vérifié réellement (2026-07-08)** contre une course Quinté+ déjà arrivée
     (R1C8, 07/07/2026) : Couplé Gagnant/Placé et 2 sur 4 ne sont exposés par PMU
     (`rapports-definitifs`) que sur les courses Quinté+ (une course ordinaire
@@ -219,10 +259,11 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   - Vérifié contre une instance PostgreSQL locale réelle (3 courses, 2 contrôlées
     dont 1 gagnante/1 perdante, 1 analysée mais non jouée → agrégats corrects sur
     les 6 tables) et contre l'API PMU réelle (rapport Simple Gagnant d'une course
-    déjà arrivée le jour même). L'extension à 5 types de pari a été rejouée en
+    déjà arrivée le jour même). L'extension aux 6 types de pari a été rejouée en
     mémoire (pas PostgreSQL) contre les rapports réels capturés de R1C8
     (07/07/2026) : gains recalculés identiques aux dividendes PMU réels pour
-    Simple Gagnant/Placé, Couplé Gagnant/Placé et 2 sur 4.
+    Simple Gagnant/Placé, Couplé Gagnant/Placé, 2 sur 4 et Quinté Flexi (y
+    compris un champ de 6 chevaux, 1 désordre exact + 5 Bonus 4sur5 simultanés).
   - **Limites assumées** (cf. ci-dessous) : le remboursement réglementaire PMU
     pour un partant devenu non-partant après l'analyse n'est pas modélisé ;
     `statistique_modele` agrège les analyses déjà faites par version, ce n'est
@@ -236,15 +277,15 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   FK `ON DELETE RESTRICT` (déjà en place, cf. L011 §9) est traduite en 409 plutôt
   que vérifiée à l'avance (évite une fenêtre de concurrence). **Jamais** de PATCH/
   DELETE sur résultat/cote/analyse et dérivés (historisés, cf. L011 §15).
-- **Tests** : 165 tests unitaires (algorithmes dont ROI réel des 5 types de
+- **Tests** : 183 tests unitaires (algorithmes dont ROI réel des 6 types de
   pari, configuration, mappers PMU/Canalturf/Zone-Turf, sécurité — hachage mot
-  de passe/jeton, limiteur de débit, dépendances RBAC) + 86 tests d'intégration
-  (API courses/analyses/résultats/cotes/PATCH/DELETE/statistiques, AuthService,
-  authentification API bout en bout, branchement presse combinée
-  Canalturf+Zone-Turf, Professionnels/Historique/Aptitude, ControleRoiService
-  (5 types de pari + détail par pari `controle_roi_pari`), StatistiqueService —
-  repositories/services en mémoire, `tests/integration/`), tous verts (251 au
-  total).
+  de passe/jeton, limiteur de débit, dépendances RBAC, sérialisation d'audit)
+  + 94 tests d'intégration (API courses/analyses/résultats/cotes/PATCH/DELETE/
+  statistiques/audit, AuthService, authentification API bout en bout,
+  branchement presse combinée Canalturf+Zone-Turf, Professionnels/Historique/
+  Aptitude, ControleRoiService (6 types de pari + détail par pari
+  `controle_roi_pari`), StatistiqueService — repositories/services en mémoire,
+  `tests/integration/`), tous verts (277 au total).
 
 ## Correction notable apportée au SAD pendant l'implémentation
 
@@ -303,12 +344,15 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
 
 ## Limites connues du module Statistiques (documentées, pas cachées)
 
-- 5 types de pari sont contrôlés contre un rapport réel (Simple Gagnant/Placé,
-  Couplé Gagnant/Placé, 2 sur 4, cf. ci-dessus) ; Quinté Flexi ou tout autre
-  type rencontré est journalisé et ignoré, pas deviné. Couplé Gagnant/Placé et
-  2 sur 4 ne sont réellement disponibles côté PMU que sur les courses Quinté+
-  (vérifié le 2026-07-08) — un pari de ce type généré sur une course ordinaire
-  ne trouve jamais de rapport correspondant, journalisé et ignoré.
+- 6 types de pari sont contrôlés contre un rapport réel (Simple Gagnant/Placé,
+  Couplé Gagnant/Placé, 2 sur 4, Quinté Flexi, cf. ci-dessus) ; tout autre type
+  rencontré est journalisé et ignoré, pas deviné. Couplé Gagnant/Placé, 2 sur 4
+  et Quinté Flexi ne sont réellement disponibles côté PMU que sur les courses
+  Quinté+ (vérifié le 2026-07-08) — un pari de ce type généré sur une course
+  ordinaire ne trouve jamais de rapport correspondant, journalisé et ignoré.
+- Quinté Flexi ne joue jamais en « Ordre » (nos tickets ne committent jamais un
+  ordre d'arrivée) — seul le rapport Désordre + Bonus 4sur5/Bonus 3 est
+  exploité ; le dividende Ordre (bien plus élevé) n'est jamais visé.
 - Le remboursement réglementaire PMU quand un partant joué devient non-partant
   après l'analyse n'est pas modélisé (règles pari-mutuel non triviales, non
   vérifiées) : traité simplement comme un pari perdant si son numéro/sa
@@ -330,9 +374,10 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
 - Limiteur de débit (`src/core/rate_limiter.py`) en mémoire, un seul processus —
   ne protège pas contre la force brute si l'API tourne sur plusieurs workers/
   instances sans état partagé (pas de Redis ou équivalent dans cette tranche).
-- L'audit (table `audit`) n'enregistre que les événements d'authentification
-  (connexion, échec, déconnexion) — pas encore chaque écriture sur chaque
-  ressource (cf. « Prochaine étape »).
+- La table `audit` grossit indéfiniment (comme les tables statistiques, cf.
+  ci-dessus) — aucune purge/archivage, `GET /audit` limite juste le nombre de
+  lignes retournées par appel (`?limite`, défaut 200), sans pagination réelle
+  (offset/curseur).
 - Pas de purge des sessions expirées/révoquées dans la table `session` — elle
   grossit indéfiniment ; acceptable pour le volume actuel, à revoir si l'usage
   s'intensifie (même logique que les autres limites déjà actées : get-or-create
@@ -375,15 +420,18 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
 
 L'essentiel de la surface API, l'authentification/RBAC réelle, une deuxième
 source de consensus presse, le module Statistiques (ROI réel + 6 tables
-agrégées, granularité par pari via `controle_roi_pari`) et 5 types de pari
-(Simple Gagnant/Placé, Couplé Gagnant/Placé, 2 sur 4) sont désormais en place.
-Pistes possibles : moteur de rejeu/backtesting L031.7 §4 (comparer des versions
-du modèle sur un historique identique — débloquerait aussi la vraie définition
-L031.2 de « Historique » et les familles Value/Contexte), Quinté Flexi, audit
-systématique des écritures (au-delà des
-seuls événements d'authentification), administration des utilisateurs via
-l'API, exploration d'une source niveau 1 (France Galop) pour sortir du
-mono-source PMU, sortir du Quinté+-only pour la Presse, interface HTML (L018).
+agrégées, granularité par pari via `controle_roi_pari`), les 6 types de pari
+(Simple Gagnant/Placé, Couplé Gagnant/Placé, 2 sur 4, Quinté Flexi) et l'audit
+systématique des écritures (au-delà des seuls événements d'authentification)
+sont désormais en place. France Galop (niveau 1) a été explorée réellement le
+2026-07-08 et écartée (cf. tableau des sources ci-dessus) : robots.txt n'y
+autorise que des listes sommaires, tout le détail exploitable est interdit —
+le mono-source PMU reste donc la seule source niveau 1 exploitable en l'état.
+Pistes possibles : moteur de rejeu/backtesting L031.7 §4 (comparer des
+versions du modèle sur un historique identique — débloquerait aussi la vraie
+définition L031.2 de « Historique » et les familles Value/Contexte), sortir du
+Quinté+-only pour la Presse, interface HTML (L018), administration des
+utilisateurs via l'API.
 
 ## Conventions de développement
 

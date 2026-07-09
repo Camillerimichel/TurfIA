@@ -8,6 +8,7 @@ silencieusement (cf. L009 §2.1, « ne fais aucune hypothèse »).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 
 from src.core.exceptions import ImportationError
@@ -30,16 +31,16 @@ SURFACES_PMU: dict[str, str] = {
 
 # Vérifié réellement le 2026-07-08 (course Quinté+ R1C8, programme du jour) :
 # TurfIA type_pari (cf. TYPES_PARI) -> code PMU réel (champ `typePari` des rapports
-# définitifs). Couplé Gagnant/Placé et 2 sur 4 ne sont exposés par PMU que sur les
-# courses Quinté+ (une course ordinaire propose `COUPLE_ORDRE`, à ordre exigé,
-# pas le même pari) — limite documentée, cf. PROJECT_STATE.md. Quinté Flexi n'a
-# volontairement pas d'entrée ici (hors périmètre, cf. plan).
+# définitifs). Couplé Gagnant/Placé, 2 sur 4 et Quinté Flexi ne sont exposés par
+# PMU que sur les courses Quinté+ (une course ordinaire propose `COUPLE_ORDRE`,
+# à ordre exigé, pas le même pari) — limite documentée, cf. PROJECT_STATE.md.
 TYPES_PARI_PMU: dict[str, str] = {
     "Simple Gagnant": "SIMPLE_GAGNANT",
     "Simple Placé": "SIMPLE_PLACE",
     "Couplé Gagnant": "COUPLE_GAGNANT",
     "Couplé Placé": "COUPLE_PLACE",
     "2 sur 4": "DEUX_SUR_QUATRE",
+    "Quinté Flexi": "QUINTE_PLUS",
 }
 
 
@@ -193,3 +194,57 @@ def extraire_rapport_deux_sur_quatre(rapports_bruts: list[dict]) -> tuple[frozen
     if not numeros_arrivee or dividende is None:
         raise ImportationError("Rapport 'DEUX_SUR_QUATRE' trouvé mais sans combinaison/dividende exploitable.")
     return frozenset(numeros_arrivee), dividende, False
+
+
+@dataclass(frozen=True)
+class RapportQuinte:
+    """Rapport officiel réel « Quinté+ » (cf. L011 §8.7), tel qu'exploité par
+    Quinté Flexi — jamais l'entrée « Ordre » (nos tickets ne committent jamais
+    un ordre d'arrivée, cf. `src.algorithms.controle_roi.calculer_gains_quinte_flexi`).
+    """
+
+    numeros_arrivee: frozenset[str]
+    dividende_desordre: float
+    dividendes_bonus4: dict[frozenset[str], float]
+    dividendes_bonus3: dict[frozenset[str], float]
+    rembourse: bool
+
+
+def extraire_rapport_quinte(rapports_bruts: list[dict]) -> RapportQuinte:
+    """Extrait le rapport « Quinté+ Désordre » (1 combinaison gagnante de 5
+    numéros), « Bonus 4sur5 » et « Bonus 3 » (une ou plusieurs combinaisons
+    partielles chacun, dividende propre à chacune — vérifié réellement le
+    2026-07-08, R1C8 du 07/07/2026 : Bonus 4sur5 en compte 5 (tous les
+    quadruples possibles parmi les 5 arrivants), Bonus 3 n'en compte qu'une
+    seule dans l'échantillon réel — aucune hypothèse n'est faite ici sur leur
+    nombre, seulement sur ce qui est réellement listé).
+    """
+    entree = _trouver_entree_rapport(rapports_bruts, "QUINTE_PLUS")
+    if bool(entree.get("rembourse", False)):
+        return RapportQuinte(frozenset(), 0.0, {}, {}, True)
+
+    numeros_arrivee: frozenset[str] = frozenset()
+    dividende_desordre = 0.0
+    dividendes_bonus4: dict[frozenset[str], float] = {}
+    dividendes_bonus3: dict[frozenset[str], float] = {}
+
+    for r in entree.get("rapports") or []:
+        combinaison = r.get("combinaison")
+        if not combinaison or "dividendePourUnEuro" not in r:
+            continue
+        numeros = combinaison.split("-")
+        if "NP" in numeros:
+            continue
+        libelle = r.get("libelle", "")
+        dividende = r["dividendePourUnEuro"] / 100
+        if "Désordre" in libelle:
+            numeros_arrivee = frozenset(numeros)
+            dividende_desordre = dividende
+        elif libelle.startswith("Bonus 4"):
+            dividendes_bonus4[frozenset(numeros)] = dividende
+        elif libelle.startswith("Bonus 3"):
+            dividendes_bonus3[frozenset(numeros)] = dividende
+
+    if not numeros_arrivee:
+        raise ImportationError("Rapport 'QUINTE_PLUS' trouvé mais sans combinaison Désordre exploitable.")
+    return RapportQuinte(numeros_arrivee, dividende_desordre, dividendes_bonus4, dividendes_bonus3, False)

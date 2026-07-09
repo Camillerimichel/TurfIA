@@ -23,6 +23,14 @@ RAISON_DIRECTIVE_ROBOTS_ANTHROPIC = (
     "robots.txt bloque explicitement le user-agent anthropic-ai (Disallow: /), séparément de la "
     "règle générale User-Agent: * — non exploré par choix, pas par indisponibilité technique."
 )
+RAISON_ROBOTS_DETAIL_INTERDIT = (
+    "Site atteignable, sans protection anti-bot, vérifié réellement le 2026-07-08 : robots.txt "
+    "(User-agent: *) n'autorise que des listes sommaires (Disallow: /fr/courses/ avec exceptions "
+    "Allow: hier/aujourdhui/demain/toutes-les-courses/replays/groupe1) et interdit tout le détail "
+    "exploitable (Disallow: /fr/courses/reunion/*, /fr/course/, /fr/cheval/, /fr/jockey/, "
+    "/fr/entraineur/, /fr/proprietaire/, /fr/eleveur/, /fr/etalon/) — aucune donnée de partant, cote "
+    "ou résultat n'est accessible, strictement moins que ce que PMU fournit déjà sans restriction."
+)
 RAISON_ROBOTS_CONTENU_BLOQUE = (
     "robots.txt (User-agent: *) interdit les pages de pronostics/partants elles-mêmes, "
     "indépendamment de toute protection anti-bot active."
@@ -36,7 +44,7 @@ SOURCES: tuple[SourceInfo, ...] = (
         niveau=1,
         role="Courses de plat et d'obstacles, conditions de course, terrain, engagements",
         implementee=False,
-        raison_si_non_implementee=RAISON_NON_VERIFIEE,
+        raison_si_non_implementee=RAISON_ROBOTS_DETAIL_INTERDIT,
     ),
     SourceInfo(
         "LeTROT",

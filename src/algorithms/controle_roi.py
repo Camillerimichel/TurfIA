@@ -1,9 +1,8 @@
 """Calcul du ROI réel a posteriori (cf. L011 §8.7 table `controle_roi`, L030.4) —
 fonctions pures (cf. L006 §4.2), aucun accès réseau ou base ici.
 
-Couvre les 5 types de pari construits par `AnalyseService` (cf. L031.6 §5) :
-Simple Gagnant/Placé, Couplé Gagnant/Placé, 2 sur 4. Quinté Flexi est
-volontairement hors périmètre (cf. plan, complexité disproportionnée).
+Couvre les 6 types de pari construits par `AnalyseService` (cf. L031.6 §5) :
+Simple Gagnant/Placé, Couplé Gagnant/Placé, 2 sur 4, Quinté Flexi.
 
 Aucune de ces fonctions ne modélise le remboursement réglementaire PMU
 spécifique à un partant devenu non-partant après l'analyse (règles pari-mutuel
@@ -69,3 +68,45 @@ def calculer_gains_deux_sur_quatre(
     if len(numeros_joues & numeros_arrivee) >= 2:
         return mise * dividende_pour_un_euro
     return 0.0
+
+
+def calculer_gains_quinte_flexi(
+    mise_par_combinaison: float,
+    sous_combinaisons: list[frozenset[str]],
+    numeros_arrivee: frozenset[str],
+    dividende_desordre: float,
+    dividendes_bonus4: dict[frozenset[str], float],
+    dividendes_bonus3: dict[frozenset[str], float],
+    rembourse: bool,
+) -> float:
+    """Gains réels d'un pari Quinté Flexi, comparé au rapport officiel PMU (cf.
+    `src.collecte.pmu.mappers.extraire_rapport_quinte`). Le Flexi joue
+    automatiquement toutes les combinaisons de 5 chevaux parmi les chevaux
+    sélectionnés (`sous_combinaisons`, cf. `construire_paris`) : chacune est
+    évaluée indépendamment (une même sélection peut gagner sur plusieurs
+    combinaisons à la fois, notamment en Bonus 4sur5) et les gains sont sommés.
+
+    - Pari remboursé : chaque combinaison est remboursée à parité.
+    - Combinaison égale aux 5 numéros d'arrivée : gains = mise par combinaison ×
+      dividende Désordre (jamais Ordre, cf. `RapportQuinte`).
+    - Sinon, si 4 de ses numéros correspondent à un quadruple Bonus 4sur5 :
+      gains = mise par combinaison × ce dividende.
+    - Sinon, si 3 de ses numéros correspondent à un triplet Bonus 3 : idem.
+    - Sinon : combinaison perdante.
+    """
+    if rembourse:
+        return mise_par_combinaison * len(sous_combinaisons)
+
+    gains = 0.0
+    for combinaison in sous_combinaisons:
+        if combinaison == numeros_arrivee:
+            gains += mise_par_combinaison * dividende_desordre
+            continue
+        dividende_bonus4 = next((div for combo, div in dividendes_bonus4.items() if combo <= combinaison), None)
+        if dividende_bonus4 is not None:
+            gains += mise_par_combinaison * dividende_bonus4
+            continue
+        dividende_bonus3 = next((div for combo, div in dividendes_bonus3.items() if combo <= combinaison), None)
+        if dividende_bonus3 is not None:
+            gains += mise_par_combinaison * dividende_bonus3
+    return gains

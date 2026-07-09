@@ -9,6 +9,7 @@ from src.collecte.pmu.mappers import (
     extraire_etat_piste_libelle,
     extraire_rapport_couple,
     extraire_rapport_deux_sur_quatre,
+    extraire_rapport_quinte,
     extraire_rapport_simple,
     horodatage_depuis_epoch_ms,
     mapper_discipline_code,
@@ -42,6 +43,11 @@ def rapports_definitifs_echantillon():
 @pytest.fixture
 def rapports_couple_2sur4_echantillon():
     return json.loads((FIXTURES / "pmu_rapports_couple_2sur4_echantillon.json").read_text(encoding="utf-8"))
+
+
+@pytest.fixture
+def rapports_quinte_echantillon():
+    return json.loads((FIXTURES / "pmu_rapports_quinte_echantillon.json").read_text(encoding="utf-8"))
 
 
 def test_mapper_discipline_code_connu():
@@ -173,3 +179,25 @@ def test_extraire_rapport_deux_sur_quatre_depuis_echantillon_reel(rapports_coupl
 def test_extraire_rapport_deux_sur_quatre_absent_leve_erreur():
     with pytest.raises(ImportationError):
         extraire_rapport_deux_sur_quatre([])
+
+
+def test_extraire_rapport_quinte_depuis_echantillon_reel(rapports_quinte_echantillon):
+    rapport = extraire_rapport_quinte(rapports_quinte_echantillon)
+    assert rapport.numeros_arrivee == frozenset({"5", "3", "7", "10", "2"})
+    assert rapport.dividende_desordre == pytest.approx(526.40)
+    assert rapport.rembourse is False
+    assert len(rapport.dividendes_bonus4) == 5
+    assert rapport.dividendes_bonus4[frozenset({"5", "3", "7", "10"})] == pytest.approx(6.0)
+    assert rapport.dividendes_bonus3 == {frozenset({"5", "3", "7"}): pytest.approx(4.40)}
+
+
+def test_extraire_rapport_quinte_ignore_ordre(rapports_quinte_echantillon):
+    # "Quinté+ Ordre" a un dividende bien plus élevé (6317570) que Désordre (52640) —
+    # si le mapper le confondait avec Désordre, ce test échouerait.
+    rapport = extraire_rapport_quinte(rapports_quinte_echantillon)
+    assert rapport.dividende_desordre == pytest.approx(526.40)
+
+
+def test_extraire_rapport_quinte_absent_leve_erreur():
+    with pytest.raises(ImportationError):
+        extraire_rapport_quinte([])

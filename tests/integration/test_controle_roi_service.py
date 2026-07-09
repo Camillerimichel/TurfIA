@@ -31,6 +31,23 @@ RAPPORT_DEUX_SUR_QUATRE = [
     }
 ]
 
+RAPPORT_QUINTE = [
+    {
+        "typePari": "QUINTE_PLUS",
+        "rembourse": False,
+        "rapports": [
+            {"libelle": "Quinté+ Ordre", "combinaison": "5-3-7-10-2", "dividendePourUnEuro": 6317570},
+            {"libelle": "Quinté+ Désordre", "combinaison": "5-3-7-10-2", "dividendePourUnEuro": 52640},
+            {"libelle": "Bonus 4sur5", "combinaison": "5-3-7-10", "dividendePourUnEuro": 600},
+            {"libelle": "Bonus 4sur5", "combinaison": "5-3-7-2", "dividendePourUnEuro": 600},
+            {"libelle": "Bonus 4sur5", "combinaison": "5-3-10-2", "dividendePourUnEuro": 600},
+            {"libelle": "Bonus 4sur5", "combinaison": "5-7-10-2", "dividendePourUnEuro": 600},
+            {"libelle": "Bonus 4sur5", "combinaison": "3-7-10-2", "dividendePourUnEuro": 600},
+            {"libelle": "Bonus 3", "combinaison": "5-3-7", "dividendePourUnEuro": 440},
+        ],
+    }
+]
+
 
 def _preparer_course(course_repo: FakeCourseRepository, numero_partant_choisi: int = 4) -> tuple[Course, Partant]:
     reunion = course_repo.create_reunion(Reunion(date=date(2026, 7, 7), hippodrome_id=1, numero=1))
@@ -233,6 +250,39 @@ def test_plusieurs_types_de_pari_dans_la_meme_analyse_ont_chacun_leur_detail():
     detail_couple = analyse_repo.controle_roi_paris[next(p.id for p in paris if p.type_pari == "Couplé Gagnant")]
     assert detail_gagnant.mise == 10.0 and detail_gagnant.gains == 14.0
     assert detail_couple.mise == 1.0 and detail_couple.gains == pytest.approx(67.60)
+
+
+def test_calcule_un_controle_quinte_flexi_avec_champ_de_6_chevaux():
+    """Sélection de 6 chevaux (n=6, Flexi) : les 5 vrais arrivants (5,3,7,10,2)
+    + 1 cheval supplémentaire (9). C(6,5)=6 sous-combinaisons : 1 désordre exact
+    + 5 bonus4sur5 (chacune omet un des 5 vrais arrivants pour le 9)."""
+    course_repo = FakeCourseRepository()
+    analyse_repo = FakeAnalyseRepository()
+    reunion = course_repo.create_reunion(Reunion(date=date(2026, 7, 7), hippodrome_id=1, numero=1))
+    course = course_repo.create_course(Course(reunion_id=reunion.id, numero=1, nom="Prix Test"))
+    numeros_joues = [5, 3, 7, 10, 2, 9]
+    partants = [
+        course_repo.create_partant(
+            Partant(course_id=course.id, cheval_id=course_repo.create_cheval(Cheval(nom=f"Cheval {n}")).id, numero=n)
+        )
+        for n in numeros_joues
+    ]
+    analyse = analyse_repo.create_analyse(Analyse(course_id=course.id, version=1, budget=3.0))
+    analyse_repo.create_pari(
+        Pari(
+            analyse_id=analyse.id, type_pari="Quinté Flexi",
+            combinaison="-".join(str(p.id) for p in partants), mise=3.0,
+        )
+    )
+    pmu_client = FakePMUClient(rapports_par_course={(1, 1): RAPPORT_QUINTE})
+    service = ControleRoiService(pmu_client, analyse_repo, course_repo)
+
+    controles = service.calculer_controles_manquants()
+
+    assert len(controles) == 1
+    # mise par combinaison = 3.0 / 6 = 0.5 ; gains = 0.5*(526.40 + 5*6.0)
+    assert controles[0].gains == pytest.approx(0.5 * (526.40 + 5 * 6.0))
+    assert controles[0].valide is True
 
 
 def test_rapport_indisponible_pour_ce_type_de_pari_est_ignore_sans_planter():

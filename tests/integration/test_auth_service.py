@@ -31,19 +31,19 @@ def test_authentifier_avec_bon_mot_de_passe(service, repos):
     assert session.utilisateur.login == "jdupont"
     assert session.role.nom == "Administrateur"
     assert session.jeton
-    assert any(e[1] == "connexion" and e[0] == repos["utilisateur"].id for e in repos["audit"].entrees)
+    assert any(e.action == "connexion" and e.utilisateur_id == repos["utilisateur"].id for e in repos["audit"].entrees)
 
 
 def test_authentifier_avec_mauvais_mot_de_passe_leve_securityerror(service, repos):
     with pytest.raises(SecurityError):
         service.authentifier("jdupont", "mauvais-mot-de-passe")
-    assert any(e[1] == "echec_connexion" for e in repos["audit"].entrees)
+    assert any(e.action == "echec_connexion" for e in repos["audit"].entrees)
 
 
 def test_authentifier_login_inconnu_leve_securityerror(service, repos):
     with pytest.raises(SecurityError):
         service.authentifier("inconnu", "peu-importe")
-    assert any(e[1] == "echec_connexion" and e[0] is None for e in repos["audit"].entrees)
+    assert any(e.action == "echec_connexion" and e.utilisateur_id is None for e in repos["audit"].entrees)
 
 
 def test_authentifier_compte_inactif_leve_securityerror(repos):
@@ -70,4 +70,4 @@ def test_deconnecter_revoque_la_session(service, repos):
     service.deconnecter(session.jeton)
     with pytest.raises(SecurityError):
         service.utilisateur_courant(session.jeton)
-    assert any(e[1] == "deconnexion" for e in repos["audit"].entrees)
+    assert any(e.action == "deconnexion" for e in repos["audit"].entrees)
