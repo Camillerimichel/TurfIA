@@ -9,11 +9,14 @@ from __future__ import annotations
 import argparse
 import sys
 
+from src.collecte.canalturf.client import CanalturfClient
+from src.collecte.zoneturf.client import ZoneTurfClient
 from src.database.connection import session
 from src.repositories.analyse_repository import AnalyseRepository
 from src.repositories.course_repository import CourseRepository
 from src.repositories.statistique_repository import StatistiqueRepository
 from src.services.analyse_service import AnalyseService
+from src.services.consensus_presse_service import ConsensusPresseService
 from src.services.preparation_service import PreparationDonneesService
 
 
@@ -23,8 +26,9 @@ def run() -> int:
     parser.add_argument("--version", type=int, default=1)
     args = parser.parse_args()
 
-    with session() as conn:
-        preparation = PreparationDonneesService(CourseRepository(conn), StatistiqueRepository(conn))
+    with CanalturfClient() as canalturf_client, ZoneTurfClient() as zoneturf_client, session() as conn:
+        presse = ConsensusPresseService(canalturf_client, zoneturf_client)
+        preparation = PreparationDonneesService(CourseRepository(conn), StatistiqueRepository(conn), presse)
         donnees_partants, sous_risques_course = preparation.preparer_donnees_partants(args.course_id)
 
         service = AnalyseService(AnalyseRepository(conn))
