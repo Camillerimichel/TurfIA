@@ -85,5 +85,10 @@ class StatistiqueModeleOut(BaseModel):
     nb_courses: int
     roi: float | None = None
     taux_reussite: float | None = None
+    roi_par_score: str | None = None
+    roi_par_hippodrome: str | None = None
+    roi_par_type_pari: str | None = None
+    drawdown: float | None = None
+    stabilite: float | None = None
     parametres: str | None = None
     commentaire: str | None = None
