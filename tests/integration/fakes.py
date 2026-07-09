@@ -242,6 +242,32 @@ class FakeCourseRepository:
     def list_partants_by_course(self, course_id: int):
         return [p for p in self.partants.values() if p.course_id == course_id]
 
+    def list_partants_detail_by_course(self, course_id: int):
+        from src.models.course import PartantDetail
+
+        resultats = []
+        for p in sorted(self.list_partants_by_course(course_id), key=lambda p: p.numero):
+            cheval = self.chevaux.get(p.cheval_id)
+            jockey = self.jockeys.get(p.jockey_id) if p.jockey_id is not None else None
+            entraineur = self.entraineurs.get(p.entraineur_id) if p.entraineur_id is not None else None
+            cotes = self.cotes_historique.get(p.id, [])
+            derniere = max(cotes, key=lambda c: c.date_maj) if cotes else None
+            resultats.append(
+                PartantDetail(
+                    id=p.id, course_id=p.course_id, cheval_id=p.cheval_id, numero=p.numero,
+                    cheval_nom=cheval.nom if cheval else f"#{p.cheval_id}",
+                    jockey_id=p.jockey_id, jockey_nom=jockey.nom if jockey else None,
+                    jockey_prenom=jockey.prenom if jockey else None,
+                    entraineur_id=p.entraineur_id, entraineur_nom=entraineur.nom if entraineur else None,
+                    entraineur_prenom=entraineur.prenom if entraineur else None,
+                    corde=p.corde, poids=p.poids, valeur=p.valeur, age=p.age, ferrure=p.ferrure,
+                    musique=p.musique, non_partant=p.non_partant,
+                    derniere_cote=derniere.cote if derniere else None,
+                    derniere_cote_operateur=derniere.operateur if derniere else None,
+                )
+            )
+        return resultats
+
     def create_cote(self, cote):
         cote = dataclasses.replace(
             cote, id=self._ids.next(), date_maj=cote.date_maj or datetime.now(timezone.utc)

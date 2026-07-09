@@ -127,6 +127,10 @@ class PartantIn(BaseModel):
 
 
 class PartantOut(BaseModel):
+    """Les champs `*_nom`/`*_prenom`/`derniere_cote*` ne sont peuplés que par
+    `GET /courses/{id}/partants` (jointure, cf. `PartantDetail`) ; `GET
+    /partants/{id}` (lecture isolée, sur `Partant` brut) les laisse à `None`."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -142,6 +146,13 @@ class PartantOut(BaseModel):
     ferrure: str | None = None
     musique: str | None = None
     non_partant: bool
+    cheval_nom: str | None = None
+    jockey_nom: str | None = None
+    jockey_prenom: str | None = None
+    entraineur_nom: str | None = None
+    entraineur_prenom: str | None = None
+    derniere_cote: float | None = None
+    derniere_cote_operateur: str | None = None
 
 
 class ResultatIn(BaseModel):

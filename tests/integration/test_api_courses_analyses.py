@@ -185,6 +185,37 @@ def test_creation_partant_avec_jockey_et_entraineur_connus(client):
     assert corps["entraineur_id"] == entraineur["id"]
 
 
+def test_list_partants_expose_noms_et_derniere_cote_par_jointure(client):
+    """cf. CourseRepository.list_partants_detail_by_course — remplace les
+    appels N+1 (GET /chevaux/{id}, /jockeys/{id}, /entraineurs/{id},
+    /partants/{id}/cotes) faits jusqu'ici par la fiche course HTML."""
+    reunion = client.post(
+        "/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": 1, "numero": 1}
+    ).json()["data"]
+    course = client.post(
+        f"/api/v1/reunions/{reunion['id']}/courses", json={"numero": 1, "nom": "Test"}
+    ).json()["data"]
+    cheval = client.post("/api/v1/chevaux", json={"nom": "Cheval Test"}).json()["data"]
+    jockey = client.post("/api/v1/jockeys", json={"nom": "Dupont", "prenom": "Jean"}).json()["data"]
+    entraineur = client.post("/api/v1/entraineurs", json={"nom": "Martin"}).json()["data"]
+    partant = client.post(
+        f"/api/v1/courses/{course['id']}/partants",
+        json={"cheval_id": cheval["id"], "numero": 1, "jockey_id": jockey["id"], "entraineur_id": entraineur["id"]},
+    ).json()["data"]
+    client.post(f"/api/v1/partants/{partant['id']}/cotes", json={"operateur": "PMU", "cote": 4.5})
+
+    reponse = client.get(f"/api/v1/courses/{course['id']}/partants")
+
+    assert reponse.status_code == 200
+    corps = reponse.json()["data"][0]
+    assert corps["cheval_nom"] == "Cheval Test"
+    assert corps["jockey_nom"] == "Dupont"
+    assert corps["jockey_prenom"] == "Jean"
+    assert corps["entraineur_nom"] == "Martin"
+    assert corps["derniere_cote"] == 4.5
+    assert corps["derniere_cote_operateur"] == "PMU"
+
+
 def test_validation_pydantic_retourne_enveloppe_422(client):
     reponse = client.post("/api/v1/reunions", json={"hippodrome_id": 1, "numero": 1})
     assert reponse.status_code == 422

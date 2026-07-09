@@ -5,19 +5,6 @@ initialiserEntete();
 
 const idCourse = new URLSearchParams(window.location.search).get("id");
 
-function derniereCote(cotes) {
-  if (!cotes || cotes.length === 0) return null;
-  return [...cotes].sort((a, b) => new Date(b.date_maj) - new Date(a.date_maj))[0];
-}
-
-async function nomOuNull(chemin) {
-  try {
-    return await apiFetch(chemin);
-  } catch (erreur) {
-    return null;
-  }
-}
-
 async function chargerCourse() {
   const course = await apiFetch(`/courses/${idCourse}`);
   document.getElementById("titre-course").textContent = `Course ${course.numero} — ${course.nom}`;
@@ -40,24 +27,24 @@ async function chargerCourse() {
 async function chargerPartants() {
   const corpsTableau = document.querySelector("#tableau-partants tbody");
   corpsTableau.innerHTML = "";
+  // Noms cheval/jockey/entraîneur et dernière cote déjà joints côté API
+  // (cf. CourseRepository.list_partants_detail_by_course) — plus d'appel N+1 ici.
   const partants = await apiFetch(`/courses/${idCourse}/partants`);
 
   for (const partant of partants) {
-    const [cheval, jockey, entraineur, cotes] = await Promise.all([
-      nomOuNull(`/chevaux/${partant.cheval_id}`),
-      partant.jockey_id ? nomOuNull(`/jockeys/${partant.jockey_id}`) : Promise.resolve(null),
-      partant.entraineur_id ? nomOuNull(`/entraineurs/${partant.entraineur_id}`) : Promise.resolve(null),
-      apiFetch(`/partants/${partant.id}/cotes`).catch(() => []),
-    ]);
-    const cote = derniereCote(cotes);
+    const jockey = partant.jockey_nom ? `${partant.jockey_prenom ?? ""} ${partant.jockey_nom}`.trim() : "—";
+    const entraineur = partant.entraineur_nom
+      ? `${partant.entraineur_prenom ?? ""} ${partant.entraineur_nom}`.trim()
+      : "—";
+    const cote = partant.derniere_cote !== null ? `${partant.derniere_cote} (${partant.derniere_cote_operateur})` : "—";
 
     const ligne = document.createElement("tr");
     const cellules = [
       partant.numero,
-      cheval ? cheval.nom : `#${partant.cheval_id}`,
-      jockey ? `${jockey.prenom ?? ""} ${jockey.nom}`.trim() : "—",
-      entraineur ? `${entraineur.prenom ?? ""} ${entraineur.nom}`.trim() : "—",
-      cote ? `${cote.cote} (${cote.operateur})` : "—",
+      partant.cheval_nom ?? `#${partant.cheval_id}`,
+      jockey,
+      entraineur,
+      cote,
       partant.non_partant ? "Oui" : "Non",
     ];
     for (const valeur of cellules) {
