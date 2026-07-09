@@ -353,9 +353,9 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   FK `ON DELETE RESTRICT` (déjà en place, cf. L011 §9) est traduite en 409 plutôt
   que vérifiée à l'avance (évite une fenêtre de concurrence). **Jamais** de PATCH/
   DELETE sur résultat/cote/analyse et dérivés (historisés, cf. L011 §15).
-- **Interface HTML locale (2026-07-09)** (`html/`, L018) — périmètre Accueil +
-  Courses/Analyses + Statistiques (Historique et Administration reportés, cf.
-  « Explicitement hors périmètre »).
+- **Interface HTML locale (2026-07-09)** (`html/`, L018) — périmètre complet :
+  Accueil + Courses/Analyses + Statistiques + **Historique (§8) et
+  Administration (§10, périmètre complet incluant sauvegardes/supervision)**.
   - **Architecture délibérément minimale** (cf. L018 §2.2/§3.3, décision
     validée avec l'utilisateur) : aucune nouvelle dépendance — pas de Jinja2
     (pas de rendu serveur), pas de framework JS, pas de build step.
@@ -396,17 +396,83 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
     d'outil d'automatisation de navigateur dans cet environnement — le JS
     lui-même (rendu, clics, formulaires) n'a pas été exécuté ni validé
     interactivement, seule la structure serveur/réseau l'a été.
-- **Tests** : 206 tests unitaires (algorithmes dont ROI réel des 6 types de
-  pari et agrégation du rejeu — ROI global + 7 indicateurs L031.7 §5,
-  configuration, mappers PMU/Canalturf/Zone-Turf, sécurité — hachage mot de
-  passe/jeton, limiteur de débit, dépendances RBAC, sérialisation d'audit)
-  + 102 tests d'intégration (API courses/analyses/résultats/cotes/PATCH/DELETE/
-  statistiques/audit/réunions par date, AuthService, authentification API bout
-  en bout, branchement presse combinée Canalturf+Zone-Turf,
-  Professionnels/Historique/Aptitude, AnalyseService (`persister=False`),
-  ControleRoiService (6 types de pari + détail par pari `controle_roi_pari`),
-  StatistiqueService — repositories/services en mémoire, `tests/integration/`),
-  tous verts (308 au
+  - **Historique (L018 §8, 2026-07-09)** : route transversale dédiée
+    `GET /historique` (filtres date/hippodrome/type_pari/decision), une ligne
+    = un pari (+ analyse et contrôle ROI par pari associés, LEFT JOIN) —
+    granularité assumée, le détail complet (classement par partant) reste
+    sur `course.html`. Nouveau `HistoriqueRepository`, page + JS dédiés.
+  - **Administration (L018 §10, 2026-07-09, périmètre complet)** —
+    l'utilisateur a choisi le périmètre complet (pas la version réduite
+    envisagée initialement) :
+    - *Journaux* : `journal` était créée en SQL mais jamais peuplée
+      (`src/core/logging.py` n'écrivait que sur stdout). Nouveau
+      `DbLogHandler` (`src/core/log_db_handler.py`) — connexion `psycopg`
+      dédiée/courte par évènement, seuil `WARNING`+ seulement (borne volume),
+      ignore les logs `psycopg.*` (anti-réentrance), n'appelle jamais
+      `logging.*` en cas d'échec. Câblé dans `api/main.py`, désactivable via
+      `LOG_JOURNAL_DB_ACTIF=false` (mis à `false` en test).
+      `GET /administration/journaux`. **Vérifié réellement** : un vrai
+      partant sans cote a déclenché un `logger.warning`, visible ensuite via
+      la route.
+    - *Lancer une automatisation* : réutilise les services déjà appelés par
+      les scripts CLI (jamais de logique dupliquée, cf. L033 ADR-002).
+      Nouveau `AutomatisationService.analyser_courses_du_jour` (seule
+      orchestration réellement nouvelle — aucun script n'existait pour
+      analyser plus d'une course à la fois) ; `collecte`/`statistiques`
+      délèguent directement à `CollecteService`/`ControleRoiService`/
+      `StatistiqueService`. Chaque déclenchement tracé dans `tache` (nouveau
+      `TacheRepository`, table existante mais jamais peuplée jusqu'ici).
+      3 routes `POST /administration/automatisations/*`, RBAC
+      `ADMINISTRATION` (plus restrictif que `DECLENCHEMENT_ANALYSE` — choix
+      documenté, sans conséquence pratique avec un seul compte Administrateur).
+    - *Vérifier les sauvegardes* : `scripts/sauvegarder_base.py` (nouveau) —
+      `pg_dump --format=custom` vers `data/sauvegardes/`, mot de passe transmis
+      via `PGPASSWORD` (jamais en argument de ligne de commande, cf. L021
+      §5.1). Suivi dans `tache` (`categorie='sauvegarde'`), pas de nouvelle
+      table. `POST`/`GET /administration/sauvegardes` (déclenchement
+      synchrone — limite documentée, pas de file d'attente). **Bug réel
+      trouvé et corrigé en vérification** : `pg_dump` verrouille TOUTES les
+      tables du schéma, y compris `migration` — or seul `turfia_migration`
+      y avait SELECT (`turfia_app` utilisé par l'API n'avait rien), donc la
+      première sauvegarde réelle a échoué avec « permission denied for
+      table migration ». Corrigé par une nouvelle migration
+      (`20260709_2000_grant_migration_table.sql`, GRANT SELECT seul, jamais
+      INSERT/UPDATE) ; **vérifié réellement** ensuite (dump de 116 Ko,
+      restaurabilité confirmée via `pg_restore -l`).
+    - *Consulter les versions* : `scripts/publier_version.py` (nouveau, geste
+      de déploiement comme `creer_utilisateur.py` — pas de route d'écriture),
+      lit `git rev-parse HEAD`/branche, peuple `version` (créée en SQL,
+      jamais peuplée jusqu'ici). `GET /administration/versions`. **Gap réel
+      trouvé et corrigé** : la table `version` avait été oubliée du GRANT
+      initial (`sql/schema/06_grants.sql`) — `turfia_app` n'avait aucun
+      accès, 500 réel sur la première requête ; corrigé par
+      `20260709_1900_grant_version_turfia_app.sql`. **Vérifié réellement**
+      (publication réussie, commit/branche corrects en retour API).
+    - *Gérer les paramètres* : nouveau `ParametreRepository`
+      (`GET`/`PATCH /administration/parametres/{cle}`, catalogue fixe, pas de
+      `POST`/`DELETE`). `AnalyseService` (via `get_analyse_service`) lit
+      désormais ses poids depuis `parametre` (`poids_score.*`/
+      `poids_risque.*`, 15 clés semées par migration à `1.0` = comportement
+      inchangé) plutôt que la constante codée en dur — le fallback déjà
+      existant (`poids or PONDERATIONS_PAR_DEFAUT`) protège contre toute
+      régression si une clé est absente. `scripts/analyser_course.py`
+      (instanciation directe hors FastAPI) reste sur les poids par défaut du
+      code — asymétrie documentée, même limite déjà notée pour
+      `ConsensusPresseService`. **Vérifié réellement** : PATCH réel d'une
+      pondération puis retour à `1.0`.
+    - *Contrôler la supervision* : périmètre volontairement réduit par
+      rapport à L035 (pas de `psutil`, pas de métriques CPU/RAM/alertes) —
+      connexion DB (ok/latence réelle), espace disque (`shutil.disk_usage`),
+      échecs `tache` récents (24h), uptime process.
+      `GET /administration/supervision`. **Vérifié réellement** contre
+      PostgreSQL local (latence ~9 ms, ~96 Go disponibles).
+- **Tests** : 215 tests unitaires (dont `AutomatisationService`,
+  `DbLogHandler` — anti-réentrance/absence de crash sur DB indisponible,
+  `SupervisionService`) + 118 tests d'intégration (dont Historique — filtres
+  date/hippodrome/type de pari/décision — et Administration — RBAC,
+  journaux, les 3 automatisations, sauvegarde réussie/échouée, versions,
+  paramètres, supervision) — repositories/services en mémoire,
+  `tests/integration/`), tous verts (333 au
   total).
 
 ## Correction notable apportée au SAD pendant l'implémentation
@@ -528,13 +594,17 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
 - Automatisations planifiées (L017/L033) — aucun scheduler, `automations/` est un
   squelette vide. **Redimensionné volontairement (2026-07-09)** : pour un usage
   mono-utilisateur local, un vrai scheduler générique n'apporte rien — remplacé
-  dans les intentions par de simples déclenchements manuels (bouton dans
-  l'interface HTML à venir, ou tâche `launchd`/cron locale appelant les scripts
-  déjà existants), pas construit dans cette tranche.
-- **Interface HTML (L018) — Accueil/Courses-Analyses/Statistiques
-  implémentées (2026-07-09)** (cf. section dédiée ci-dessous) ; Historique et
-  Administration (journaux, sauvegardes, supervision — capacités serveur
-  inexistantes) restent hors périmètre.
+  par de simples déclenchements manuels, désormais construits (page
+  Administration de l'interface HTML, `POST /administration/automatisations/*`,
+  cf. ci-dessous) plutôt qu'une planification récurrente configurable
+  (régularité/heures) — pas de table de configuration de cron, pas de
+  scheduler en tâche de fond dans le process API.
+- **Interface HTML (L018) — les 5 modules (Accueil/Courses-Analyses/
+  Statistiques/Historique/Administration) sont désormais implémentés
+  (2026-07-09)** (cf. section dédiée ci-dessus). Seul le module
+  Automatisations planifiées (scheduler générique récurrent) reste hors
+  périmètre (cf. ci-dessous) — l'Administration livrée couvre le
+  déclenchement *manuel* des mêmes opérations, pas leur planification.
 - Endpoints résultats/cotes en écriture, PATCH/DELETE sur les ressources
   référentielles/métier, authentification/RBAC réels, module Statistiques
   (ROI réel + 6 tables agrégées) et moteur de rejeu/backtesting L031.7 §4-5
@@ -576,20 +646,30 @@ place. France Galop (niveau 1) a été explorée réellement le 2026-07-08 et
 listes sommaires, tout le détail exploitable est interdit — le mono-source PMU
 reste donc la seule source niveau 1 exploitable en l'état.
 
-**Interface HTML locale (2026-07-09)** : périmètre Accueil + Courses/Analyses
-+ Statistiques désormais implémenté (cf. ci-dessus), **strictement locale**
-(tourne uniquement sur la machine de l'utilisateur, un seul compte) — en
-conséquence, l'administration des utilisateurs via l'API et un vrai scheduler
-générique (« Automatisations planifiées ») restent volontairement écartés
-(cf. ci-dessus), pas de simple report.
+**Interface HTML locale (2026-07-09)** : les 5 modules L018 (Accueil,
+Courses/Analyses, Statistiques, Historique, Administration — périmètre
+complet incluant sauvegardes/supervision) sont désormais implémentés (cf.
+ci-dessus), **strictement locale** (tourne uniquement sur la machine de
+l'utilisateur, un seul compte) — en conséquence, l'administration des
+utilisateurs via l'API et un vrai scheduler générique (« Automatisations
+planifiées ») restent volontairement écartés, pas de simple report ;
+l'Administration livrée ne fait que du déclenchement manuel des mêmes
+opérations qu'un scheduler exécuterait.
 
-Pistes possibles : modules Historique et Administration de L018 (journaux,
-sauvegardes, supervision — nécessiteraient de construire des capacités
-serveur qui n'existent pas encore) ; enrichir la fiche partant côté HTML
-(noms cheval/jockey/entraineur par jointure plutôt que N+1 appels, cf.
-« Interface HTML locale » ci-dessus) ; rebrancher le rejeu pour définir la
-vraie famille L031.2 « Historique » (performance passée du moteur) et les
-familles Value/Contexte ; sortir du Quinté+-only pour la Presse.
+Deux gaps réels de droits PostgreSQL ont été trouvés et corrigés en
+vérification (`turfia_app` n'avait accès ni à `version` ni, pour `pg_dump`,
+à `migration` — cf. migrations `20260709_1900_grant_version_turfia_app.sql`
+et `20260709_2000_grant_migration_table.sql`) : à surveiller si de nouvelles
+tables techniques sont ajoutées, le GRANT de `sql/schema/06_grants.sql` doit
+systématiquement être étendu en même temps que le schéma.
+
+Pistes possibles : enrichir la fiche partant côté HTML (noms cheval/jockey/
+entraineur par jointure plutôt que N+1 appels, cf. « Interface HTML locale »
+ci-dessus) ; rebrancher le rejeu pour définir la vraie famille L031.2
+« Historique » (performance passée du moteur) et les familles Value/
+Contexte ; sortir du Quinté+-only pour la Presse ; un vrai scheduler si le
+besoin de planification réapparaît (actuellement redimensionné en
+déclenchements manuels, cf. ci-dessus).
 
 ## Conventions de développement
 

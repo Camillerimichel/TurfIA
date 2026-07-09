@@ -152,6 +152,16 @@ th {
   border-bottom: none;
 }
 
+.actions-automatisation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.actions-automatisation button {
+  margin-top: 0;
+}
+
 form label {
   display: block;
   margin-top: 0.75rem;
@@ -162,7 +172,8 @@ form label {
 form input[type="text"],
 form input[type="password"],
 form input[type="number"],
-form input[type="date"] {
+form input[type="date"],
+form select {
   width: 100%;
   max-width: 320px;
   padding: 0.5rem;
@@ -170,6 +181,11 @@ form input[type="date"] {
   border: 1px solid var(--couleur-bordure);
   border-radius: 4px;
   font-size: 1rem;
+}
+
+.message-succes {
+  color: var(--couleur-accent);
+  margin-top: 0.75rem;
 }
 
 button {

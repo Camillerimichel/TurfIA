@@ -34,6 +34,8 @@ class Settings:
     session_duree_minutes: int
     login_max_tentatives: int
     login_fenetre_secondes: int
+    log_niveau_db: str
+    chemin_sauvegardes: str
 
 
 def load_settings(config_path: Path | None = None, load_env_file: bool = True) -> Settings:
@@ -65,6 +67,7 @@ def load_settings(config_path: Path | None = None, load_env_file: bool = True) -
     logging_cfg = raw.get("logging", {})
     securite_cfg = raw.get("securite", {})
     login_cfg = securite_cfg.get("login", {})
+    administration_cfg = raw.get("administration", {})
 
     try:
         return Settings(
@@ -79,6 +82,8 @@ def load_settings(config_path: Path | None = None, load_env_file: bool = True) -
             session_duree_minutes=int(securite_cfg.get("session_duree_minutes", 60)),
             login_max_tentatives=int(login_cfg.get("max_tentatives", 5)),
             login_fenetre_secondes=int(login_cfg.get("fenetre_secondes", 300)),
+            log_niveau_db=os.environ.get("LOG_NIVEAU_DB", logging_cfg.get("niveau_db", "WARNING")),
+            chemin_sauvegardes=administration_cfg.get("chemin_sauvegardes", "data/sauvegardes"),
         )
     except (TypeError, ValueError) as exc:
         raise ConfigurationError(f"Configuration invalide : {exc}") from exc

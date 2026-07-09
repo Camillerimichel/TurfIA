@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TurfIA — Administration</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <header class="entete">
+    <h1><a href="/">TurfIA</a></h1>
+    <nav>
+      <a href="/">Accueil</a>
+      <a href="/historique.html">Historique</a>
+      <a href="/statistiques.html">Statistiques</a>
+      <a href="/administration.html" class="actif">Administration</a>
+    </nav>
+    <div class="info-utilisateur">
+      <span id="nom-utilisateur"></span>
+      <button id="bouton-deconnexion">Déconnexion</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="carte">
+      <h2>Supervision</h2>
+      <div id="section-supervision">Chargement…</div>
+    </section>
+
+    <section class="carte">
+      <h2>Automatisations</h2>
+      <p class="note">Déclenchement manuel (pas d'ordonnanceur automatique dans cette tranche) — chaque action relance les mêmes services que les scripts CLI correspondants.</p>
+      <div class="actions-automatisation">
+        <button id="bouton-collecte" type="button">Collecter le programme du jour</button>
+        <button id="bouton-analyse-jour" type="button">Analyser les courses du jour</button>
+        <button id="bouton-statistiques" type="button">Calculer les statistiques</button>
+      </div>
+      <p id="message-automatisation" hidden></p>
+      <div class="tableau-scroll" id="section-taches"></div>
+    </section>
+
+    <section class="carte">
+      <h2>Sauvegardes</h2>
+      <button id="bouton-sauvegarde" type="button">Lancer une sauvegarde</button>
+      <p id="message-sauvegarde" hidden></p>
+      <div class="tableau-scroll" id="section-sauvegardes"></div>
+    </section>
+
+    <section class="carte">
+      <h2>Versions publiées</h2>
+      <p class="note">Publiées via <code>scripts/publier_version.py</code> (geste de déploiement), pas depuis cette page.</p>
+      <div class="tableau-scroll" id="section-versions"></div>
+    </section>
+
+    <section class="carte">
+      <h2>Paramètres</h2>
+      <p class="note">Pondérations des sous-scores/sous-risques (cf. L011 §10.4) — modification immédiate, sans redémarrage.</p>
+      <div class="tableau-scroll" id="section-parametres"></div>
+    </section>
+
+    <section class="carte">
+      <h2>Journaux</h2>
+      <form id="formulaire-journaux">
+        <label for="filtre-niveau">Niveau</label>
+        <select id="filtre-niveau">
+          <option value="">Tous</option>
+          <option value="WARNING">WARNING</option>
+          <option value="ERROR">ERROR</option>
+          <option value="CRITICAL">CRITICAL</option>
+        </select>
+        <label for="filtre-composant">Composant</label>
+        <input type="text" id="filtre-composant" placeholder="ex. api.errors" />
+        <button type="submit">Filtrer</button>
+      </form>
+      <div class="tableau-scroll" id="section-journaux"></div>
+    </section>
+  </main>
+
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/administration.js"></script>
+</body>
+</html>
