@@ -8,7 +8,9 @@ exposé).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.dependencies.auth import ECRITURE_DONNEES, LECTURE, exiger_roles
 from api.dependencies.db import get_audit_repository, get_course_repository, get_referentiel_repository
@@ -60,6 +62,18 @@ def create_reunion(
     reunion = repo.create_reunion(Reunion(**payload.model_dump()))
     audit_repo.enregistrer(utilisateur.id, "creation_reunion", objet=str(reunion.id), nouvel_etat=serialiser_etat(reunion))
     return Enveloppe(data=ReunionOut.model_validate(reunion))
+
+
+@router.get("/reunions", response_model=Enveloppe[list[ReunionOut]])
+def list_reunions(
+    date_jour: date = Query(default_factory=date.today, alias="date"),
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
+) -> Enveloppe[list[ReunionOut]]:
+    """Réunions d'une date donnée (défaut : aujourd'hui) — point d'entrée de
+    navigation pour l'interface HTML (cf. L018 §5)."""
+    reunions = repo.list_reunions_by_date(date_jour)
+    return Enveloppe(data=[ReunionOut.model_validate(r) for r in reunions])
 
 
 @router.get("/reunions/{reunion_id}", response_model=Enveloppe[ReunionOut])

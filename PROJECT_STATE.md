@@ -353,16 +353,60 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
   FK `ON DELETE RESTRICT` (déjà en place, cf. L011 §9) est traduite en 409 plutôt
   que vérifiée à l'avance (évite une fenêtre de concurrence). **Jamais** de PATCH/
   DELETE sur résultat/cote/analyse et dérivés (historisés, cf. L011 §15).
+- **Interface HTML locale (2026-07-09)** (`html/`, L018) — périmètre Accueil +
+  Courses/Analyses + Statistiques (Historique et Administration reportés, cf.
+  « Explicitement hors périmètre »).
+  - **Architecture délibérément minimale** (cf. L018 §2.2/§3.3, décision
+    validée avec l'utilisateur) : aucune nouvelle dépendance — pas de Jinja2
+    (pas de rendu serveur), pas de framework JS, pas de build step.
+    `html/templates/*.html` sont des pages statiques pures ; tout le contenu
+    dynamique vient du JS via `fetch()` (`html/static/js/api.js` centralise
+    l'appel API, l'en-tête `Authorization: Bearer`, le parsing de l'enveloppe
+    `{success, data}`/`{success:false, error}`, et la redirection vers
+    `login.html` sur 401). Navigation par query string
+    (`course.html?id=42`), pas de routeur JS. Jeton stocké en `localStorage`
+    (pas de cookies -> pas de CSRF à protéger, L018 §15 satisfait par
+    construction). `api/main.py` monte `StaticFiles` (déjà fourni par
+    Starlette/FastAPI, aucune dépendance ajoutée) sur `/static` et `/` (après
+    tous les routeurs API, pour que `/api/v1/*` reste prioritaire).
+  - **Gap réel trouvé en explorant l'API existante** : aucune route ne
+    listait les réunions par date (seulement par id connu) — impossible de
+    construire « réunions du jour ». Ajout de
+    `CourseRepository.list_reunions_by_date(jour)` +
+    `GET /reunions?date=YYYY-MM-DD` (défaut : aujourd'hui).
+  - **Compromis assumé** : `PartantOut` n'expose que des id
+    (`cheval_id`/`jockey_id`/`entraineur_id`), pas les noms — la fiche course
+    fait donc un appel `GET /chevaux/{id}` (et jockey/entraineur) par
+    partant (N+1) plutôt qu'une jointure côté repository. Accepté pour ce
+    périmètre (volume local modeste, cf. L018 §14) ; optimisable plus tard si
+    ça devient sensible. Pas de pagination réelle non plus (même logique que
+    `GET /audit`).
+  - Déclenchement d'analyse (`POST /courses/{id}/analyses/auto`) derrière une
+    confirmation JS explicite (`window.confirm`, cf. L018 §10.1 — action qui
+    engage un budget).
+  - Page Statistiques : les 6 tables déjà exposées, y compris `modeles` avec
+    les indicateurs L031.7 §5 enrichis (`roi_par_score`/`roi_par_hippodrome`/
+    `roi_par_type_pari` en JSON, dépliés dans un `<details>` par version).
+  - **Vérifié réellement** : suite de tests complète (aucune régression),
+    serveur de développement démarré, toutes les pages/assets confirmés en
+    200 via `curl`, et un parcours authentifié complet (création d'un compte
+    de vérification, login réel, appel `GET /reunions` et
+    `GET /statistiques/modeles` avec le jeton obtenu) — compte de
+    vérification nettoyé ensuite. **Limite honnête** : pas de navigateur ni
+    d'outil d'automatisation de navigateur dans cet environnement — le JS
+    lui-même (rendu, clics, formulaires) n'a pas été exécuté ni validé
+    interactivement, seule la structure serveur/réseau l'a été.
 - **Tests** : 206 tests unitaires (algorithmes dont ROI réel des 6 types de
   pari et agrégation du rejeu — ROI global + 7 indicateurs L031.7 §5,
   configuration, mappers PMU/Canalturf/Zone-Turf, sécurité — hachage mot de
   passe/jeton, limiteur de débit, dépendances RBAC, sérialisation d'audit)
-  + 99 tests d'intégration (API courses/analyses/résultats/cotes/PATCH/DELETE/
-  statistiques/audit, AuthService, authentification API bout en bout,
-  branchement presse combinée Canalturf+Zone-Turf, Professionnels/Historique/
-  Aptitude, AnalyseService (`persister=False`), ControleRoiService (6 types de
-  pari + détail par pari `controle_roi_pari`), StatistiqueService —
-  repositories/services en mémoire, `tests/integration/`), tous verts (305 au
+  + 102 tests d'intégration (API courses/analyses/résultats/cotes/PATCH/DELETE/
+  statistiques/audit/réunions par date, AuthService, authentification API bout
+  en bout, branchement presse combinée Canalturf+Zone-Turf,
+  Professionnels/Historique/Aptitude, AnalyseService (`persister=False`),
+  ControleRoiService (6 types de pari + détail par pari `controle_roi_pari`),
+  StatistiqueService — repositories/services en mémoire, `tests/integration/`),
+  tous verts (308 au
   total).
 
 ## Correction notable apportée au SAD pendant l'implémentation
@@ -487,16 +531,19 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
   dans les intentions par de simples déclenchements manuels (bouton dans
   l'interface HTML à venir, ou tâche `launchd`/cron locale appelant les scripts
   déjà existants), pas construit dans cette tranche.
-- Interface HTML (L018) — `html/` est un squelette vide.
+- **Interface HTML (L018) — Accueil/Courses-Analyses/Statistiques
+  implémentées (2026-07-09)** (cf. section dédiée ci-dessous) ; Historique et
+  Administration (journaux, sauvegardes, supervision — capacités serveur
+  inexistantes) restent hors périmètre.
 - Endpoints résultats/cotes en écriture, PATCH/DELETE sur les ressources
   référentielles/métier, authentification/RBAC réels, module Statistiques
   (ROI réel + 6 tables agrégées) et moteur de rejeu/backtesting L031.7 §4-5
   sont désormais implémentés (cf. ci-dessus). Reste hors périmètre :
   administration des utilisateurs via l'API — **décidé volontairement hors
-  périmètre** (2026-07-09) : l'interface HTML à venir (cf. « Prochaine étape »)
-  tournera uniquement en local sur la machine de l'utilisateur, un seul
-  compte (déjà créable via `scripts/creer_utilisateur.py`), pas de gestion
-  multi-utilisateurs à construire.
+  périmètre** (2026-07-09) : l'interface HTML tourne uniquement en local sur
+  la machine de l'utilisateur, un seul compte (déjà créable via
+  `scripts/creer_utilisateur.py`), pas de gestion multi-utilisateurs à
+  construire.
 - La vraie définition L031.2 de « Historique » (performance passée du moteur
   TurfIA lui-même, pas du cheval) pourrait maintenant s'appuyer sur le moteur
   de rejeu, mais ce rebranchement n'est pas fait ; seule l'interprétation
@@ -529,17 +576,20 @@ place. France Galop (niveau 1) a été explorée réellement le 2026-07-08 et
 listes sommaires, tout le détail exploitable est interdit — le mono-source PMU
 reste donc la seule source niveau 1 exploitable en l'état.
 
-**Décision d'orientation (2026-07-09)** : la prochaine étape est l'interface
-HTML (L018), mais **strictement locale** (tourne uniquement sur la machine de
-l'utilisateur, un seul compte) — en conséquence, l'administration des
-utilisateurs via l'API et un vrai scheduler générique (« Automatisations
-planifiées ») sont volontairement écartés (cf. ci-dessus), pas de simple
-report. Le correctif préalable (PATCH/POST `course` avec référentiel inconnu
-→ 404 ciblé) est fait (cf. « Limites connues de l'authentification/RBAC »).
+**Interface HTML locale (2026-07-09)** : périmètre Accueil + Courses/Analyses
++ Statistiques désormais implémenté (cf. ci-dessus), **strictement locale**
+(tourne uniquement sur la machine de l'utilisateur, un seul compte) — en
+conséquence, l'administration des utilisateurs via l'API et un vrai scheduler
+générique (« Automatisations planifiées ») restent volontairement écartés
+(cf. ci-dessus), pas de simple report.
 
-Pistes possibles au-delà de l'HTML : rebrancher le rejeu pour définir la vraie
-famille L031.2 « Historique » (performance passée du moteur) et les familles
-Value/Contexte, sortir du Quinté+-only pour la Presse.
+Pistes possibles : modules Historique et Administration de L018 (journaux,
+sauvegardes, supervision — nécessiteraient de construire des capacités
+serveur qui n'existent pas encore) ; enrichir la fiche partant côté HTML
+(noms cheval/jockey/entraineur par jointure plutôt que N+1 appels, cf.
+« Interface HTML locale » ci-dessus) ; rebrancher le rejeu pour définir la
+vraie famille L031.2 « Historique » (performance passée du moteur) et les
+familles Value/Contexte ; sortir du Quinté+-only pour la Presse.
 
 ## Conventions de développement
 

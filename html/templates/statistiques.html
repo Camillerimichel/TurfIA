@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TurfIA — Statistiques</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <header class="entete">
+    <h1><a href="/">TurfIA</a></h1>
+    <nav>
+      <a href="/">Accueil</a>
+      <a href="/statistiques.html" class="actif">Statistiques</a>
+    </nav>
+    <div class="info-utilisateur">
+      <span id="nom-utilisateur"></span>
+      <button id="bouton-deconnexion">Déconnexion</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="carte">
+      <h2>Globale</h2>
+      <div class="tableau-scroll" id="section-globale"></div>
+    </section>
+
+    <section class="carte">
+      <h2>Par tranche de score</h2>
+      <div class="tableau-scroll" id="section-scores"></div>
+    </section>
+
+    <section class="carte">
+      <h2>Par hippodrome</h2>
+      <div class="tableau-scroll" id="section-hippodromes"></div>
+    </section>
+
+    <section class="carte">
+      <h2>Par discipline</h2>
+      <div class="tableau-scroll" id="section-disciplines"></div>
+    </section>
+
+    <section class="carte">
+      <h2>Par type de pari</h2>
+      <div class="tableau-scroll" id="section-paris"></div>
+    </section>
+
+    <section class="carte">
+      <h2>Comparaison de versions de modèle</h2>
+      <p class="note">Alimenté par <code>scripts/calculer_statistiques.py</code> (agrégation par statut Pré/Finale) et par <code>scripts/rejouer_versions.py</code> (rejeu multi-versions, cf. L031.7 §4-5) — deux sémantiques différentes de « version ».</p>
+      <div class="tableau-scroll" id="section-modeles"></div>
+    </section>
+  </main>
+
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/statistiques.js"></script>
+</body>
+</html>

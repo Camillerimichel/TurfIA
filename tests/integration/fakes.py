@@ -135,6 +135,9 @@ class FakeCourseRepository:
     def get_reunion(self, reunion_id: int):
         return self.reunions.get(reunion_id)
 
+    def list_reunions_by_date(self, jour):
+        return sorted((r for r in self.reunions.values() if r.date == jour), key=lambda r: r.numero)
+
     def update_reunion(self, reunion_id: int, champs: dict):
         return self._appliquer_patch(self.reunions, reunion_id, champs)
 

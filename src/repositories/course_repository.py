@@ -100,6 +100,21 @@ class CourseRepository:
             )
             return cur.fetchone()
 
+    def list_reunions_by_date(self, jour: date) -> list[Reunion]:
+        """Réunions d'une date donnée — point d'entrée de navigation pour
+        l'interface HTML (cf. L018 §5, « Quinté du jour »/Accueil) : jusqu'ici
+        aucune route ne permettait de lister les réunions sans connaître leur
+        id à l'avance."""
+        with self._conn.cursor(row_factory=class_row(Reunion)) as cur:
+            cur.execute(
+                """
+                SELECT id, date, hippodrome_id, numero, heure_debut, heure_fin, statut
+                FROM reunion WHERE date = %s ORDER BY numero
+                """,
+                (jour,),
+            )
+            return cur.fetchall()
+
     def get_or_create_reunion(self, reunion: Reunion) -> Reunion:
         with self._conn.cursor(row_factory=class_row(Reunion)) as cur:
             cur.execute(
