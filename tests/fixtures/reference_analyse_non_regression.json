@@ -1,0 +1,42 @@
+{
+  "_note": "Référence figée pour tests/integration/test_non_regression_determinisme.py (cf. L020 §8.3). Tout écart doit être expliqué et validé explicitement (nouvelle version de règles, cf. L009 §5.1) avant de régénérer ce fichier — jamais un ajustement silencieux.",
+  "analyse": {
+    "score_confiance": 90.43,
+    "risque": 0.0,
+    "roi_theorique": -88.18,
+    "decision": "Forte opportunité",
+    "budget": 50.0
+  },
+  "partants_par_numero": {
+    "1": {
+      "rang": 1,
+      "score_turfia": 90.4320987654321,
+      "score_final": 90.4320987654321,
+      "categorie": "Base",
+      "value_bet": false,
+      "roi_theorique": -88.18247431434152
+    },
+    "2": {
+      "rang": 2,
+      "score_turfia": 68.46978557504873,
+      "score_final": 73.46978557504873,
+      "categorie": "Chance régulière",
+      "value_bet": true,
+      "roi_theorique": -85.68396026152672
+    },
+    "3": {
+      "rang": 3,
+      "score_turfia": 32.40740740740741,
+      "score_final": 32.40740740740741,
+      "categorie": "Écarté",
+      "value_bet": false,
+      "roi_theorique": -79.67224250658063
+    }
+  },
+  "paris": [
+    {"type_pari": "Simple Gagnant", "numeros": [1], "mise": 15.38, "roi_estime": -88.18},
+    {"type_pari": "Simple Placé", "numeros": [1], "mise": 11.54, "roi_estime": -88.18},
+    {"type_pari": "Simple Placé", "numeros": [2], "mise": 11.54, "roi_estime": -85.68},
+    {"type_pari": "Couplé Placé", "numeros": [1, 2], "mise": 11.54, "roi_estime": -86.93}
+  ]
+}
