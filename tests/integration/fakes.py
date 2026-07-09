@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from src.core.exceptions import BusinessRuleError, ImportationError
 from src.models.audit import Audit
 from src.models.historique import HistoriqueLigne
+from src.models.referentiels import Discipline, Distance, EtatPiste, Hippodrome, Surface
 from src.models.technique import Journal, Tache
 from src.services.collecte_service import RapportCollecte
 from src.services.supervision_service import EtatSupervision
@@ -88,6 +89,29 @@ class FakeReferentielRepository:
     def get_etat_piste(self, etat_piste_id: int):
         return self.etats_piste.get(etat_piste_id)
 
+    # -- get-or-create : utilisées par CollecteService (cf. src/repositories/
+    # referentiel_repository.py, même sémantique idempotente par nom/libellé) --
+
+    def get_or_create_hippodrome(self, nom: str, ville: str | None = None, pays: str | None = None):
+        existant = next((h for h in self.hippodromes.values() if h.nom == nom), None)
+        return existant if existant is not None else self.seed_hippodrome(Hippodrome(nom=nom, ville=ville, pays=pays))
+
+    def get_or_create_discipline(self, libelle: str):
+        existant = next((d for d in self.disciplines.values() if d.libelle == libelle), None)
+        return existant if existant is not None else self.seed_discipline(Discipline(libelle=libelle))
+
+    def get_or_create_surface(self, libelle: str):
+        existant = next((s for s in self.surfaces.values() if s.libelle == libelle), None)
+        return existant if existant is not None else self.seed_surface(Surface(libelle=libelle))
+
+    def get_or_create_etat_piste(self, libelle: str):
+        existant = next((e for e in self.etats_piste.values() if e.libelle == libelle), None)
+        return existant if existant is not None else self.seed_etat_piste(EtatPiste(libelle=libelle))
+
+    def get_or_create_distance(self, distance: int, unite: str = "m"):
+        existant = next((d for d in self.distances.values() if d.distance == distance and d.unite == unite), None)
+        return existant if existant is not None else self.seed_distance(Distance(distance=distance, unite=unite))
+
 
 class FakeCourseRepository:
     def __init__(self) -> None:
@@ -148,6 +172,17 @@ class FakeCourseRepository:
         references = any(c.reunion_id == reunion_id for c in self.courses.values())
         return self._supprimer(self.reunions, reunion_id, "la réunion", references)
 
+    def get_or_create_reunion(self, reunion):
+        existant = next(
+            (
+                r
+                for r in self.reunions.values()
+                if r.date == reunion.date and r.hippodrome_id == reunion.hippodrome_id and r.numero == reunion.numero
+            ),
+            None,
+        )
+        return existant if existant is not None else self.create_reunion(reunion)
+
     def create_course(self, course):
         course = dataclasses.replace(course, id=self._ids.next())
         self.courses[course.id] = course
@@ -164,6 +199,13 @@ class FakeCourseRepository:
             r.course_id == course_id for r in self.resultats.values()
         )
         return self._supprimer(self.courses, course_id, "la course", references)
+
+    def get_or_create_course(self, course):
+        existant = next(
+            (c for c in self.courses.values() if c.reunion_id == course.reunion_id and c.numero == course.numero),
+            None,
+        )
+        return existant if existant is not None else self.create_course(course)
 
     def list_courses_by_reunion(self, reunion_id: int):
         return [c for c in self.courses.values() if c.reunion_id == reunion_id]
@@ -192,6 +234,10 @@ class FakeCourseRepository:
         references = any(p.cheval_id == cheval_id for p in self.partants.values())
         return self._supprimer(self.chevaux, cheval_id, "le cheval", references)
 
+    def get_or_create_cheval(self, cheval):
+        existant = next((c for c in self.chevaux.values() if c.nom == cheval.nom), None)
+        return existant if existant is not None else self.create_cheval(cheval)
+
     def create_jockey(self, jockey):
         jockey = dataclasses.replace(jockey, id=self._ids.next())
         self.jockeys[jockey.id] = jockey
@@ -207,6 +253,10 @@ class FakeCourseRepository:
         references = any(p.jockey_id == jockey_id for p in self.partants.values())
         return self._supprimer(self.jockeys, jockey_id, "le jockey", references)
 
+    def get_or_create_jockey(self, jockey):
+        existant = next((j for j in self.jockeys.values() if j.nom == jockey.nom), None)
+        return existant if existant is not None else self.create_jockey(jockey)
+
     def create_entraineur(self, entraineur):
         entraineur = dataclasses.replace(entraineur, id=self._ids.next())
         self.entraineurs[entraineur.id] = entraineur
@@ -221,6 +271,10 @@ class FakeCourseRepository:
     def delete_entraineur(self, entraineur_id: int) -> bool:
         references = any(p.entraineur_id == entraineur_id for p in self.partants.values())
         return self._supprimer(self.entraineurs, entraineur_id, "l'entraîneur", references)
+
+    def get_or_create_entraineur(self, entraineur):
+        existant = next((e for e in self.entraineurs.values() if e.nom == entraineur.nom), None)
+        return existant if existant is not None else self.create_entraineur(entraineur)
 
     def create_partant(self, partant):
         partant = dataclasses.replace(partant, id=self._ids.next())
@@ -238,6 +292,13 @@ class FakeCourseRepository:
             partant_id in self.cotes_historique and len(self.cotes_historique[partant_id]) > 0
         )
         return self._supprimer(self.partants, partant_id, "le partant", references)
+
+    def get_or_create_partant(self, partant):
+        existant = next(
+            (p for p in self.partants.values() if p.course_id == partant.course_id and p.numero == partant.numero),
+            None,
+        )
+        return existant if existant is not None else self.create_partant(partant)
 
     def list_partants_by_course(self, course_id: int):
         return [p for p in self.partants.values() if p.course_id == course_id]
@@ -384,16 +445,37 @@ class FakeAnalyseRepository:
 class FakePMUClient:
     """Remplace PMUClient dans les tests d'intégration — aucun accès réseau (cf.
     L020 §2.2). `rapports_par_course` associe (numero_reunion, numero_course) à la
-    réponse brute simulée de /rapports-definitifs."""
+    réponse brute simulée de /rapports-definitifs ; `programme` est la réponse
+    brute simulée de /programme (ou `None` -> erreur) ; `participants_par_course`
+    associe (numero_reunion, numero_course) à la réponse brute simulée de
+    /participants (cf. CollecteService)."""
 
-    def __init__(self, rapports_par_course: dict | None = None) -> None:
+    def __init__(
+        self,
+        rapports_par_course: dict | None = None,
+        programme: dict | None = None,
+        participants_par_course: dict | None = None,
+    ) -> None:
         self.rapports_par_course = rapports_par_course or {}
+        self.programme = programme
+        self.participants_par_course = participants_par_course or {}
 
     def recuperer_rapports_definitifs(self, jour, num_reunion: int, num_course: int) -> list[dict]:
         cle = (num_reunion, num_course)
         if cle not in self.rapports_par_course:
             raise ImportationError(f"Rapports non disponibles pour R{num_reunion}C{num_course} (simulé).")
         return self.rapports_par_course[cle]
+
+    def recuperer_programme(self, jour) -> dict:
+        if self.programme is None:
+            raise ImportationError("Programme non disponible (simulé).")
+        return self.programme
+
+    def recuperer_participants(self, jour, num_reunion: int, num_course: int) -> dict:
+        cle = (num_reunion, num_course)
+        if cle not in self.participants_par_course:
+            raise ImportationError(f"Participants non disponibles pour R{num_reunion}C{num_course} (simulé).")
+        return self.participants_par_course[cle]
 
 
 class FakeUtilisateurRepository:

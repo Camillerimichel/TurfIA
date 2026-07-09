@@ -21,4 +21,4 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Lancer la suite de tests
-        run: pytest tests/ -q
+        run: pytest tests/ -q --cov=src/algorithms --cov=src/services --cov-report=term-missing

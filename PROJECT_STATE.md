@@ -473,12 +473,36 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
       PostgreSQL local (latence ~9 ms, ~96 Go disponibles).
 - **Tests** : 215 tests unitaires (dont `AutomatisationService`,
   `DbLogHandler` — anti-réentrance/absence de crash sur DB indisponible,
-  `SupervisionService`) + 118 tests d'intégration (dont Historique — filtres
-  date/hippodrome/type de pari/décision — et Administration — RBAC,
+  `SupervisionService`) + 139 tests d'intégration (dont Historique — filtres
+  date/hippodrome/type de pari/décision —, Administration — RBAC,
   journaux, les 3 automatisations, sauvegarde réussie/échouée, versions,
-  paramètres, supervision) — repositories/services en mémoire,
-  `tests/integration/`), tous verts (333 au
-  total).
+  paramètres, supervision —, `CollecteService` et `ConsensusPresseService`,
+  cf. ci-dessous) — repositories/services en mémoire, `tests/integration/`),
+  tous verts (354 au total).
+- **Couverture de tests mesurée (2026-07-09, `pytest-cov`, cf. L020 §14.1
+  cible ≥80 % sur `algorithms`/`services`)** : 90 % sur `src/algorithms`+
+  `src/services` (81 % avant cette mesure). Deux vrais trous de couverture
+  trouvés et fermés — `CollecteService` (30 % -> 100 %) et
+  `ConsensusPresseService` (29 % -> 100 %) n'avaient jusqu'ici **aucun**
+  test dédié malgré des fixtures déjà présentes pour cela
+  (`tests/fixtures/pmu_programme_echantillon.json`/
+  `pmu_participants_echantillon.json`, `FakePMUClient`, fixtures HTML
+  Canalturf/Zone-Turf déjà utilisées pour tester les mappers). Nouveaux
+  `tests/integration/test_collecte_service.py` (import réunion/course/
+  partants sur échantillon PMU réel, réutilisation idempotente de
+  l'hippodrome entre réunions, isolation d'une course/réunion en échec sans
+  interrompre les suivantes — cf. L023 §5.2, unité de distance PMU inconnue)
+  et `test_consensus_presse_service.py` (combinaison des deux sources,
+  confirmation indépendante de la course Quinté+ du jour, isolation d'une
+  source en panne — HTML minimal pour le scénario où les deux sources
+  doivent confirmer la même course, sinon fixtures réelles déjà capturées).
+  Nécessite d'étendre `FakeReferentielRepository`/`FakeCourseRepository`
+  avec les méthodes `get_or_create_*` (absentes jusqu'ici, jamais utilisées
+  par les tests API existants) et `FakePMUClient` avec
+  `recuperer_programme`/`recuperer_participants`. `pytest-cov` ajouté à
+  `requirements.txt` et à la CI (`--cov=src/algorithms --cov=src/services
+  --cov-report=term-missing`, rapport seul, pas de seuil bloquant — cf.
+  L020 §14.1 « une couverture élevée n'est pas une fin en soi »).
 
 ## Correction notable apportée au SAD pendant l'implémentation
 
