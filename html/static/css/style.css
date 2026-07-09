@@ -1,0 +1,219 @@
+/* Feuille de style unique de l'interface HTML TurfIA — cf. L018 §3.2, §12
+   (responsive), §13 (accessibilité : contrastes, tailles de police lisibles).
+   Volontairement minimale (usage strictement local, un seul utilisateur). */
+
+:root {
+  --couleur-fond: #f5f6f8;
+  --couleur-carte: #ffffff;
+  --couleur-texte: #1f2430;
+  --couleur-accent: #1a5f3c;
+  --couleur-accent-clair: #e6f2ec;
+  --couleur-bordure: #d9dde3;
+  --couleur-erreur: #b3261e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  color: var(--couleur-texte);
+  background: var(--couleur-fond);
+}
+
+a {
+  color: var(--couleur-accent);
+}
+
+.entete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--couleur-carte);
+  border-bottom: 1px solid var(--couleur-bordure);
+}
+
+.entete h1 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.entete h1 a {
+  text-decoration: none;
+  color: var(--couleur-texte);
+}
+
+.entete nav {
+  display: flex;
+  gap: 1rem;
+  flex: 1;
+}
+
+.entete nav a {
+  text-decoration: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.entete nav a.actif {
+  background: var(--couleur-accent-clair);
+  color: var(--couleur-accent);
+  font-weight: 600;
+}
+
+.info-utilisateur {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+}
+
+main {
+  max-width: 1100px;
+  margin: 1.5rem auto;
+  padding: 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.carte {
+  background: var(--couleur-carte);
+  border: 1px solid var(--couleur-bordure);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+}
+
+.carte h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+}
+
+.note {
+  color: #555b66;
+  font-size: 0.85rem;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--couleur-bordure);
+}
+
+th {
+  background: var(--couleur-accent-clair);
+}
+
+/* Les tableaux larges défilent horizontalement plutôt que de casser la mise
+   en page sur petit écran (cf. L018 §12). */
+.tableau-scroll {
+  overflow-x: auto;
+}
+
+.bloc-reunion, .bloc-modele {
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px dashed var(--couleur-bordure);
+}
+
+.bloc-course {
+  margin: 0.5rem 0 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--couleur-fond);
+  border-radius: 6px;
+}
+
+.bloc-course h4 {
+  margin: 0 0 0.35rem 0;
+  font-size: 1rem;
+}
+
+.bloc-paris {
+  font-size: 0.9rem;
+}
+
+.liste-paris {
+  margin: 0.25rem 0 0 0;
+  padding-left: 1.25rem;
+}
+
+.bloc-reunion:last-child, .bloc-modele:last-child {
+  border-bottom: none;
+}
+
+form label {
+  display: block;
+  margin-top: 0.75rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+form input[type="text"],
+form input[type="password"],
+form input[type="number"],
+form input[type="date"] {
+  width: 100%;
+  max-width: 320px;
+  padding: 0.5rem;
+  margin-top: 0.25rem;
+  border: 1px solid var(--couleur-bordure);
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+button {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  background: var(--couleur-accent);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+.message-erreur, #message-analyse {
+  color: var(--couleur-erreur);
+  margin-top: 0.75rem;
+}
+
+.page-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.carte-connexion {
+  background: var(--couleur-carte);
+  border: 1px solid var(--couleur-bordure);
+  border-radius: 8px;
+  padding: 2rem;
+  width: 100%;
+  max-width: 360px;
+}
+
+@media (max-width: 640px) {
+  .entete {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  main {
+    margin: 1rem auto;
+  }
+}

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TurfIA — Connexion</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body class="page-login">
+  <main class="carte-connexion">
+    <h1>TurfIA</h1>
+    <form id="formulaire-connexion">
+      <label for="login">Identifiant</label>
+      <input type="text" id="login" name="login" required autofocus />
+
+      <label for="mot-de-passe">Mot de passe</label>
+      <input type="password" id="mot-de-passe" name="mot_de_passe" required />
+
+      <button type="submit">Se connecter</button>
+      <p id="message-erreur" class="message-erreur" role="alert" hidden></p>
+    </form>
+  </main>
+
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/login.js"></script>
+</body>
+</html>

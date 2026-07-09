@@ -199,3 +199,27 @@ def test_analyse_sur_course_inconnue_retourne_404(client):
         json={"partants": [], "sous_risques_course": {}},
     )
     assert reponse.status_code == 404
+
+
+def test_list_reunions_par_date(client):
+    client.post("/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": 1, "numero": 1})
+    client.post("/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": 1, "numero": 2})
+    client.post("/api/v1/reunions", json={"date": "2026-07-08", "hippodrome_id": 1, "numero": 1})
+
+    reponse = client.get("/api/v1/reunions", params={"date": "2026-07-07"})
+    assert reponse.status_code == 200
+    corps = reponse.json()["data"]
+    assert len(corps) == 2
+    assert [r["numero"] for r in corps] == [1, 2]
+
+
+def test_list_reunions_date_sans_reunion_est_vide(client):
+    reponse = client.get("/api/v1/reunions", params={"date": "2026-01-01"})
+    assert reponse.status_code == 200
+    assert reponse.json()["data"] == []
+
+
+def test_list_reunions_sans_date_utilise_aujourdhui(client):
+    reponse = client.get("/api/v1/reunions")
+    assert reponse.status_code == 200
+    assert reponse.json()["data"] == []

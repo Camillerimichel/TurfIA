@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TurfIA — Accueil</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <header class="entete">
+    <h1><a href="/">TurfIA</a></h1>
+    <nav>
+      <a href="/" class="actif">Accueil</a>
+      <a href="/statistiques.html">Statistiques</a>
+    </nav>
+    <div class="info-utilisateur">
+      <span id="nom-utilisateur"></span>
+      <button id="bouton-deconnexion">Déconnexion</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="carte">
+      <h2>ROI global</h2>
+      <div id="widget-roi-global">Chargement…</div>
+    </section>
+
+    <section class="carte">
+      <h2>Réunions et paris du jour</h2>
+      <label for="selecteur-date">Date</label>
+      <input type="date" id="selecteur-date" />
+      <div id="liste-reunions">Chargement…</div>
+    </section>
+  </main>
+
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/accueil.js"></script>
+</body>
+</html>

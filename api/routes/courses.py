@@ -8,7 +8,9 @@ exposé).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.dependencies.auth import ECRITURE_DONNEES, LECTURE, exiger_roles
 from api.dependencies.db import get_audit_repository, get_course_repository, get_referentiel_repository
@@ -62,6 +64,18 @@ def create_reunion(
     return Enveloppe(data=ReunionOut.model_validate(reunion))
 
 
+@router.get("/reunions", response_model=Enveloppe[list[ReunionOut]])
+def list_reunions(
+    date_jour: date = Query(default_factory=date.today, alias="date"),
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
+) -> Enveloppe[list[ReunionOut]]:
+    """Réunions d'une date donnée (défaut : aujourd'hui) — point d'entrée de
+    navigation pour l'interface HTML (cf. L018 §5)."""
+    reunions = repo.list_reunions_by_date(date_jour)
+    return Enveloppe(data=[ReunionOut.model_validate(r) for r in reunions])
+
+
 @router.get("/reunions/{reunion_id}", response_model=Enveloppe[ReunionOut])
 def get_reunion(
     reunion_id: int,
@@ -108,17 +122,37 @@ def delete_reunion(
     return Enveloppe(data={"supprime": True})
 
 
+def _valider_referentiels_course(champs: dict, referentiel_repo: ReferentielRepository) -> None:
+    """Vérifie l'existence des référentiels optionnels d'une course avant
+    écriture (404 ciblé plutôt qu'une violation de contrainte FK brute en 500,
+    même principe déjà appliqué à `jockey_id`/`entraineur_id` sur un partant)."""
+    verifications = {
+        "discipline_id": ("Discipline", referentiel_repo.get_discipline),
+        "type_course_id": ("Type de course", referentiel_repo.get_type_course),
+        "distance_id": ("Distance", referentiel_repo.get_distance),
+        "surface_id": ("Surface", referentiel_repo.get_surface),
+        "etat_piste_id": ("État de piste", referentiel_repo.get_etat_piste),
+    }
+    for champ, (libelle, getter) in verifications.items():
+        valeur = champs.get(champ)
+        if valeur is not None and getter(valeur) is None:
+            raise HTTPException(status_code=404, detail=f"{libelle} {valeur} introuvable.")
+
+
 @router.post("/reunions/{reunion_id}/courses", response_model=Enveloppe[CourseOut], status_code=201)
 def create_course(
     reunion_id: int,
     payload: CourseIn,
     repo: CourseRepository = Depends(get_course_repository),
+    referentiel_repo: ReferentielRepository = Depends(get_referentiel_repository),
     audit_repo: AuditRepository = Depends(get_audit_repository),
     utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[CourseOut]:
     if repo.get_reunion(reunion_id) is None:
         raise HTTPException(status_code=404, detail=f"Réunion {reunion_id} introuvable.")
-    course = repo.create_course(Course(reunion_id=reunion_id, **payload.model_dump()))
+    champs = payload.model_dump()
+    _valider_referentiels_course(champs, referentiel_repo)
+    course = repo.create_course(Course(reunion_id=reunion_id, **champs))
     audit_repo.enregistrer(utilisateur.id, "creation_course", objet=str(course.id), nouvel_etat=serialiser_etat(course))
     return Enveloppe(data=CourseOut.model_validate(course))
 
@@ -152,13 +186,16 @@ def update_course(
     course_id: int,
     payload: CoursePatch,
     repo: CourseRepository = Depends(get_course_repository),
+    referentiel_repo: ReferentielRepository = Depends(get_referentiel_repository),
     audit_repo: AuditRepository = Depends(get_audit_repository),
     utilisateur: Utilisateur = Depends(exiger_roles(*ECRITURE_DONNEES)),
 ) -> Enveloppe[CourseOut]:
     ancien = repo.get_course(course_id)
     if ancien is None:
         raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
-    course = repo.update_course(course_id, payload.model_dump(exclude_unset=True))
+    champs = payload.model_dump(exclude_unset=True)
+    _valider_referentiels_course(champs, referentiel_repo)
+    course = repo.update_course(course_id, champs)
     audit_repo.enregistrer(
         utilisateur.id, "modification_course", objet=str(course_id),
         ancien_etat=serialiser_etat(ancien), nouvel_etat=serialiser_etat(course),
