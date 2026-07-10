@@ -118,6 +118,20 @@ function construireBlocParis(detail) {
     const item = document.createElement("li");
     const selection = pari.combinaison_lisible ?? pari.combinaison ?? "—";
     item.textContent = `${pari.type_pari} — ${selection} — mise ${formaterMontant(pari.mise)} €`;
+
+    // Un Quinté Flexi joue plusieurs combinaisons de 5 chevaux à la fois (cf.
+    // L031.6 §5) — le pool de chevaux seul ne montre pas les tickets réellement joués.
+    if (pari.sous_combinaisons) {
+      const sousListe = document.createElement("ul");
+      sousListe.className = "liste-paris";
+      for (const combinaison of pari.sous_combinaisons) {
+        const sousItem = document.createElement("li");
+        sousItem.textContent = `${combinaison} — ${formaterMontant(pari.mise_par_combinaison)} €`;
+        sousListe.appendChild(sousItem);
+      }
+      item.appendChild(sousListe);
+    }
+
     liste.appendChild(item);
   }
   bloc.appendChild(liste);

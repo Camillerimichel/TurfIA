@@ -35,8 +35,10 @@ def test_calculer_indicateur_forme_premiere_place():
     assert calculer_indicateur_forme("1p") == 100.0
 
 
-def test_calculer_indicateur_forme_absente_score_neutre():
-    assert calculer_indicateur_forme(None) == SCORE_NEUTRE_PAR_DEFAUT
+def test_calculer_indicateur_forme_absente_retourne_none():
+    """Exclue de la moyenne pondérée par l'appelant (cf.
+    PreparationDonneesService), pas comptée neutre à plein poids."""
+    assert calculer_indicateur_forme(None) is None
 
 
 def test_calculer_indicateur_forme_moyenne_sur_n_courses():
@@ -94,8 +96,8 @@ def test_calculer_indicateur_presse_combine_une_seule_source():
     )
 
 
-def test_calculer_indicateur_reussite_echantillon_insuffisant():
-    assert calculer_indicateur_reussite(nb_victoires=1, nb_courses=2, minimum_courses=3) == SCORE_NEUTRE_PAR_DEFAUT
+def test_calculer_indicateur_reussite_echantillon_insuffisant_retourne_none():
+    assert calculer_indicateur_reussite(nb_victoires=1, nb_courses=2, minimum_courses=3) is None
 
 
 def test_calculer_indicateur_reussite_toutes_victoires():
@@ -114,6 +116,14 @@ def test_calculer_indicateur_professionnels_moyenne_simple():
     assert calculer_indicateur_professionnels(score_jockey=100.0, score_entraineur=50.0, score_couple=0.0) == 50.0
 
 
+def test_calculer_indicateur_professionnels_exclut_les_variables_indisponibles():
+    assert calculer_indicateur_professionnels(score_jockey=100.0, score_entraineur=None, score_couple=None) == 100.0
+
+
+def test_calculer_indicateur_professionnels_none_si_tout_indisponible():
+    assert calculer_indicateur_professionnels(score_jockey=None, score_entraineur=None, score_couple=None) is None
+
+
 def test_calculer_indicateur_risque_taille_champ_petit_champ():
     assert calculer_indicateur_risque_taille_champ(4) == 0.0
 
@@ -122,12 +132,12 @@ def test_calculer_indicateur_risque_taille_champ_grand_champ():
     assert calculer_indicateur_risque_taille_champ(20) == 100.0
 
 
-def test_calculer_indicateur_historique_moteur_neutre_si_roi_absent():
-    assert calculer_indicateur_historique_moteur(roi=None, nb_courses=10) == SCORE_NEUTRE_PAR_DEFAUT
+def test_calculer_indicateur_historique_moteur_none_si_roi_absent():
+    assert calculer_indicateur_historique_moteur(roi=None, nb_courses=10) is None
 
 
-def test_calculer_indicateur_historique_moteur_neutre_si_echantillon_insuffisant():
-    assert calculer_indicateur_historique_moteur(roi=25.0, nb_courses=2, minimum_courses=3) == SCORE_NEUTRE_PAR_DEFAUT
+def test_calculer_indicateur_historique_moteur_none_si_echantillon_insuffisant():
+    assert calculer_indicateur_historique_moteur(roi=25.0, nb_courses=2, minimum_courses=3) is None
 
 
 def test_calculer_indicateur_historique_moteur_roi_nul_est_neutre():

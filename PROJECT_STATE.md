@@ -606,9 +606,13 @@ l'utilisateur : **remplacer** cette interprétation par le vrai signal moteur
 (`src/algorithms/indicateurs.py`) lit le ROI réel du moteur à l'hippodrome de
 la course via `StatistiqueRepository.get_dernier_hippodrome` (dernière ligne
 de `statistique_hippodrome`, alimentée par les vrais `controle_roi` via
-`scripts/calculer_statistiques.py`) : score neutre (50) si aucune statistique
-ou échantillon `< 3` courses, sinon ROI normalisé sur `[-30 %, +30 %]`
-(bornes assumées, clampées au-delà — aucune formule SAD pour ces bornes).
+`scripts/calculer_statistiques.py`) : ROI normalisé sur `[-30 %, +30 %]`
+(bornes assumées, clampées au-delà — aucune formule SAD pour ces bornes) si
+aucune statistique ou échantillon `< 3` courses, la famille est **exclue** de
+la moyenne pondérée plutôt que comptée à un score neutre (revu le
+2026-07-10, cf. « Diagnostic demandé par l'utilisateur » plus bas et L031.2
+§6.1 — la version neutre-à-plein-poids initiale s'est révélée être un vrai
+bug de dilution du score, pas un choix à conserver).
 `PreparationDonneesService` prend désormais un `StatistiqueRepository` requis
 (pas optionnel : préserve l'invariant « Historique toujours calculée »).
 `CourseRepository.compter_performances_cheval_hippodrome` (performance du
@@ -1004,6 +1008,164 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
     Vérifié réellement (transaction annulée) : 9 analyses candidates avant
     filtre, 4 réellement tentées et calculées avec succès, 0 WARNING (contre
     plusieurs dizaines observées dans le journal avant ce correctif).
+  - **Vrai bug trouvé (retour utilisateur : « tu dupliques les courses ») et
+    corrigé : la page Historique montrait une ligne par VERSION d'analyse,
+    pas une ligne par course.** `HistoriqueRepository.rechercher` joignait
+    `analyses a ON a.course_id = c.id` sans filtrer sur la version — une
+    course réanalysée plusieurs fois dans la journée (cf. L033, chaque passage
+    horaire vise une nouvelle version) apparaissait donc une fois par version
+    calculée. Corrigé : la jointure ne retient que `a.version = MAX(version)`
+    par course (sous-requête corrélée). Vérifié réellement : 111 lignes -> 47
+    lignes sur les données du jour, 0 course avec plusieurs versions dans le
+    résultat (contre 19 avant correctif, jusqu'à 5 versions pour une même
+    course).
+  - Filtre décision de l'Historique élargi en choix multiples (mêmes cases à
+    cocher qu'Accueil, "ou" logique), par défaut tout sauf "Ne pas jouer" —
+    `HistoriqueFiltres.decision` (singulier) devient `decisions: list[str]`,
+    `GET /historique?decisions=...` accepte plusieurs valeurs répétées
+    (`a.decision = ANY(%s)` côté SQL). Colonne « Version » retirée du tableau
+    (une seule version affichée désormais, l'information n'apporte plus rien
+    à cette vue — l'historique complet des versions reste sur la fiche course).
+  - **Réponse à « quand as-tu les résultats définitifs avec les gains ? »** :
+    jusqu'ici, uniquement de façon manuelle (bouton « Calculer les
+    statistiques » de l'Administration, ou `python scripts/
+    calculer_statistiques.py`) — décision explicite du 2026-07-09 (« pas
+    d'intégration à un ordonnanceur dans cette tranche »). **Revu à la demande
+    de l'utilisateur (2026-07-10, "oui")** : `scripts/
+    rafraichir_et_analyser_jour.py` gagne une 3ᵉ étape (`calcul_statistiques`,
+    même tâche/nom que le déclenchement manuel) qui enchaîne
+    `ControleRoiService.calculer_controles_manquants()` (désormais filtré,
+    cf. ci-dessus — ignore silencieusement les courses trop récentes) puis
+    `StatistiqueService.calculer_toutes()`, à chaque passage horaire (9h-23h,
+    sans fenêtre de coupure contrairement à l'analyse : cette étape est
+    justement utile pour les courses déjà parties). `calcul_statistiques`
+    ajoutée à `TACHES_QUOTIDIENNES` (tableau de bord Cron). Cela ne revient
+    pas sur la décision du 2026-07-09 (pas de scheduler générique) : c'est la
+    même réutilisation d'un script CLI déjà existant que pour les deux
+    premières étapes (cf. L033 ADR-002). Vérifié réellement en conditions de
+    production (launchd, pas un test) : les 3 tâches s'enchaînent et se
+    terminent en succès (`collecte_programme_jour`, `analyse_courses_jour`,
+    `calcul_statistiques`, tables recalculées), visibles dans le tableau de
+    bord Cron.
+- **Diagnostic demandé par l'utilisateur (« quasiment aucune course n'est
+  jouable, redonne-moi la méthode de calcul du score de confiance ») —
+  vrai bug trouvé et corrigé, en plus de l'explication.**
+  - Score de confiance = score final de la tête de liste après classement
+    (cf. L031.1 §9, `AnalyseService.analyser_course`) = Score TurfIA + Bonus
+    Value Bet (5 si value bet) − Malus Risque (0,2 × risque, cf. L031.6 §3).
+    Score TurfIA = moyenne pondérée des sous-scores des familles réellement
+    présentes pour ce partant (poids par défaut tous à 1,0, paramétrables via
+    `parametre.poids_score.*`) — une famille absente (ex. Presse hors
+    Quinté+) est exclue de la moyenne, pas comptée comme neutre.
+  - **Vrai bug trouvé en creusant pourquoi le score reste bas : la famille
+    "Forme" valait le score neutre (50) pour 100 % des partants, tout le
+    temps.** `CollecteService._importer_partant` n'a jamais extrait le champ
+    `musique` des données PMU (`participant_brut.get("musique")` absent du
+    code) alors que la donnée existe bien réellement (vérifié par un appel
+    PMU réel : `"0aDa2a2a2a(25)Da1a4aDm"` pour un partant) — `calculer_
+    indicateur_forme` recevait donc systématiquement `None` et retournait le
+    score neutre. Vérifié réellement en base : 0 partant sur 609 avec une
+    musique renseignée. Corrigé : `musique` extraite et portée par `Partant`
+    (pas `Cheval` — la musique reflète l'historique du cheval tel que connu
+    pour CETTE course précise, jamais écrasée entre courses) ;
+    `PreparationDonneesService` lit désormais `partant.musique` (supprime au
+    passage un `get_cheval` par partant, plus nécessaire). N'affecte que les
+    NOUVEAUX partants collectés à partir de maintenant (`get_or_create_partant`
+    ne met jamais à jour une ligne déjà existante, cf. `ON CONFLICT ... DO
+    NOTHING`) — les partants déjà collectés aujourd'hui restent sans musique
+    tant qu'ils ne sont pas re-collectés depuis zéro.
+  - Concrètement, avec ce bug, sur une course réelle à 15 partants observée
+    en vérifiant ce diagnostic (course 150) : Forme = 50 et Professionnels ≈
+    50 pour tous, Historique = 41,7 pour tous (identique par hippodrome, peu
+    de données réelles accumulées à ce stade) — seul Marché variait vraiment.
+    Un seul partant (le favori du marché) dépassait tout juste le seuil de
+    60 (score 60,4) ; tous les autres restaient sous 52. Une fois "Forme"
+    réellement alimentée, ce goulot d'étranglement s'atténue mécaniquement
+    (plus une seule famille sur 3-4 disponibles porte l'information) — mais
+    "Historique"/"Professionnels"/"Aptitude" resteront proches du neutre tant
+    que peu de courses réelles auront été contrôlées (`controle_roi`) et que
+    peu de statistiques jockey/entraîneur/cheval-dans-ces-conditions auront
+    atteint le seuil minimal de 3 courses (cf. `calculer_indicateur_reussite`,
+    `calculer_indicateur_historique_moteur`) — pas un bug, une limite de
+    démarrage qui se résorbe avec l'accumulation de données réelles.
+  - **Suite au retour utilisateur (« si si peu de courses sont jouables,
+    c'est qu'il y a un autre souci » + comparaison à un concurrent obtenant
+    75/100 « jouer normalement » sur le même Quinté+) : vrai bug d'incohérence
+    trouvé et corrigé dans le calcul du Score TurfIA lui-même**, au-delà du
+    bug `musique` ci-dessus. Une famille réellement absente (ex. Presse hors
+    Quinté+) était déjà exclue de la moyenne pondérée — mais une famille
+    présente dont l'échantillon est statistiquement insuffisant (`nb_courses
+    < minimum_courses`, cf. `calculer_indicateur_reussite`/`calculer_
+    indicateur_historique_moteur`) ou dont la musique est absente (cf.
+    `calculer_indicateur_forme`) retombait à un score neutre (50) compté à
+    PLEIN POIDS dans la moyenne — traitement incohérent de deux situations
+    pourtant équivalentes (« je ne sais pas »), qui diluait systématiquement
+    le score dès qu'une famille manquait de données suffisantes (quasiment
+    toujours en tout début de vie du moteur : peu d'hippodromes/jockeys/
+    entraîneurs ont encore 3 courses réelles contrôlées). Ni un bug SAD (L031.2
+    §5 est muet sur la gestion des échantillons insuffisants, aucune formule
+    n'y est imposée) ni une recalibration des pondérations (inchangées,
+    toutes à 1,0 — cf. L031.2 §10, toute pondération doit être validée sur
+    historique avant adoption, ce que le peu de données réelles actuelles ne
+    permet pas encore) : uniquement une correction de cohérence interne, déjà
+    appliquée à "aptitude"/"presse" absents, désormais étendue à "forme" (cf.
+    `calculer_indicateur_forme` retourne `None` si aucune musique),
+    "professionnels" (`calculer_indicateur_professionnels` exclut les
+    variables `None`, `None` si les 3 le sont) et "historique". Corrigé dans
+    `src/algorithms/indicateurs.py` (signatures `float | None`) et
+    `PreparationDonneesService` (n'ajoute la clé au dict `sous_scores` que si
+    la valeur n'est pas `None`).
+  - Vérifié réellement (transaction annulée) : sur la même course 150 utilisée
+    pour le diagnostic, le meilleur score passe de 57,9 à 60,6 (franchit
+    « Jeu prudent »). Sur le Quinté+ réel du jour (course 109, avec un vrai
+    consensus presse Canalturf/Zone-Turf) : le partant en tête atteint
+    désormais **81,7 (« Jeu normal »)**, un second à 72,0 — directement
+    comparable à l'ordre de grandeur cité par l'utilisateur (75/100, « jouer
+    normalement ») pour un système concurrent sur le même type de course,
+    alors qu'avant ce correctif la dilution systématique aurait plafonné ce
+    même partant nettement plus bas.
+  - **Vérification de bout en bout (2026-07-10, ~21h06)** : automatisation
+    horaire relancée manuellement après le correctif (pas d'attente du
+    prochain passage). Preuve directe en base : la course 152 passe de
+    « Ne pas jouer » (score 49,52, version 4, calculée à 21h00 avant le
+    correctif) à **« Jeu prudent » (score 62,57, version 5, calculée à
+    21h06 après le correctif)** — même course, mêmes cotes, seul le calcul a
+    changé. Étape statistiques également relancée (tables recalculées, 0
+    nouveau contrôle ROI cette fois — aucune analyse fraîchement éligible).
+    **Limite honnête** : la course 109 (le Quinté+ cité plus haut) était déjà
+    partie au moment de cette relance — son analyse reste figée sur sa
+    dernière valeur calculée *avant* le correctif (une course déjà courue
+    n'est plus jamais réanalysée, cf. `nb_deja_parties` ci-dessus) ; le score
+    81,7 cité est celui d'un calcul à blanc (transaction annulée) avec le
+    code corrigé sur les mêmes données, pas (encore) la valeur persistée
+    officiellement pour cette course précise.
+  - **Méthode de calcul documentée dans le SAD lui-même** (pas seulement ici) :
+    cf. `docs/L031.2_ALGORITHMES_SCORE_TURFIA_v1.0.md` §6.1 (nouveau,
+    version 1.2 du document) — règle d'exclusion des familles sans donnée
+    exploitable, formalisée comme clarification d'implémentation plutôt que
+    silencieusement laissée dans le seul code.
+- **Vrai gap trouvé (retour utilisateur : « tu n'affiches nulle part les
+  combinaisons de jeux avec les paris par combinaison ») et corrigé, 2026-07-10.**
+  Un ticket Quinté Flexi joue en réalité TOUTES les combinaisons de 5 chevaux
+  parmi la sélection retenue (Bases + Chances régulières + Outsider + Tocard
+  éventuel, cf. L031.6 §5) dès que celle-ci dépasse 5 chevaux — `Pari.
+  combinaison` ne stocke que le pool des chevaux sélectionnés (ex. 6 chevaux),
+  jamais les `C(6,5)=6` combinaisons individuellement jouées. `combinaison_
+  lisible` (ajouté plus tôt) affichait donc le pool entier comme si c'était
+  une seule combinaison, sans jamais montrer les tickets réellement joués ni
+  leur mise chacun. Corrigé : nouvelle fonction `_sous_combinaisons_quinte`
+  (`api/routes/analyses.py`, même logique d'énumération que `ControleRoiService.
+  calculer_gains_pari`, déjà réutilisée pour le calcul des gains réels — ici
+  pour l'affichage) ; `ParisOut` gagne `sous_combinaisons`/`mise_par_
+  combinaison` (`None` pour tout type de pari autre que Quinté Flexi, ou si la
+  sélection compte déjà exactement 5 chevaux). Affiché par `course.js` (liste
+  dédiée sous le tableau des paris) et `accueil.js` (sous-liste imbriquée sous
+  la ligne Quinté Flexi). Vérifié par test unitaire direct (6 chevaux -> 6
+  combinaisons de 5, mise totale répartie également) — aucun Quinté Flexi
+  réel en base au moment de la vérification (peu de courses atteignent encore
+  une sélection de 6+ chevaux, cf. les limites de démarrage documentées
+  ci-dessus), donc pas de vérification bout-en-bout possible sur données
+  réelles cette fois, limite assumée et signalée honnêtement.
 - **Interface HTML (L018) — les 5 modules (Accueil/Courses-Analyses/
   Statistiques/Historique/Administration) sont désormais implémentés
   (2026-07-09)** (cf. section dédiée ci-dessus). Seul le module

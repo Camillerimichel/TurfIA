@@ -68,9 +68,10 @@ RACINE_PROJET = Path(__file__).resolve().parent.parent.parent
 TACHES_QUOTIDIENNES: list[tuple[str, str]] = [
     ("collecte_programme_jour", "Collecte du programme du jour"),
     ("analyse_courses_jour", "Analyse des courses du jour"),
+    ("calcul_statistiques", "Contrôle ROI + statistiques"),
 ]
 
-# Les deux étapes de scripts/rafraichir_et_analyser_jour.py écrivent dans les
+# Les trois étapes de scripts/rafraichir_et_analyser_jour.py écrivent dans les
 # mêmes fichiers (cf. automations/launchd/com.turfia.rafraichir-analyser.plist,
 # StandardOutPath/StandardErrorPath) — un seul journal partagé, pas un par tâche.
 CHEMIN_JOURNAL_CRON = RACINE_PROJET / "logs" / "rafraichir_et_analyser.log"

@@ -16,6 +16,18 @@ PreparationDonneesService, qui exclut plutôt que d'inventer une cote
 manquante), avant de relancer l'analyse — qui vise systématiquement une
 nouvelle version (cf. AnalyseService.prochaine_version) : la décision jouer/
 ne pas jouer peut donc changer d'une heure à l'autre, dans les deux sens.
+Troisième étape : contrôle ROI réel (rapports définitifs PMU) de chaque
+analyse qui en manque encore, puis recalcul des 6 tables statistiques — cf.
+`scripts/calculer_statistiques.py`, jusqu'ici déclenché uniquement à la main
+(bouton Administration) ; intégré ici pour que les gains réels se mettent à
+jour tout au long de la journée sans action manuelle (décision du
+2026-07-10, cf. PROJECT_STATE.md — revient sur le "pas d'intégration à un
+ordonnanceur" du 2026-07-09, qui ne visait que le scheduler générique, pas
+cette réutilisation d'un script CLI déjà existant). Contrairement à
+l'analyse, cette étape n'a pas de fenêtre de coupure : elle est justement
+utile pour les courses déjà parties (`ControleRoiService` ignore déjà de
+lui-même celles trop récentes, cf. MARGE_HOMOLOGATION_MINUTES).
+
 Chaque étape est tracée dans `tache` (même repository que `POST
 /administration/automatisations/*`) — visible dans la page Administration au
 même titre qu'un déclenchement manuel.
@@ -45,7 +57,9 @@ from src.services.analyse_service import AnalyseService
 from src.services.automatisation_service import AutomatisationService
 from src.services.collecte_service import CollecteService
 from src.services.consensus_presse_service import ConsensusPresseService
+from src.services.controle_roi_service import ControleRoiService
 from src.services.preparation_service import PreparationDonneesService
+from src.services.statistique_service import StatistiqueService
 
 MARGE_AVANT_DERNIERE_COURSE_MINUTES = 30
 
@@ -113,6 +127,20 @@ def run() -> int:
                     ),
                 )
 
+            tache_statistiques = tache_repo.demarrer("calcul_statistiques", categorie="automatisation")
+            try:
+                controle_roi_service = ControleRoiService(pmu_client, AnalyseRepository(conn), course_repo)
+                controles = controle_roi_service.calculer_controles_manquants()
+                resume_statistiques = StatistiqueService(StatistiqueRepository(conn)).calculer_toutes()
+            except Exception as exc:
+                tache_repo.terminer(tache_statistiques.id, "echec", commentaire=str(exc)[:2000])
+                raise
+            tache_repo.terminer(
+                tache_statistiques.id,
+                "succes",
+                commentaire=f"{len(controles)} contrôle(s) ROI, tables : {resume_statistiques}",
+            )
+
     print(
         f"Collecte : {rapport_collecte.nb_reunions} réunion(s), {rapport_collecte.nb_courses} course(s), "
         f"{rapport_collecte.nb_partants} partant(s)"
@@ -128,6 +156,7 @@ def run() -> int:
         )
         for course_id, message in rapport_analyse.erreurs:
             print(f"  - Course {course_id} : {message}")
+    print(f"Statistiques : {len(controles)} contrôle(s) ROI calculé(s), tables : {resume_statistiques}")
     return 0
 
 

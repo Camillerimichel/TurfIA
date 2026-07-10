@@ -65,6 +65,24 @@ def test_collecte_importe_reunion_courses_et_partants(programme_echantillon, par
     assert all(c.quinte is False for c in courses_creees)
 
 
+def test_collecte_extrait_la_musique_du_partant(programme_echantillon, participants_echantillon):
+    """Non-régression : `participant.musique` (présent dans les données PMU
+    réelles) doit être conservé sur le Partant — bug réel corrigé le
+    2026-07-10 : jamais extrait auparavant, ce qui faisait retomber la famille
+    "Forme" au score neutre pour 100 % des partants (vérifié réellement :
+    0/609 chevaux avec musique en base avant ce correctif)."""
+    service, courses, _ = _construire_service(
+        programme_echantillon, {(1, 1): participants_echantillon, (1, 2): participants_echantillon}
+    )
+
+    service.collecter_programme_du_jour(date(2026, 7, 7))
+
+    musiques = {p.numero: p.musique for p in courses.partants.values() if p.course_id == list(courses.courses)[0]}
+    assert musiques.get(1) == "1p"
+    assert musiques.get(2) == "5p7p0p0p"
+    assert musiques.get(3) == "Ap"
+
+
 def test_collecte_marque_quinte_la_course_visee_par_parisevenement(participants_echantillon):
     """cf. programme PMU réel : le Quinté+ est signalé par `parisEvenement`
     (codePari QUINTE_PLUS/E_QUINTE_PLUS) au niveau réunion, pas sur la course

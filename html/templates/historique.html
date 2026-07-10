@@ -48,14 +48,13 @@
             <option value="Quinté Flexi">Quinté Flexi</option>
           </select>
 
-          <label for="filtre-decision">Décision</label>
-          <select id="filtre-decision">
-            <option value="">Toutes</option>
-            <option value="Ne pas jouer">Ne pas jouer</option>
-            <option value="Jeu prudent">Jeu prudent</option>
-            <option value="Jeu normal">Jeu normal</option>
-            <option value="Forte opportunité">Forte opportunité</option>
-          </select>
+          <fieldset id="filtre-decision">
+            <legend>Décision</legend>
+            <label><input type="checkbox" value="Ne pas jouer" /> Ne pas jouer</label>
+            <label><input type="checkbox" value="Jeu prudent" checked /> Jeu prudent</label>
+            <label><input type="checkbox" value="Jeu normal" checked /> Jeu normal</label>
+            <label><input type="checkbox" value="Forte opportunité" checked /> Forte opportunité</label>
+          </fieldset>
 
           <button type="submit">Rechercher</button>
         </form>

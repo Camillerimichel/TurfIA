@@ -7,6 +7,8 @@ relecture ultérieure d'une analyse déjà persistée.
 
 from __future__ import annotations
 
+import itertools
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies.auth import DECLENCHEMENT_ANALYSE, LECTURE, exiger_roles
@@ -54,6 +56,29 @@ def _resoudre_combinaison(combinaison: str | None, partants_detail: dict[int, Pa
     return " + ".join(_libelle_partant(int(pid), partants_detail) for pid in combinaison.split("-"))
 
 
+def _sous_combinaisons_quinte(
+    combinaison: str, mise: float, partants_detail: dict[int, PartantDetail]
+) -> tuple[list[str], float] | None:
+    """Un ticket Quinté Flexi couvre TOUTES les combinaisons de 5 chevaux parmi
+    la sélection retenue (Bases + Chances régulières + Outsider + Tocard
+    éventuel, cf. `construire_paris`/`_construire_selection_quinte`) — pas une
+    seule combinaison. `Pari.combinaison` ne stocke que le pool de chevaux
+    sélectionnés ; sans cette expansion, rien n'indiquait quelles combinaisons
+    précises sont réellement jouées (même logique que `ControleRoiService.
+    calculer_gains_pari`, qui les énumère déjà pour calculer les gains réels —
+    ici, c'est pour l'affichage). Retourne `None` si la sélection compte déjà
+    exactement 5 chevaux (une seule combinaison, `combinaison_lisible` suffit).
+    """
+    partant_ids = [int(pid) for pid in combinaison.split("-")]
+    if len(partant_ids) <= 5:
+        return None
+    sous_combinaisons = list(itertools.combinations(partant_ids, 5))
+    libelles = [
+        " + ".join(_libelle_partant(pid, partants_detail) for pid in combo) for combo in sous_combinaisons
+    ]
+    return libelles, round(mise / len(sous_combinaisons), 2)
+
+
 def _partant_classe_vers_out(partant_classe: PartantClasse, partants_detail: dict[int, PartantDetail]) -> AnalysePartantOut:
     """Traduit le résultat en mémoire (`PartantClasse`) vers la forme persistée
     (`AnalysePartantOut`) : `score` = Score TurfIA brut, `confiance` = score final
@@ -93,10 +118,19 @@ def _persistance_vers_out(
 
 
 def _pari_vers_out(pari: Pari, partants_detail: dict[int, PartantDetail]) -> ParisOut:
+    sous_combinaisons = None
+    mise_par_combinaison = None
+    if pari.type_pari == "Quinté Flexi" and pari.combinaison:
+        resultat = _sous_combinaisons_quinte(pari.combinaison, pari.mise, partants_detail)
+        if resultat is not None:
+            sous_combinaisons, mise_par_combinaison = resultat
+
     return ParisOut(
         type_pari=pari.type_pari,
         combinaison=pari.combinaison,
         combinaison_lisible=_resoudre_combinaison(pari.combinaison, partants_detail),
+        sous_combinaisons=sous_combinaisons,
+        mise_par_combinaison=mise_par_combinaison,
         mise=pari.mise,
         gain_estime=pari.gain_estime,
         roi_estime=pari.roi_estime,

@@ -149,6 +149,24 @@ function formaterDetailAnalyse(detail) {
     }
     tableauParis.appendChild(corpsParis);
     conteneur.appendChild(tableauParis);
+
+    // Un Quinté Flexi joue plusieurs combinaisons de 5 chevaux à la fois
+    // (cf. L031.6 §5) — `combinaison_lisible` seule ne montre que le pool de
+    // chevaux retenus, pas les tickets individuellement joués.
+    for (const pari of detail.paris) {
+      if (!pari.sous_combinaisons) continue;
+      const titreCombinaisons = document.createElement("h5");
+      titreCombinaisons.textContent = `Combinaisons jouées (${pari.type_pari}, ${formaterMontant(pari.mise_par_combinaison)} € chacune)`;
+      conteneur.appendChild(titreCombinaisons);
+      const listeCombinaisons = document.createElement("ul");
+      listeCombinaisons.className = "liste-paris";
+      for (const combinaison of pari.sous_combinaisons) {
+        const item = document.createElement("li");
+        item.textContent = combinaison;
+        listeCombinaisons.appendChild(item);
+      }
+      conteneur.appendChild(listeCombinaisons);
+    }
   }
   return conteneur;
 }

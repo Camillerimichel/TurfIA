@@ -3,13 +3,19 @@ referme la boucle collecte (src/collecte, src/services/collecte_service.py) ->
 analyse (src/services/analyse_service.py), cf. L015 §7.
 
 N'invente aucune donnée : un partant non-partant ou sans cote collectée est exclu
-de l'analyse plutôt que de recevoir une valeur fabriquée (cf. L009 §2.1).
+de l'analyse plutôt que de recevoir une valeur fabriquée (cf. L009 §2.1). Même
+principe appliqué de façon cohérente aux sous-scores eux-mêmes depuis le
+2026-07-10 (cf. PROJECT_STATE.md) : une famille sans donnée exploitable (musique
+absente, échantillon jockey/entraîneur/hippodrome trop petit...) est exclue de la
+moyenne pondérée du Score TurfIA plutôt que comptée à un score neutre "confiant"
+à plein poids — l'ancien comportement plafonnait artificiellement le score de la
+quasi-totalité des courses dès qu'une ou plusieurs familles manquaient de
+données, ce qui est presque toujours le cas en début de vie du moteur.
 """
 
 from __future__ import annotations
 
 from src.algorithms.indicateurs import (
-    SCORE_NEUTRE_PAR_DEFAUT,
     calculer_indicateur_forme,
     calculer_indicateur_historique_moteur,
     calculer_indicateur_presse_combine,
@@ -85,9 +91,19 @@ class PreparationDonneesService:
 
         donnees_partants: list[DonneesPartant] = []
         for partant, cote, score_marche in zip(partants_exploitables, cotes_ordonnees, scores_marche):
-            cheval = self._courses.get_cheval(partant.cheval_id)
-            score_forme = calculer_indicateur_forme(cheval.musique if cheval else None)
-            sous_scores = {"marche": score_marche, "forme": score_forme}
+            # `partant.musique` (pas `cheval.musique`) : la musique reflète l'historique
+            # du cheval tel que connu au moment de CETTE course précise (cf. PMU,
+            # `participant.musique`), pas une valeur partagée/écrasée entre courses —
+            # bug réel corrigé le 2026-07-10 : jamais extraite du tout à la collecte
+            # (`CollecteService._importer_partant` ignorait ce champ), donc "Forme"
+            # valait systématiquement le score neutre pour 100 % des partants
+            # (vérifié réellement : 0/609 chevaux avec musique en base).
+            sous_scores: dict[str, float] = {"marche": score_marche}
+
+            score_forme = calculer_indicateur_forme(partant.musique)
+            if score_forme is not None:
+                sous_scores["forme"] = score_forme
+
             if classements_presse:
                 sous_scores["presse"] = calculer_indicateur_presse_combine(classements_presse, partant.numero)
 
@@ -95,34 +111,37 @@ class PreparationDonneesService:
                 score_jockey = (
                     calculer_indicateur_reussite(*self._courses.compter_performances_jockey(partant.jockey_id, course_id))
                     if partant.jockey_id is not None
-                    else SCORE_NEUTRE_PAR_DEFAUT
+                    else None
                 )
                 score_entraineur = (
                     calculer_indicateur_reussite(
                         *self._courses.compter_performances_entraineur(partant.entraineur_id, course_id)
                     )
                     if partant.entraineur_id is not None
-                    else SCORE_NEUTRE_PAR_DEFAUT
+                    else None
                 )
                 score_couple = (
                     calculer_indicateur_reussite(
                         *self._courses.compter_performances_couple(partant.jockey_id, partant.entraineur_id, course_id)
                     )
                     if partant.jockey_id is not None and partant.entraineur_id is not None
-                    else SCORE_NEUTRE_PAR_DEFAUT
+                    else None
                 )
-                sous_scores["professionnels"] = calculer_indicateur_professionnels(
-                    score_jockey, score_entraineur, score_couple
-                )
+                score_professionnels = calculer_indicateur_professionnels(score_jockey, score_entraineur, score_couple)
+                if score_professionnels is not None:
+                    sous_scores["professionnels"] = score_professionnels
 
-            sous_scores["historique"] = score_historique
+            if score_historique is not None:
+                sous_scores["historique"] = score_historique
 
             if conditions_connues:
-                sous_scores["aptitude"] = calculer_indicateur_reussite(
+                score_aptitude = calculer_indicateur_reussite(
                     *self._courses.compter_performances_cheval_conditions(
                         partant.cheval_id, course.distance_id, course.surface_id, course.etat_piste_id, course_id
                     )
                 )
+                if score_aptitude is not None:
+                    sous_scores["aptitude"] = score_aptitude
 
             donnees_partants.append(
                 DonneesPartant(partant_id=partant.id, sous_scores=sous_scores, cote=cote)
