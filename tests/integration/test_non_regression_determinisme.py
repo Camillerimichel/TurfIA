@@ -49,8 +49,13 @@ def _rejouer_scenario_fige():
 
     numero_par_partant_id: dict[int, int] = {}
     for numero, (nom, cote, musique) in enumerate(_PARTANTS_FIGES, start=1):
-        cheval = course_repo.create_cheval(Cheval(nom=nom, musique=musique))
-        partant = course_repo.create_partant(Partant(course_id=course.id, cheval_id=cheval.id, numero=numero))
+        cheval = course_repo.create_cheval(Cheval(nom=nom))
+        # `musique` sur le Partant (pas le Cheval) : reflète l'historique du
+        # cheval tel que connu pour CETTE course précise (cf. PMU, corrigé le
+        # 2026-07-10 dans PreparationDonneesService — cf. PROJECT_STATE.md).
+        partant = course_repo.create_partant(
+            Partant(course_id=course.id, cheval_id=cheval.id, numero=numero, musique=musique)
+        )
         course_repo.create_cote(Cote(partant_id=partant.id, operateur="PMU", cote=cote))
         numero_par_partant_id[partant.id] = numero
 

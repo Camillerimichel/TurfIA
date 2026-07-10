@@ -182,6 +182,7 @@ class CollecteService:
                 jockey_id=jockey_id,
                 entraineur_id=entraineur_id,
                 age=participant_brut.get("age"),
+                musique=participant_brut.get("musique"),
                 non_partant=participant_brut.get("statut") == "NON_PARTANT",
             )
         )

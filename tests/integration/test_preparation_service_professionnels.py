@@ -46,18 +46,13 @@ def _ajouter_partant(course_repo, course, nom_cheval, jockey_id=None, entraineur
     return partant, cheval
 
 
-def test_historique_toujours_present():
-    course_repo = FakeCourseRepository()
-    course = _preparer_course(course_repo)
-    partant, _ = _ajouter_partant(course_repo, course, "Cheval A")
-    service = PreparationDonneesService(course_repo, FakeStatistiqueRepository())
-
-    donnees_partants, _ = service.preparer_donnees_partants(course.id)
-
-    assert all("historique" in dp.sous_scores for dp in donnees_partants)
-
-
-def test_historique_neutre_sans_statistique_hippodrome():
+def test_historique_absent_sans_statistique_hippodrome():
+    """Sans statistique hippodrome du tout (ni a fortiori d'échantillon
+    suffisant), "historique" est exclu de la moyenne pondérée plutôt que
+    compté à un score neutre à plein poids (bug réel corrigé le 2026-07-10,
+    cf. PROJECT_STATE.md : cela plafonnait artificiellement le Score TurfIA
+    de la quasi-totalité des courses, tant que peu d'hippodromes ont un
+    historique de contrôle ROI suffisant)."""
     course_repo = FakeCourseRepository()
     course = _preparer_course(course_repo)
     partant, _ = _ajouter_partant(course_repo, course, "Cheval A")
@@ -66,7 +61,7 @@ def test_historique_neutre_sans_statistique_hippodrome():
     donnees_partants, _ = service.preparer_donnees_partants(course.id)
 
     dp = next(d for d in donnees_partants if d.partant_id == partant.id)
-    assert dp.sous_scores["historique"] == 50.0
+    assert "historique" not in dp.sous_scores
 
 
 def test_historique_reflete_le_roi_reel_du_moteur_a_hippodrome():
@@ -97,7 +92,11 @@ def test_aptitude_absente_si_conditions_course_inconnues():
     assert all("aptitude" not in dp.sous_scores for dp in donnees_partants)
 
 
-def test_aptitude_presente_si_conditions_course_connues():
+def test_aptitude_absente_si_echantillon_insuffisant_malgre_conditions_connues():
+    """Conditions connues mais aucune course antérieure dans ces mêmes
+    distance/surface/état de piste pour ce cheval (échantillon < 3, cf.
+    `calculer_indicateur_reussite`) : "aptitude" reste exclue plutôt que
+    neutre à plein poids (même principe que "historique", cf. ci-dessus)."""
     course_repo = FakeCourseRepository()
     course = _preparer_course(course_repo, avec_conditions=True)
     _ajouter_partant(course_repo, course, "Cheval A")
@@ -105,7 +104,21 @@ def test_aptitude_presente_si_conditions_course_connues():
 
     donnees_partants, _ = service.preparer_donnees_partants(course.id)
 
-    assert all("aptitude" in dp.sous_scores for dp in donnees_partants)
+    assert all("aptitude" not in dp.sous_scores for dp in donnees_partants)
+
+
+def test_aptitude_presente_si_conditions_connues_et_echantillon_suffisant():
+    course_repo = FakeCourseRepository()
+    course = _preparer_course(course_repo, avec_conditions=True)
+    partant, cheval = _ajouter_partant(course_repo, course, "Cheval A")
+    # 2 victoires sur 4 courses dans ces mêmes distance/surface/état de piste -> 50.0.
+    course_repo.performances_conditions[(cheval.id, DISTANCE_ID, SURFACE_ID, ETAT_PISTE_ID)] = (2, 4)
+    service = PreparationDonneesService(course_repo, FakeStatistiqueRepository())
+
+    donnees_partants, _ = service.preparer_donnees_partants(course.id)
+
+    dp = next(d for d in donnees_partants if d.partant_id == partant.id)
+    assert dp.sous_scores["aptitude"] == 50.0
 
 
 def test_professionnels_absente_sans_jockey_ni_entraineur():

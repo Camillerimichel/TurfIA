@@ -36,7 +36,9 @@ def test_list_cron_sans_execution_retourne_derniere_tache_null(client):
 
     assert reponse.status_code == 200
     lignes = reponse.json()["data"]
-    assert [ligne["nom"] for ligne in lignes] == ["collecte_programme_jour", "analyse_courses_jour"]
+    assert [ligne["nom"] for ligne in lignes] == [
+        "collecte_programme_jour", "analyse_courses_jour", "calcul_statistiques",
+    ]
     assert all(ligne["derniere_tache"] is None for ligne in lignes)
 
 

@@ -86,6 +86,12 @@ class ParisOut(BaseModel):
     type_pari: str
     combinaison: str | None = None
     combinaison_lisible: str | None = None
+    # Un Quinté Flexi couvre plusieurs combinaisons de 5 chevaux à la fois (cf.
+    # L031.6 §5) : `sous_combinaisons` les liste individuellement (une par
+    # ticket réellement joué), `mise_par_combinaison` répartit la mise totale
+    # entre elles. `None` pour tout autre type de pari (une seule combinaison).
+    sous_combinaisons: list[str] | None = None
+    mise_par_combinaison: float | None = None
     mise: float
     gain_estime: float | None = None
     roi_estime: float | None = None

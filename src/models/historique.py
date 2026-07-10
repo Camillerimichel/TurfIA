@@ -13,16 +13,18 @@ class HistoriqueFiltres:
     date_fin: date | None = None
     hippodrome_id: int | None = None
     type_pari: str | None = None
-    decision: str | None = None
+    decisions: list[str] | None = None
     limite: int = 200
 
 
 @dataclass(frozen=True)
 class HistoriqueLigne:
-    """Une ligne = un pari (avec l'analyse et le contrôle ROI qui s'y rattachent).
-    Une analyse sans pari (décision Ne pas jouer) apparaît une fois avec les
-    colonnes de pari à `None` (LEFT JOIN). Le détail complet d'une analyse
-    (classement par partant) reste consultable via `course.html?id=`."""
+    """Une ligne = un pari (avec l'analyse et le contrôle ROI qui s'y rattachent),
+    pour la dernière version d'analyse connue de chaque course (une course
+    réanalysée à chaque passage de l'automatisation horaire, cf. L033, ne doit
+    apparaître qu'une fois ici — l'historique des versions reste consultable
+    via `course.html?id=`). Une analyse sans pari (décision Ne pas jouer)
+    apparaît une fois avec les colonnes de pari à `None` (LEFT JOIN)."""
 
     date: date
     hippodrome_id: int

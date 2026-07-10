@@ -262,22 +262,23 @@ form label {
   font-size: 0.9rem;
 }
 
-/* Filtre décision Accueil (cf. L018 §5) : choix multiples via cases à cocher
-   plutôt qu'un <select multiple> (Ctrl/Cmd+clic peu découvrable). */
-#filtre-decision-accueil {
+/* Filtre décision Accueil/Historique (cf. L018 §5, §8) : choix multiples via
+   cases à cocher plutôt qu'un <select multiple> (Ctrl/Cmd+clic peu
+   découvrable). */
+#filtre-decision-accueil, #filtre-decision {
   margin-top: 0.75rem;
   border: 1px solid var(--couleur-bordure);
   border-radius: 4px;
   padding: 0.5rem 0.75rem;
 }
 
-#filtre-decision-accueil legend {
+#filtre-decision-accueil legend, #filtre-decision legend {
   font-weight: 600;
   font-size: 0.9rem;
   padding: 0 0.25rem;
 }
 
-#filtre-decision-accueil label {
+#filtre-decision-accueil label, #filtre-decision label {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;

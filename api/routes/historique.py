@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from api.dependencies.auth import LECTURE, exiger_roles
 from api.dependencies.db import get_historique_repository
@@ -27,7 +27,7 @@ def rechercher_historique(
     date_fin: date | None = None,
     hippodrome_id: int | None = None,
     type_pari: str | None = None,
-    decision: str | None = None,
+    decisions: list[str] | None = Query(None),
     limite: int = 200,
     repo: HistoriqueRepository = Depends(get_historique_repository),
     _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
@@ -37,7 +37,7 @@ def rechercher_historique(
         date_fin=date_fin,
         hippodrome_id=hippodrome_id,
         type_pari=type_pari,
-        decision=decision,
+        decisions=decisions,
         limite=limite,
     )
     return Enveloppe(data=[HistoriqueLigneOut.model_validate(l) for l in repo.rechercher(filtres)])

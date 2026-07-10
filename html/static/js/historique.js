@@ -53,11 +53,19 @@ function construireTableau(lignes, colonnes) {
   return table;
 }
 
+// cf. src/core/constants.py::DECISIONS — même liste, même ordre.
+const TOUTES_DECISIONS = ["Ne pas jouer", "Jeu prudent", "Jeu normal", "Forte opportunité"];
+
+function decisionsSelectionnees() {
+  return [...document.querySelectorAll('#filtre-decision input[type="checkbox"]:checked')].map(
+    (case_) => case_.value
+  );
+}
+
 const COLONNES = [
   { libelle: "Date", cle: "date" },
   { libelle: "Hippodrome", cle: "hippodrome_nom" },
   { libelle: "Course", cle: "course_nom" },
-  { libelle: "Version", cle: "version" },
   { libelle: "Analysée le", cle: "date_calcul" },
   { libelle: "Décision", cle: "decision" },
   { libelle: "Score", cle: "score_confiance" },
@@ -94,12 +102,23 @@ async function rechercherHistorique() {
   const dateFin = document.getElementById("filtre-date-fin").value;
   const hippodromeId = document.getElementById("filtre-hippodrome").value;
   const typePari = document.getElementById("filtre-type-pari").value;
-  const decision = document.getElementById("filtre-decision").value;
+  const decisions = decisionsSelectionnees();
+  if (decisions.length === 0) {
+    // Aucune décision cochée : rien ne peut correspondre, pas la peine d'appeler l'API.
+    conteneur.innerHTML = "";
+    conteneur.appendChild(construireTableau([], COLONNES));
+    return;
+  }
   if (dateDebut) parametres.set("date_debut", dateDebut);
   if (dateFin) parametres.set("date_fin", dateFin);
   if (hippodromeId) parametres.set("hippodrome_id", hippodromeId);
   if (typePari) parametres.set("type_pari", typePari);
-  if (decision) parametres.set("decision", decision);
+  // Toutes les décisions cochées = pas de filtrage réel (cf. accueil.js) :
+  // ne rien envoyer plutôt que la liste complète, pour rester cohérent avec
+  // "aucune sélection" côté API.
+  if (decisions.length < TOUTES_DECISIONS.length) {
+    for (const decision of decisions) parametres.append("decisions", decision);
+  }
 
   try {
     const lignes = await apiFetch(`/historique?${parametres.toString()}`);

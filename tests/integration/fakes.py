@@ -722,33 +722,39 @@ class FakeHistoriqueRepository:
             hippodrome_nom = hippodrome.nom if hippodrome is not None else "?"
 
             for course in self._courses.list_courses_by_reunion(reunion.id):
-                for analyse in self._analyses.list_analyses_by_course(course.id):
-                    if filtres.decision is not None and analyse.decision != filtres.decision:
+                # Seule la dernière version d'analyse de chaque course (cf.
+                # L033 : la réanalyse horaire crée une nouvelle version à chaque
+                # passage) — même comportement que la requête SQL réelle.
+                analyses_course = self._analyses.list_analyses_by_course(course.id)
+                if not analyses_course:
+                    continue
+                analyse = max(analyses_course, key=lambda a: a.version)
+                if filtres.decisions and analyse.decision not in filtres.decisions:
+                    continue
+                base = dict(
+                    date=reunion.date, hippodrome_id=reunion.hippodrome_id, hippodrome_nom=hippodrome_nom,
+                    course_id=course.id, course_numero=course.numero, course_nom=course.nom,
+                    analyse_id=analyse.id, version=analyse.version, date_calcul=analyse.date_calcul,
+                    decision=analyse.decision,
+                    score_confiance=analyse.score_confiance, risque=analyse.risque, budget=analyse.budget,
+                )
+                paris = self._analyses.list_paris_by_analyse(analyse.id)
+                if not paris:
+                    if filtres.type_pari is not None:
                         continue
-                    base = dict(
-                        date=reunion.date, hippodrome_id=reunion.hippodrome_id, hippodrome_nom=hippodrome_nom,
-                        course_id=course.id, course_numero=course.numero, course_nom=course.nom,
-                        analyse_id=analyse.id, version=analyse.version, date_calcul=analyse.date_calcul,
-                        decision=analyse.decision,
-                        score_confiance=analyse.score_confiance, risque=analyse.risque, budget=analyse.budget,
-                    )
-                    paris = self._analyses.list_paris_by_analyse(analyse.id)
-                    if not paris:
-                        if filtres.type_pari is not None:
-                            continue
-                        lignes.append(HistoriqueLigne(**base))
+                    lignes.append(HistoriqueLigne(**base))
+                    continue
+                for pari in paris:
+                    if filtres.type_pari is not None and pari.type_pari != filtres.type_pari:
                         continue
-                    for pari in paris:
-                        if filtres.type_pari is not None and pari.type_pari != filtres.type_pari:
-                            continue
-                        controle = self._analyses.controle_roi_paris.get(pari.id)
-                        lignes.append(HistoriqueLigne(
-                            **base, pari_id=pari.id, type_pari=pari.type_pari, mise=pari.mise,
-                            gain_estime=pari.gain_estime, roi_estime=pari.roi_estime,
-                            roi_reel=controle.roi if controle else None,
-                            profit_reel=controle.profit if controle else None,
-                            valide=controle.valide if controle else None,
-                        ))
+                    controle = self._analyses.controle_roi_paris.get(pari.id)
+                    lignes.append(HistoriqueLigne(
+                        **base, pari_id=pari.id, type_pari=pari.type_pari, mise=pari.mise,
+                        gain_estime=pari.gain_estime, roi_estime=pari.roi_estime,
+                        roi_reel=controle.roi if controle else None,
+                        profit_reel=controle.profit if controle else None,
+                        valide=controle.valide if controle else None,
+                    ))
         lignes.sort(key=lambda l: (l.date, l.course_numero, l.version), reverse=True)
         return lignes[: filtres.limite]
 

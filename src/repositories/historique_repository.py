@@ -41,9 +41,9 @@ class HistoriqueRepository:
         if filtres.type_pari is not None:
             conditions.append("p.type_pari = %s")
             valeurs.append(filtres.type_pari)
-        if filtres.decision is not None:
-            conditions.append("a.decision = %s")
-            valeurs.append(filtres.decision)
+        if filtres.decisions:
+            conditions.append("a.decision = ANY(%s)")
+            valeurs.append(filtres.decisions)
 
         clause_where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         valeurs.append(filtres.limite)
@@ -55,11 +55,16 @@ class HistoriqueRepository:
                 FROM reunion re
                 JOIN course c ON c.reunion_id = re.id
                 JOIN hippodrome h ON h.id = re.hippodrome_id
+                -- Seule la dernière version d'analyse de chaque course (cf.
+                -- L033 : la réanalyse horaire crée une nouvelle version à
+                -- chaque passage, sans quoi une même course apparaîtrait une
+                -- fois par version calculée dans la journée).
                 JOIN analyses a ON a.course_id = c.id
+                    AND a.version = (SELECT MAX(a2.version) FROM analyses a2 WHERE a2.course_id = c.id)
                 LEFT JOIN pari p ON p.analyse_id = a.id
                 LEFT JOIN controle_roi_pari crp ON crp.pari_id = p.id
                 {clause_where}
-                ORDER BY re.date DESC, c.numero, a.version, p.id
+                ORDER BY re.date DESC, c.numero, p.id
                 LIMIT %s
                 """,
                 valeurs,
