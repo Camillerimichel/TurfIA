@@ -10,7 +10,9 @@ du JS côté client (`window.confirm`, cf. `html/static/js/administration.js`).
 from __future__ import annotations
 
 import subprocess
+from collections import deque
 from datetime import date
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -32,10 +34,12 @@ from api.dependencies.services import (
 from api.schemas.administration import (
     ErreurCourseOut,
     EtatSupervisionOut,
+    JournalCronOut,
     JournalOut,
     ParametreOut,
     ParametrePatchIn,
     RapportAnalyseJourOut,
+    TacheCronOut,
     TacheOut,
     VersionOut,
 )
@@ -55,6 +59,63 @@ from src.services.statistique_service import StatistiqueService
 from src.services.supervision_service import SupervisionService
 
 router = APIRouter(prefix="/administration", tags=["Administration"])
+
+RACINE_PROJET = Path(__file__).resolve().parent.parent.parent
+
+# Tâches quotidiennes connues (cf. scripts/rafraichir_et_analyser_jour.py,
+# automations/launchd/) — liste fixe plutôt qu'un registre générique, un seul
+# script planifié existant à ce jour (cf. L018 §10, tableau de bord Cron).
+TACHES_QUOTIDIENNES: list[tuple[str, str]] = [
+    ("collecte_programme_jour", "Collecte du programme du jour"),
+    ("analyse_courses_jour", "Analyse des courses du jour"),
+]
+
+# Les deux étapes de scripts/rafraichir_et_analyser_jour.py écrivent dans les
+# mêmes fichiers (cf. automations/launchd/com.turfia.rafraichir-analyser.plist,
+# StandardOutPath/StandardErrorPath) — un seul journal partagé, pas un par tâche.
+CHEMIN_JOURNAL_CRON = RACINE_PROJET / "logs" / "rafraichir_et_analyser.log"
+CHEMIN_JOURNAL_CRON_ERREURS = RACINE_PROJET / "logs" / "rafraichir_et_analyser.err.log"
+NB_LIGNES_JOURNAL_CRON = 200  # pas d'archive (cf. L018 §10) : juste la fin du fichier courant
+
+
+def _lire_dernieres_lignes(chemin: Path, n: int) -> str:
+    if not chemin.exists():
+        return ""
+    with chemin.open(encoding="utf-8", errors="replace") as fichier:
+        return "".join(deque(fichier, maxlen=n))
+
+
+# -- 2.0 Tableau de bord Cron -----------------------------------------------------
+
+
+@router.get("/cron", response_model=Enveloppe[list[TacheCronOut]])
+def list_cron(
+    tache_repo: TacheRepository = Depends(get_tache_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ADMINISTRATION)),
+) -> Enveloppe[list[TacheCronOut]]:
+    resultat = [
+        TacheCronOut(
+            nom=nom,
+            libelle=libelle,
+            derniere_tache=(
+                TacheOut.model_validate(derniere) if (derniere := tache_repo.get_derniere_par_nom(nom)) else None
+            ),
+        )
+        for nom, libelle in TACHES_QUOTIDIENNES
+    ]
+    return Enveloppe(data=resultat)
+
+
+@router.get("/cron/journal", response_model=Enveloppe[JournalCronOut])
+def get_journal_cron(
+    _utilisateur: Utilisateur = Depends(exiger_roles(*ADMINISTRATION)),
+) -> Enveloppe[JournalCronOut]:
+    return Enveloppe(
+        data=JournalCronOut(
+            sortie=_lire_dernieres_lignes(CHEMIN_JOURNAL_CRON, NB_LIGNES_JOURNAL_CRON),
+            erreurs=_lire_dernieres_lignes(CHEMIN_JOURNAL_CRON_ERREURS, NB_LIGNES_JOURNAL_CRON),
+        )
+    )
 
 
 # -- 2.1 Journaux --------------------------------------------------------------
@@ -127,11 +188,18 @@ def declencher_analyse_jour(
         tache_repo.terminer(tache.id, "echec", commentaire=str(exc)[:2000])
         raise
     statut = "succes" if rapport.nb_erreurs == 0 else "echec"
-    tache_repo.terminer(tache.id, statut, commentaire=f"{rapport.nb_courses} course(s), {rapport.nb_erreurs} erreur(s)")
+    tache_repo.terminer(
+        tache.id, statut,
+        commentaire=(
+            f"{rapport.nb_courses} course(s), {rapport.nb_deja_analysees} déjà à jour, "
+            f"{rapport.nb_erreurs} erreur(s)"
+        ),
+    )
     audit_repo.enregistrer(utilisateur.id, "automatisation_analyse_jour", objet=str(tache.id))
     return Enveloppe(data=RapportAnalyseJourOut(
         nb_courses=rapport.nb_courses,
         nb_erreurs=rapport.nb_erreurs,
+        nb_deja_analysees=rapport.nb_deja_analysees,
         erreurs=[ErreurCourseOut(course_id=cid, message=msg) for cid, msg in rapport.erreurs],
     ))
 

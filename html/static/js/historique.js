@@ -5,6 +5,7 @@ initialiserEntete();
 function formaterValeur(valeur) {
   if (valeur === null || valeur === undefined) return "—";
   if (typeof valeur === "number") return Number.isInteger(valeur) ? valeur : valeur.toFixed(2);
+  if (typeof valeur === "string" && MOTIF_DATE_ISO.test(valeur)) return formaterDateHeure(valeur);
   return valeur;
 }
 
@@ -38,6 +39,9 @@ function construireTableau(lignes, colonnes) {
         lien.href = `/course.html?id=${ligne.course_id}`;
         lien.textContent = `${ligne.course_numero} — ${ligne.course_nom}`;
         cellule.appendChild(lien);
+      } else if (colonne.montant) {
+        const brut = ligne[colonne.cle];
+        cellule.textContent = brut === null || brut === undefined ? "—" : formaterMontant(brut);
       } else {
         cellule.textContent = formaterValeur(ligne[colonne.cle]);
       }
@@ -54,14 +58,15 @@ const COLONNES = [
   { libelle: "Hippodrome", cle: "hippodrome_nom" },
   { libelle: "Course", cle: "course_nom" },
   { libelle: "Version", cle: "version" },
+  { libelle: "Analysée le", cle: "date_calcul" },
   { libelle: "Décision", cle: "decision" },
   { libelle: "Score", cle: "score_confiance" },
   { libelle: "Risque", cle: "risque" },
   { libelle: "Type de pari", cle: "type_pari" },
-  { libelle: "Mise €", cle: "mise" },
+  { libelle: "Mise €", cle: "mise", montant: true },
   { libelle: "ROI estimé %", cle: "roi_estime" },
   { libelle: "ROI réel %", cle: "roi_reel" },
-  { libelle: "Profit réel €", cle: "profit_reel" },
+  { libelle: "Profit réel €", cle: "profit_reel", montant: true },
   { libelle: "Validé", cle: "valide" },
 ];
 

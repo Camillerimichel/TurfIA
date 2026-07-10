@@ -32,6 +32,21 @@ from src.core.logging import configure_logging
 
 RACINE_PROJET = Path(__file__).resolve().parent.parent
 
+
+class StaticFilesSansCache(StaticFiles):
+    """`Cache-Control: no-cache` sur chaque réponse — force le navigateur à
+    revalider (ETag/Last-Modified, déjà gérés nativement par Starlette) avant
+    de réutiliser une copie en cache, plutôt que de suivre une politique
+    heuristique qui peut servir un fichier JS/CSS périmé après une
+    modification (rencontré réellement en test manuel de l'interface HTML,
+    cf. PROJECT_STATE.md) — sans dépendance ajoutée, coût négligeable vu la
+    taille des fichiers et l'usage strictement local."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
 settings = get_settings()
 configure_logging(settings.log_level)
 
@@ -63,5 +78,5 @@ app.include_router(administration.router, prefix=settings.api_prefix)
 # Interface HTML locale (cf. L018) — montée après les routeurs API pour que
 # `/api/v1/*` reste prioritaire. Pas de moteur de gabarits (Jinja2) : tout le
 # contenu dynamique vient du JS via fetch() (cf. L018 §3.3, html/static/js/api.js).
-app.mount("/static", StaticFiles(directory=RACINE_PROJET / "html" / "static"), name="static")
-app.mount("/", StaticFiles(directory=RACINE_PROJET / "html" / "templates", html=True), name="html")
+app.mount("/static", StaticFilesSansCache(directory=RACINE_PROJET / "html" / "static"), name="static")
+app.mount("/", StaticFilesSansCache(directory=RACINE_PROJET / "html" / "templates", html=True), name="html")

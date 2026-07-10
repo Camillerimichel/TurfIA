@@ -22,13 +22,21 @@
   </header>
 
   <main>
-    <section class="carte">
-      <h2>Supervision</h2>
+    <details class="carte">
+      <summary><h2>Supervision</h2></summary>
       <div id="section-supervision">Chargement…</div>
-    </section>
+    </details>
 
-    <section class="carte">
-      <h2>Automatisations</h2>
+    <details class="carte">
+      <summary><h2>Tableau de bord Cron</h2></summary>
+      <p class="note">Tâches quotidiennes planifiées (launchd, 9h-14h) — dernière exécution connue, pas d'historique complet.</p>
+      <div class="tableau-scroll" id="section-cron"></div>
+      <button id="bouton-journal-cron" type="button">Afficher le journal</button>
+      <pre id="journal-cron" hidden></pre>
+    </details>
+
+    <details class="carte">
+      <summary><h2>Automatisations</h2></summary>
       <p class="note">Déclenchement manuel (pas d'ordonnanceur automatique dans cette tranche) — chaque action relance les mêmes services que les scripts CLI correspondants.</p>
       <div class="actions-automatisation">
         <button id="bouton-collecte" type="button">Collecter le programme du jour</button>
@@ -37,29 +45,29 @@
       </div>
       <div id="message-automatisation" hidden></div>
       <div class="tableau-scroll" id="section-taches"></div>
-    </section>
+    </details>
 
-    <section class="carte">
-      <h2>Sauvegardes</h2>
+    <details class="carte">
+      <summary><h2>Sauvegardes</h2></summary>
       <button id="bouton-sauvegarde" type="button">Lancer une sauvegarde</button>
       <p id="message-sauvegarde" hidden></p>
       <div class="tableau-scroll" id="section-sauvegardes"></div>
-    </section>
+    </details>
 
-    <section class="carte">
-      <h2>Versions publiées</h2>
+    <details class="carte">
+      <summary><h2>Versions publiées</h2></summary>
       <p class="note">Publiées via <code>scripts/publier_version.py</code> (geste de déploiement), pas depuis cette page.</p>
       <div class="tableau-scroll" id="section-versions"></div>
-    </section>
+    </details>
 
-    <section class="carte">
-      <h2>Paramètres</h2>
+    <details class="carte">
+      <summary><h2>Paramètres</h2></summary>
       <p class="note">Pondérations des sous-scores/sous-risques (cf. L011 §10.4) — modification immédiate, sans redémarrage.</p>
       <div class="tableau-scroll" id="section-parametres"></div>
-    </section>
+    </details>
 
-    <section class="carte">
-      <h2>Journaux</h2>
+    <details class="carte">
+      <summary><h2>Journaux</h2></summary>
       <form id="formulaire-journaux">
         <label for="filtre-niveau">Niveau</label>
         <select id="filtre-niveau">
@@ -73,7 +81,7 @@
         <button type="submit">Filtrer</button>
       </form>
       <div class="tableau-scroll" id="section-journaux"></div>
-    </section>
+    </details>
   </main>
 
   <script src="/static/js/api.js"></script>

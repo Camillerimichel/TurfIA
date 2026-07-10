@@ -4,10 +4,13 @@
 
 initialiserEntete();
 
+// MOTIF_DATE_ISO / formaterDateHeure : cf. api.js (partagé par toutes les pages).
+
 function formaterValeur(valeur) {
   if (valeur === null || valeur === undefined) return "—";
   if (typeof valeur === "boolean") return valeur ? "Oui" : "Non";
   if (typeof valeur === "number") return Number.isInteger(valeur) ? valeur : valeur.toFixed(2);
+  if (typeof valeur === "string" && MOTIF_DATE_ISO.test(valeur)) return formaterDateHeure(valeur);
   return valeur;
 }
 
@@ -80,6 +83,109 @@ async function chargerSupervision() {
   }
 }
 
+// -- Tableau de bord Cron -----------------------------------------------------------
+
+// Planification fixe (cf. automations/launchd/com.turfia.rafraichir-analyser.plist,
+// StartCalendarInterval) — dupliquée ici volontairement : un compte à rebours
+// entièrement côté client reste exact même après l'heure de déclenchement passée
+// (il repasse tout seul sur le créneau suivant), contrairement à un instant figé
+// récupéré une fois depuis le serveur.
+const HEURES_CRON_QUOTIDIEN = [9, 10, 11, 12, 13, 14];
+
+function prochaineExecutionCron(maintenant = new Date()) {
+  for (const heure of HEURES_CRON_QUOTIDIEN) {
+    const candidat = new Date(maintenant);
+    candidat.setHours(heure, 0, 0, 0);
+    if (candidat > maintenant) return candidat;
+  }
+  const demain = new Date(maintenant);
+  demain.setDate(demain.getDate() + 1);
+  demain.setHours(HEURES_CRON_QUOTIDIEN[0], 0, 0, 0);
+  return demain;
+}
+
+function formaterDureeRestante(ms) {
+  if (ms <= 0) return "imminent";
+  const totalSecondes = Math.floor(ms / 1000);
+  const deuxChiffres = (n) => String(n).padStart(2, "0");
+  const heures = Math.floor(totalSecondes / 3600);
+  const minutes = Math.floor((totalSecondes % 3600) / 60);
+  const secondes = totalSecondes % 60;
+  return `${deuxChiffres(heures)}:${deuxChiffres(minutes)}:${deuxChiffres(secondes)}`;
+}
+
+const COLONNES_CRON = [
+  { libelle: "Tâche", cle: "libelle" },
+  { libelle: "Début", cle: "debut" },
+  { libelle: "Fin", cle: "fin" },
+  { libelle: "Durée (ms)", cle: "duree_ms" },
+  { libelle: "Statut", cle: "statut" },
+  { libelle: "Commentaire", cle: "commentaire" },
+];
+
+// Un seul intervalle global, jamais réinstancié : met à jour tous les comptes
+// à rebours affichés (peu importe combien de fois chargerCron() a été rappelé).
+function mettreAJourComptesARebours() {
+  const cible = prochaineExecutionCron();
+  const texte = `${formaterDureeRestante(cible - new Date())} (${formaterDateHeure(cible)})`;
+  for (const span of document.querySelectorAll(".compte-a-rebours-cron")) {
+    span.textContent = texte;
+  }
+}
+setInterval(mettreAJourComptesARebours, 1000);
+
+async function chargerCron() {
+  const conteneur = document.getElementById("section-cron");
+  try {
+    const lignes = await apiFetch("/administration/cron");
+    const lignesAplaties = lignes.map((ligne) => ({
+      libelle: ligne.libelle,
+      debut: ligne.derniere_tache?.debut ?? null,
+      fin: ligne.derniere_tache?.fin ?? null,
+      duree_ms: ligne.derniere_tache?.duree_ms ?? null,
+      statut: ligne.derniere_tache?.statut ?? "jamais exécutée",
+      commentaire: ligne.derniere_tache?.commentaire ?? null,
+    }));
+    conteneur.innerHTML = "";
+    const table = construireTableau(lignesAplaties, COLONNES_CRON);
+
+    // Colonne "Prochain déclenchement" ajoutée à part : valeur vivante mise à
+    // jour chaque seconde, pas gérée par le formatage statique de construireTableau.
+    const theadSupp = document.createElement("th");
+    theadSupp.textContent = "Prochain déclenchement";
+    table.querySelector("thead tr").appendChild(theadSupp);
+    if (lignesAplaties.length > 0) {
+      for (const tr of table.querySelectorAll("tbody tr")) {
+        const cellule = document.createElement("td");
+        const span = document.createElement("span");
+        span.className = "compte-a-rebours-cron";
+        cellule.appendChild(span);
+        tr.appendChild(cellule);
+      }
+    }
+    conteneur.appendChild(table);
+    mettreAJourComptesARebours();
+  } catch (erreur) {
+    conteneur.textContent = `Erreur : ${erreur.message}`;
+  }
+}
+
+document.getElementById("bouton-journal-cron").addEventListener("click", async () => {
+  const zone = document.getElementById("journal-cron");
+  if (!zone.hidden) {
+    zone.hidden = true;
+    return;
+  }
+  try {
+    const journal = await apiFetch("/administration/cron/journal");
+    zone.textContent =
+      `--- Sortie ---\n${journal.sortie || "(vide)"}\n\n--- Erreurs ---\n${journal.erreurs || "(vide)"}`;
+  } catch (erreur) {
+    zone.textContent = `Erreur : ${erreur.message}`;
+  }
+  zone.hidden = false;
+});
+
 // -- Automatisations --------------------------------------------------------------
 
 const COLONNES_TACHES = [
@@ -99,6 +205,7 @@ const LIBELLES_RESULTAT_AUTOMATISATION = {
   nb_courses: "Courses importées",
   nb_partants: "Partants importés",
   nb_erreurs: "Erreurs",
+  nb_deja_analysees: "Déjà à jour (ignorées)",
   nb_controles_roi: "Contrôles ROI calculés",
 };
 
@@ -296,6 +403,7 @@ document.getElementById("formulaire-journaux").addEventListener("submit", (evene
 });
 
 chargerSupervision();
+chargerCron();
 chargerTaches();
 chargerSauvegardes();
 chargerVersions();

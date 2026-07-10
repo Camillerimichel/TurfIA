@@ -63,7 +63,7 @@ from tests.integration.fakes import (  # noqa: E402
 def repos():
     referentiel_repo = FakeReferentielRepository()
     referentiel_repo.seed_hippodrome(Hippodrome(nom="ParisLongchamp", ville="Paris", pays="France"))
-    course_repo = FakeCourseRepository()
+    course_repo = FakeCourseRepository(referentiel_repo)
     analyse_repo = FakeAnalyseRepository()
     presse_service = FakeConsensusPresseService()
     utilisateur_repo = FakeUtilisateurRepository()

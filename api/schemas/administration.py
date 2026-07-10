@@ -77,4 +77,23 @@ class ErreurCourseOut(BaseModel):
 class RapportAnalyseJourOut(BaseModel):
     nb_courses: int
     nb_erreurs: int
+    nb_deja_analysees: int = 0
     erreurs: list[ErreurCourseOut]
+
+
+class TacheCronOut(BaseModel):
+    """Une ligne du tableau de bord Cron — dernière exécution connue d'une
+    tâche quotidienne (`nom` fixe, cf. `api/routes/administration.py`), ou
+    `derniere_tache=None` si elle n'a jamais tourné."""
+
+    nom: str
+    libelle: str
+    derniere_tache: TacheOut | None = None
+
+
+class JournalCronOut(BaseModel):
+    """Dernières lignes des fichiers de log launchd (`logs/rafraichir_et_
+    analyser*.log`) — pas d'archive, juste la fin du fichier courant."""
+
+    sortie: str
+    erreurs: str

@@ -20,8 +20,12 @@ class _PreparationBoiteuse:
 
 
 class _AnalyseServiceFactice:
-    def __init__(self) -> None:
+    def __init__(self, courses_deja_analysees: set[int] | None = None) -> None:
         self.appels: list[int] = []
+        self._courses_deja_analysees = courses_deja_analysees or set()
+
+    def deja_analysee(self, course_id: int, version: int) -> bool:
+        return course_id in self._courses_deja_analysees
 
     def analyser_course(self, course_id, version, partants, sous_risques_course, **kwargs):
         self.appels.append(course_id)
@@ -48,6 +52,21 @@ def test_analyser_courses_du_jour_continue_apres_une_erreur_isolee():
     assert rapport.nb_courses == 2
     assert rapport.nb_erreurs == 1
     assert rapport.erreurs == [(ids_courses[1], "Aucun partant collecté.")]
+    assert analyse_service.appels == [ids_courses[0], ids_courses[2]]
+
+
+def test_analyser_courses_du_jour_ignore_les_courses_deja_analysees_sans_les_compter_en_erreur():
+    course_repo = FakeCourseRepository()
+    ids_courses = _seeder_reunion_trois_courses(course_repo)
+    analyse_service = _AnalyseServiceFactice(courses_deja_analysees={ids_courses[1]})
+    service = AutomatisationService(course_repo, _PreparationBoiteuse(-1), analyse_service)
+
+    rapport = service.analyser_courses_du_jour(date(2026, 7, 9))
+
+    assert rapport.nb_courses == 2
+    assert rapport.nb_erreurs == 0
+    assert rapport.nb_deja_analysees == 1
+    assert rapport.erreurs == []
     assert analyse_service.appels == [ids_courses[0], ids_courses[2]]
 
 

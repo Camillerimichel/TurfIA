@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.turfia.rafraichir-analyser</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/MichelCamilleri 1/Documents/TurfIA/.venv/bin/python</string>
+        <string>-m</string>
+        <string>scripts.rafraichir_et_analyser_jour</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/MichelCamilleri 1/Documents/TurfIA</string>
+
+    <!-- Toutes les heures de 9h à 14h inclus (cf. décision du 2026-07-10) -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>10</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>11</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>14</integer><key>Minute</key><integer>0</integer></dict>
+    </array>
+
+    <key>StandardOutPath</key>
+    <string>/Users/MichelCamilleri 1/Documents/TurfIA/logs/rafraichir_et_analyser.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/MichelCamilleri 1/Documents/TurfIA/logs/rafraichir_et_analyser.err.log</string>
+
+    <!-- Un seul run à la fois : si une exécution précédente traîne encore
+         (collecte lente, etc.), launchd ne la relance pas en double. -->
+    <key>AbandonProcessGroup</key>
+    <true/>
+</dict>
+</plist>

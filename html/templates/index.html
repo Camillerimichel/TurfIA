@@ -29,8 +29,22 @@
 
     <section class="carte">
       <h2>Réunions et paris du jour</h2>
-      <label for="selecteur-date">Date</label>
-      <input type="date" id="selecteur-date" />
+      <form id="formulaire-filtres-accueil">
+        <label for="selecteur-date">Date</label>
+        <input type="date" id="selecteur-date" />
+
+        <label for="filtre-hippodrome-accueil">Hippodrome</label>
+        <select id="filtre-hippodrome-accueil">
+          <option value="">Tous</option>
+        </select>
+
+        <label for="filtre-decision-accueil">Décision</label>
+        <select id="filtre-decision-accueil">
+          <option value="jouer" selected>Jouer</option>
+          <option value="ne_pas_jouer">Ne pas jouer</option>
+          <option value="toutes">Toutes</option>
+        </select>
+      </form>
       <div id="liste-reunions">Chargement…</div>
     </section>
   </main>

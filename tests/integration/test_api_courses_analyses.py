@@ -2,6 +2,8 @@
 (repositories simulés, cf. tests/integration/fakes.py).
 """
 
+from src.models.referentiels import Hippodrome
+
 
 def test_flux_complet_creation_et_analyse(client):
     reunion = client.post(
@@ -242,6 +244,20 @@ def test_list_reunions_par_date(client):
     corps = reponse.json()["data"]
     assert len(corps) == 2
     assert [r["numero"] for r in corps] == [1, 2]
+    assert corps[0]["hippodrome_nom"] == "ParisLongchamp"
+
+
+def test_list_reunions_filtre_par_hippodrome(client, repos):
+    autre_hippodrome = repos["referentiel"].seed_hippodrome(Hippodrome(nom="Vincennes", ville="Paris", pays="France"))
+    client.post("/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": 1, "numero": 1})
+    client.post("/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": autre_hippodrome.id, "numero": 1})
+
+    reponse = client.get("/api/v1/reunions", params={"date": "2026-07-07", "hippodrome_id": autre_hippodrome.id})
+
+    assert reponse.status_code == 200
+    corps = reponse.json()["data"]
+    assert len(corps) == 1
+    assert corps[0]["hippodrome_nom"] == "Vincennes"
 
 
 def test_list_reunions_date_sans_reunion_est_vide(client):

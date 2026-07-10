@@ -5,6 +5,7 @@ initialiserEntete();
 function formaterValeur(valeur) {
   if (valeur === null || valeur === undefined) return "n/a";
   if (typeof valeur === "number") return Number.isInteger(valeur) ? valeur : valeur.toFixed(2);
+  if (typeof valeur === "string" && MOTIF_DATE_ISO.test(valeur)) return formaterDateHeure(valeur);
   return valeur;
 }
 
@@ -33,7 +34,7 @@ function construireTableau(lignes, colonnes) {
     const tr = document.createElement("tr");
     for (const colonne of colonnes) {
       const cellule = document.createElement("td");
-      cellule.textContent = formaterValeur(ligne[colonne.cle]);
+      cellule.textContent = colonne.montant ? formaterMontant(ligne[colonne.cle]) : formaterValeur(ligne[colonne.cle]);
       tr.appendChild(cellule);
     }
     corps.appendChild(tr);
@@ -84,7 +85,7 @@ async function chargerModeles() {
       resume.textContent =
         `${formaterValeur(modele.nb_courses)} course(s) — ROI ${formaterValeur(modele.roi)} % — ` +
         `taux de réussite ${formaterValeur(modele.taux_reussite)} % — ` +
-        `drawdown ${formaterValeur(modele.drawdown)} € — stabilité ${formaterValeur(modele.stabilite)}`;
+        `drawdown ${formaterMontant(modele.drawdown)} € — stabilité ${formaterValeur(modele.stabilite)}`;
       bloc.appendChild(resume);
 
       if (modele.commentaire) {
@@ -120,8 +121,8 @@ async function chargerModeles() {
         construireSousTableauJSON(modele.roi_par_hippodrome, [
           { libelle: "Hippodrome", cle: "hippodrome_id" },
           { libelle: "Courses", cle: "nb_courses" },
-          { libelle: "Mises €", cle: "mises" },
-          { libelle: "Gains €", cle: "gains" },
+          { libelle: "Mises €", cle: "mises", montant: true },
+          { libelle: "Gains €", cle: "gains", montant: true },
           { libelle: "ROI %", cle: "roi" },
         ])
       );
@@ -133,8 +134,8 @@ async function chargerModeles() {
         construireSousTableauJSON(modele.roi_par_type_pari, [
           { libelle: "Type de pari", cle: "type_pari" },
           { libelle: "Paris", cle: "nb_paris" },
-          { libelle: "Mises €", cle: "mises" },
-          { libelle: "Gains €", cle: "gains" },
+          { libelle: "Mises €", cle: "mises", montant: true },
+          { libelle: "Gains €", cle: "gains", montant: true },
           { libelle: "ROI %", cle: "roi" },
           { libelle: "Taux réussite %", cle: "taux_reussite" },
         ])
@@ -153,9 +154,9 @@ chargerSectionSimple("/statistiques/globale", "section-globale", [
   { libelle: "Courses", cle: "nb_courses" },
   { libelle: "Jouées", cle: "nb_jouees" },
   { libelle: "Ignorées", cle: "nb_ignorees" },
-  { libelle: "Mises €", cle: "mises" },
-  { libelle: "Gains €", cle: "gains" },
-  { libelle: "Profit €", cle: "profit" },
+  { libelle: "Mises €", cle: "mises", montant: true },
+  { libelle: "Gains €", cle: "gains", montant: true },
+  { libelle: "Profit €", cle: "profit", montant: true },
   { libelle: "ROI %", cle: "roi" },
   { libelle: "Taux réussite %", cle: "taux_reussite" },
 ]);
@@ -172,27 +173,27 @@ chargerSectionSimple("/statistiques/scores", "section-scores", [
 chargerSectionSimple("/statistiques/hippodromes", "section-hippodromes", [
   { libelle: "Hippodrome", cle: "hippodrome_id" },
   { libelle: "Courses", cle: "nb_courses" },
-  { libelle: "Mises €", cle: "mises" },
-  { libelle: "Gains €", cle: "gains" },
-  { libelle: "Profit €", cle: "profit" },
+  { libelle: "Mises €", cle: "mises", montant: true },
+  { libelle: "Gains €", cle: "gains", montant: true },
+  { libelle: "Profit €", cle: "profit", montant: true },
   { libelle: "ROI %", cle: "roi" },
 ]);
 
 chargerSectionSimple("/statistiques/disciplines", "section-disciplines", [
   { libelle: "Discipline", cle: "discipline_id" },
   { libelle: "Courses", cle: "nb_courses" },
-  { libelle: "Mises €", cle: "mises" },
-  { libelle: "Gains €", cle: "gains" },
-  { libelle: "Profit €", cle: "profit" },
+  { libelle: "Mises €", cle: "mises", montant: true },
+  { libelle: "Gains €", cle: "gains", montant: true },
+  { libelle: "Profit €", cle: "profit", montant: true },
   { libelle: "ROI %", cle: "roi" },
 ]);
 
 chargerSectionSimple("/statistiques/paris", "section-paris", [
   { libelle: "Type de pari", cle: "type_pari" },
   { libelle: "Paris", cle: "nb_paris" },
-  { libelle: "Mises €", cle: "mises" },
-  { libelle: "Gains €", cle: "gains" },
-  { libelle: "Profit €", cle: "profit" },
+  { libelle: "Mises €", cle: "mises", montant: true },
+  { libelle: "Gains €", cle: "gains", montant: true },
+  { libelle: "Profit €", cle: "profit", montant: true },
   { libelle: "ROI %", cle: "roi" },
   { libelle: "Taux réussite %", cle: "taux_reussite" },
 ]);

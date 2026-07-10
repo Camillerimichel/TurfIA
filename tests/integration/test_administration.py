@@ -24,6 +24,65 @@ def test_toutes_les_routes_administration_refusent_role_non_administrateur(clien
     assert client.get("/api/v1/administration/parametres").status_code == 403
     assert client.get("/api/v1/administration/supervision").status_code == 403
     assert client.post("/api/v1/administration/automatisations/collecte").status_code == 403
+    assert client.get("/api/v1/administration/cron").status_code == 403
+    assert client.get("/api/v1/administration/cron/journal").status_code == 403
+
+
+# -- Tableau de bord Cron ---------------------------------------------------------
+
+
+def test_list_cron_sans_execution_retourne_derniere_tache_null(client):
+    reponse = client.get("/api/v1/administration/cron")
+
+    assert reponse.status_code == 200
+    lignes = reponse.json()["data"]
+    assert [ligne["nom"] for ligne in lignes] == ["collecte_programme_jour", "analyse_courses_jour"]
+    assert all(ligne["derniere_tache"] is None for ligne in lignes)
+
+
+def test_list_cron_reflete_la_derniere_execution_par_nom(client, repos):
+    repos["tache"].demarrer("collecte_programme_jour", categorie="automatisation")
+    tache = repos["tache"].demarrer("collecte_programme_jour", categorie="automatisation")
+    repos["tache"].terminer(tache.id, "succes", commentaire="ok")
+
+    reponse = client.get("/api/v1/administration/cron")
+
+    assert reponse.status_code == 200
+    ligne = next(l for l in reponse.json()["data"] if l["nom"] == "collecte_programme_jour")
+    assert ligne["derniere_tache"]["id"] == tache.id
+    assert ligne["derniere_tache"]["statut"] == "succes"
+
+
+def test_get_journal_cron_lit_les_fichiers_de_log(client, tmp_path, monkeypatch):
+    fichier_sortie = tmp_path / "rafraichir_et_analyser.log"
+    fichier_erreurs = tmp_path / "rafraichir_et_analyser.err.log"
+    fichier_sortie.write_text("ligne de sortie\n", encoding="utf-8")
+    fichier_erreurs.write_text("ligne d'erreur\n", encoding="utf-8")
+
+    import api.routes.administration as administration_routes
+
+    monkeypatch.setattr(administration_routes, "CHEMIN_JOURNAL_CRON", fichier_sortie)
+    monkeypatch.setattr(administration_routes, "CHEMIN_JOURNAL_CRON_ERREURS", fichier_erreurs)
+
+    reponse = client.get("/api/v1/administration/cron/journal")
+
+    assert reponse.status_code == 200
+    corps = reponse.json()["data"]
+    assert corps["sortie"] == "ligne de sortie\n"
+    assert corps["erreurs"] == "ligne d'erreur\n"
+
+
+def test_get_journal_cron_fichiers_absents_retourne_chaines_vides(client, tmp_path, monkeypatch):
+    import api.routes.administration as administration_routes
+
+    monkeypatch.setattr(administration_routes, "CHEMIN_JOURNAL_CRON", tmp_path / "absent.log")
+    monkeypatch.setattr(administration_routes, "CHEMIN_JOURNAL_CRON_ERREURS", tmp_path / "absent.err.log")
+
+    reponse = client.get("/api/v1/administration/cron/journal")
+
+    assert reponse.status_code == 200
+    corps = reponse.json()["data"]
+    assert corps == {"sortie": "", "erreurs": ""}
 
 
 # -- Journaux -------------------------------------------------------------------
@@ -71,6 +130,25 @@ def test_declencher_analyse_jour_relance_les_courses_du_jour(client, repos):
     corps = reponse.json()["data"]
     assert corps["nb_courses"] == 1
     assert corps["nb_erreurs"] == 0
+
+
+def test_declencher_analyse_jour_relance_une_deuxieme_fois_ne_remonte_pas_en_echec(client, repos):
+    reunion = repos["course"].create_reunion(Reunion(date=date.today(), hippodrome_id=1, numero=1))
+    course = repos["course"].create_course(Course(reunion_id=reunion.id, numero=1, nom="Prix Test"))
+    cheval = repos["course"].create_cheval(Cheval(nom="Cheval Test"))
+    partant = repos["course"].create_partant(Partant(course_id=course.id, cheval_id=cheval.id, numero=1))
+    repos["course"].create_cote(Cote(partant_id=partant.id, operateur="PMU", cote=3.0))
+
+    client.post("/api/v1/administration/automatisations/analyse-jour")
+    reponse = client.post("/api/v1/administration/automatisations/analyse-jour")
+
+    assert reponse.status_code == 200
+    corps = reponse.json()["data"]
+    assert corps["nb_courses"] == 0
+    assert corps["nb_deja_analysees"] == 1
+    assert corps["nb_erreurs"] == 0
+    taches = repos["tache"].lister(categorie="automatisation")
+    assert taches[0].statut == "succes"
 
 
 def test_declencher_statistiques_recalcule_et_journalise(client, repos):

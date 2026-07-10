@@ -93,26 +93,47 @@ class CourseRepository:
         with self._conn.cursor(row_factory=class_row(Reunion)) as cur:
             cur.execute(
                 """
-                SELECT id, date, hippodrome_id, numero, heure_debut, heure_fin, statut
-                FROM reunion WHERE id = %s
+                SELECT re.id, re.date, re.hippodrome_id, re.numero, re.heure_debut, re.heure_fin,
+                       re.statut, h.nom AS hippodrome_nom
+                FROM reunion re
+                LEFT JOIN hippodrome h ON h.id = re.hippodrome_id
+                WHERE re.id = %s
                 """,
                 (reunion_id,),
             )
             return cur.fetchone()
 
-    def list_reunions_by_date(self, jour: date) -> list[Reunion]:
+    def list_reunions_by_date(self, jour: date, hippodrome_id: int | None = None) -> list[Reunion]:
         """Réunions d'une date donnée — point d'entrée de navigation pour
         l'interface HTML (cf. L018 §5, « Quinté du jour »/Accueil) : jusqu'ici
         aucune route ne permettait de lister les réunions sans connaître leur
-        id à l'avance."""
+        id à l'avance. `hippodrome_nom` joint pour l'affichage (page Accueil) ;
+        `hippodrome_id` optionnel pour le filtre de la même page."""
         with self._conn.cursor(row_factory=class_row(Reunion)) as cur:
-            cur.execute(
-                """
-                SELECT id, date, hippodrome_id, numero, heure_debut, heure_fin, statut
-                FROM reunion WHERE date = %s ORDER BY numero
-                """,
-                (jour,),
-            )
+            if hippodrome_id is not None:
+                cur.execute(
+                    """
+                    SELECT re.id, re.date, re.hippodrome_id, re.numero, re.heure_debut, re.heure_fin,
+                           re.statut, h.nom AS hippodrome_nom
+                    FROM reunion re
+                    LEFT JOIN hippodrome h ON h.id = re.hippodrome_id
+                    WHERE re.date = %s AND re.hippodrome_id = %s
+                    ORDER BY re.numero
+                    """,
+                    (jour, hippodrome_id),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT re.id, re.date, re.hippodrome_id, re.numero, re.heure_debut, re.heure_fin,
+                           re.statut, h.nom AS hippodrome_nom
+                    FROM reunion re
+                    LEFT JOIN hippodrome h ON h.id = re.hippodrome_id
+                    WHERE re.date = %s
+                    ORDER BY re.numero
+                    """,
+                    (jour,),
+                )
             return cur.fetchall()
 
     def get_or_create_reunion(self, reunion: Reunion) -> Reunion:

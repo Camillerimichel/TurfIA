@@ -371,7 +371,17 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
     affiche/masque une bannière injectée dynamiquement
     (`#indicateur-chargement-global`) — un seul point de câblage couvre
     tous les appels de toutes les pages, aucune page n'a eu besoin d'être
-    modifiée individuellement. Navigation par query string
+    modifiée individuellement. **Durée d'affichage minimale (300 ms)
+    ajoutée** après un premier test manuel où la bannière n'apparaissait
+    jamais : en local une requête peut se terminer en quelques millisecondes,
+    affichage et retrait pouvant survenir dans le même cycle de rendu du
+    navigateur (jamais peint du tout, pas juste trop rapide pour être vu).
+    **`StaticFiles` remplacé par `StaticFilesSansCache`** (`Cache-Control:
+    no-cache` sur chaque réponse statique) : un test manuel a montré le
+    navigateur servir une version JS périmée après modification — force
+    désormais la revalidation (ETag/Last-Modified déjà gérés nativement par
+    Starlette) à chaque chargement plutôt qu'une politique heuristique.
+    Navigation par query string
     (`course.html?id=42`), pas de routeur JS. Jeton stocké en `localStorage`
     (pas de cookies -> pas de CSRF à protéger, L018 §15 satisfait par
     construction). `api/main.py` monte `StaticFiles` (déjà fourni par
@@ -439,7 +449,49 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
       **Affichage du résultat amélioré (2026-07-10)** : le premier test manuel
       réel a montré un JSON brut peu lisible — `administration.js` construit
       désormais un résumé structuré (compteurs, tableau des tables
-      recalculées, liste des erreurs) au lieu de `JSON.stringify`.
+      recalculées, liste des erreurs) au lieu de `JSON.stringify` ; les
+      colonnes date/heure (`debut`, `fin`, `date_publication`,
+      `date_evenement`) sont affichées en `DD/MM/AAAA - HH:MM` plutôt qu'en
+      ISO brut.
+      **Bug réel trouvé et corrigé (2026-07-10)** : `TacheRepository.
+      terminer()` calculait `duree_ms` avec `now()`, qui renvoie la même
+      valeur du début à la fin d'une transaction PostgreSQL (= `CURRENT_
+      TIMESTAMP`, figé) — `demarrer()`/`terminer()` s'exécutant dans la même
+      transaction (une connexion par requête), `duree_ms` valait toujours 0
+      quel que soit le travail réel effectué entre les deux appels (constaté
+      en test manuel : une vraie collecte de 55 courses affichait 0 ms).
+      Remplacé par `clock_timestamp()` (heure réelle de chaque instruction,
+      y compris au sein d'une même transaction) pour `debut`/`fin`/
+      `duree_ms`. Vérifié réellement (`pg_sleep` dans une transaction de
+      test annulée ensuite : 593 ms mesurés correctement).
+      **Bug réel trouvé et corrigé (2026-07-10) : un second déclenchement
+      d'« Analyser les courses du jour » faisait planter toute la route
+      (500)** dès la première course déjà analysée dans cette version —
+      `AnalyseRepository.create_analyse` levait un `psycopg.errors.
+      UniqueViolation` (contrainte `uk_analyse_version`) jamais rattrapé, qui
+      abortait toute la transaction PostgreSQL (donc toutes les courses
+      suivantes du lot, pas seulement celle en conflit). Corrigé par un
+      `SAVEPOINT` (`conn.transaction()`) autour de l'insertion, qui traduit
+      la violation en `BusinessRuleError` sans invalider la transaction
+      englobante ; `AutomatisationService.analyser_courses_du_jour` capture
+      désormais `BusinessRuleError` en plus de `ValidationError` par course
+      (isolation réelle, pas seulement pour les échecs de validation).
+      Vérifié réellement (savepoint testé isolément contre PostgreSQL local,
+      puis lot complet de 55 courses déjà analysées : 0 succès/55 « déjà
+      analysée » au lieu d'un 500).
+      **Bug de performance réel trouvé et corrigé (2026-07-10) :
+      `ConsensusPresseService` refaisait les 2 requêtes réseau vers
+      Canalturf/Zone-Turf pour CHAQUE course du lot**, alors que la page du
+      Quinté+ du jour est strictement identique quel que soit le nombre de
+      courses traitées — ~10 s/course (délai de politesse), soit plus de
+      9 minutes pour 55 courses (constaté en test manuel : la route semblait
+      « plantée »/sans réponse). Le Quinté+ du jour (page + classement) est
+      désormais résolu au plus une fois par instance de service (cache
+      mémoire), réutilisé pour toutes les courses suivantes du même lot.
+      Vérifié réellement (lot complet de 55 courses : 2,7 s au lieu de
+      plusieurs minutes) ; nouveau test dédié vérifiant que les clients
+      Canalturf/Zone-Turf ne sont interrogés qu'une seule fois sur 5 courses
+      consultées.
     - *Vérifier les sauvegardes* : `scripts/sauvegarder_base.py` (nouveau) —
       `pg_dump --format=custom` vers `data/sauvegardes/`, mot de passe transmis
       via `PGPASSWORD` (jamais en argument de ligne de commande, cf. L021
@@ -483,14 +535,14 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
       PostgreSQL local (latence ~9 ms, ~96 Go disponibles).
 - **Tests** : 215 tests unitaires (dont `AutomatisationService`,
   `DbLogHandler` — anti-réentrance/absence de crash sur DB indisponible,
-  `SupervisionService`) + 141 tests d'intégration (dont Historique — filtres
+  `SupervisionService`) + 143 tests d'intégration (dont Historique — filtres
   date/hippodrome/type de pari/décision —, Administration — RBAC,
   journaux, les 3 automatisations, sauvegarde réussie/échouée, versions,
   paramètres, supervision —, `CollecteService` (dont détection `Course.quinte`
-  via `parisEvenement`), `ConsensusPresseService` et la suite de
-  non-régression par déterminisme, cf. ci-dessous) — repositories/services en
-  mémoire, `tests/integration/`), tous verts (356
-  au total).
+  via `parisEvenement`), `ConsensusPresseService` (dont non-répétition des
+  appels réseau par lot) et la suite de non-régression par déterminisme, cf.
+  ci-dessous) — repositories/services en mémoire, `tests/integration/`), tous
+  verts (358 au total).
 - **Couverture de tests mesurée (2026-07-09, `pytest-cov`, cf. L020 §14.1
   cible ≥80 % sur `algorithms`/`services`)** : 90 % sur `src/algorithms`+
   `src/services` (81 % avant cette mesure). Deux vrais trous de couverture
@@ -686,14 +738,141 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
 
 ## Explicitement hors périmètre (travail futur, non implémenté)
 
-- Automatisations planifiées (L017/L033) — aucun scheduler, `automations/` est un
-  squelette vide. **Redimensionné volontairement (2026-07-09)** : pour un usage
-  mono-utilisateur local, un vrai scheduler générique n'apporte rien — remplacé
-  par de simples déclenchements manuels, désormais construits (page
-  Administration de l'interface HTML, `POST /administration/automatisations/*`,
-  cf. ci-dessous) plutôt qu'une planification récurrente configurable
-  (régularité/heures) — pas de table de configuration de cron, pas de
-  scheduler en tâche de fond dans le process API.
+- Automatisations planifiées (L017/L033) — **redimensionné volontairement
+  (2026-07-09)** : pour un usage mono-utilisateur local, un vrai scheduler
+  générique dans le process API n'apporte rien — remplacé par de simples
+  déclenchements manuels (page Administration, `POST /administration/
+  automatisations/*`) plutôt qu'une planification récurrente configurable en
+  base. **Premier vrai besoin de planification couvert le 2026-07-10** :
+  les cotes PMU se publiant progressivement (vérifié réellement, cf. ci-dessus
+  §« Limites connues de la collecte »), l'utilisateur veut relancer collecte
+  + analyse toutes les heures de 9h à 14h. Nouveau
+  `scripts/rafraichir_et_analyser_jour.py` (enchaîne les deux, mêmes services
+  que l'Administration HTML, cf. L033 ADR-002 ; chaque étape tracée dans
+  `tache`, visible dans l'Administration comme un déclenchement manuel) +
+  `automations/launchd/com.turfia.rafraichir-analyser.plist` (agent `launchd`
+  natif macOS, 6 exécutions 9h-14h) — exactement la solution déjà anticipée
+  dans la décision du 2026-07-09 (« tâche `launchd`/cron locale appelant les
+  scripts déjà existants »), pas un nouveau scheduler générique dans
+  l'application. `automations/` reste un squelette Python vide (l'exécution
+  planifiée passe par l'OS, pas par un module `automations/*` en tâche de
+  fond) — voir `automations/launchd/README.md` pour l'installation.
+  **Tableau de bord Cron ajouté le 2026-07-10** (page Administration, bloc
+  avant « Automatisations ») : `TacheRepository.get_derniere_par_nom`,
+  `GET /administration/cron` (dernière exécution connue de chaque tâche
+  quotidienne fixe — `collecte_programme_jour`/`analyse_courses_jour` —,
+  volontairement sans historique/archive), `GET /administration/cron/journal`
+  (dernières 200 lignes des fichiers `logs/rafraichir_et_analyser*.log` du
+  plist launchd). **Bug réel trouvé et corrigé le 2026-07-10 en vérifiant la
+  route contre les données réelles** : à partir de la 2ᵉ exécution horaire du
+  jour, `analyse_courses_jour` remontait systématiquement en `echec` (`Une
+  analyse existe déjà pour la course N en version 1` comptée comme erreur
+  pour chaque course déjà analysée à l'heure précédente — le SAVEPOINT de
+  `AnalyseRepository.create_analyse` évite bien le crash du lot, mais le
+  compte d'erreurs qui en résultait faisait quand même passer tout le run en
+  `echec`, alors que c'est le cas attendu d'un script relancé toutes les
+  heures). Corrigé en amont plutôt qu'en aval : nouvelle
+  `AnalyseRepository.existe_analyse(course_id, version)` +
+  `AnalyseService.deja_analysee`, appelée par `AutomatisationService.
+  analyser_courses_du_jour` avant de refaire le travail de préparation —
+  les courses déjà analysées sont désormais comptées à part
+  (`RapportAnalyseJour.nb_deja_analysees`, affiché dans le résumé
+  Administration et dans le tableau de bord Cron) et n'affectent plus le
+  statut de la tâche. Vérifié réellement (script direct, transaction
+  annulée) : sur les 55 courses du jour, 41 déjà analysées désormais
+  ignorées proprement, seules les 14 vraies erreurs « Aucun partant
+  exploitable » (déjà vérifiées légitimes, cotes PMU pas encore publiées)
+  restent comptées — `nb_erreurs` passe de 55 à 14, statut `succes` dès que
+  ces 14 courses obtiennent leurs cotes.
+- **Passe esthétique sur les 5 pages HTML, 2026-07-10** (retours utilisateur
+  après premiers tests manuels réels) :
+  - Format horaire unifié `JJ/MM/AAAA - HH:MM` partout où une valeur ISO a un
+    composant heure (`formaterDateHeure`/`MOTIF_DATE_ISO` déplacés dans
+    `api.js`, chargé par toutes les pages, plutôt que dupliqués — utilisés
+    désormais aussi par historique.js/statistiques.js/course.js/accueil.js,
+    pas seulement administration.js). Les dates seules (jour de réunion, sans
+    heure) restent en `AAAA-MM-JJ`, non concernées.
+  - Toute analyse affichée porte désormais son heure de calcul
+    (`date_calcul`) : fiche course (liste + détail), page Accueil (bloc
+    paris), page Historique (nouvelle colonne « Analysée le »). Nécessitait
+    d'ajouter `date_calcul` à `HistoriqueLigne`/`HistoriqueLigneOut` (absent
+    jusqu'ici, cf. `HistoriqueRepository._COLONNES`) — vrai gap, pas juste un
+    oubli d'affichage.
+  - Page Accueil : nom d'hippodrome affiché (`Reunion.hippodrome_nom`, LEFT
+    JOIN `hippodrome` ajouté à `CourseRepository.get_reunion`/
+    `list_reunions_by_date`) au lieu de « hippodrome #N ». Nouveau filtre
+    hippodrome (`GET /reunions?hippodrome_id=`, réutilise `/hippodromes` déjà
+    utilisé par Historique). Nouveau filtre décision Jouer/Ne pas jouer/Toutes,
+    actif par défaut sur « Jouer » (masque les courses `Ne pas jouer` et les
+    courses pas encore analysées ; une réunion sans aucune course
+    correspondante est masquée entièrement plutôt que montrée vide).
+  - Page Historique : bloc de filtres réorganisé en deux colonnes (`.colonnes-
+    deux`, empilées sur petit écran) — filtres à gauche, rappel des règles de
+    décision à droite (seuils de score → décision/budget, cf. `src/algorithms/
+    score.py::determiner_decision`, `src/algorithms/classement.py::
+    calculer_budget` — texte statique, valeurs recopiées des constantes
+    réelles du code, pas inventées).
+  - Vérifié réellement contre PostgreSQL (pas seulement via les tests sur
+    fakes) : `list_reunions_by_date` renvoie bien les noms d'hippodrome réels
+    (ex. « HIPPODROME DE CABOURG »), le filtre `hippodrome_id` réduit
+    correctement le résultat, `HistoriqueRepository.rechercher` renvoie
+    `date_calcul` peuplé. Limite honnête : pas de navigateur pour valider
+    visuellement le rendu JS — vérifié par lecture du code + réponses API
+    réelles, comme pour le reste de l'interface HTML.
+- **Deuxième passe esthétique, 2026-07-10** (mêmes retours utilisateur) :
+  - Tous les montants en euros affichés dans l'interface ont désormais un
+    séparateur de milliers " " (`formaterMontant` dans `api.js`, partagé) —
+    budgets/mises/gains/profits/drawdown, sur les 4 pages concernées
+    (Accueil, fiche course, Historique, Statistiques). Séparateur décimal
+    laissé en "." (demande limitée au séparateur de milliers). Vérifié
+    directement en Node (hors navigateur) sur les cas limites (négatif, zéro,
+    plusieurs milliers).
+  - Tableau de bord Cron (Administration) : nouvelle colonne « Prochain
+    déclenchement » avec compte à rebours réel (`HH:MM:SS`, mis à jour chaque
+    seconde par `setInterval`) + heure absolue du prochain créneau. Calculé
+    entièrement côté client à partir de la planification `[9, 10, 11, 12, 13,
+    14]` (dupliquée en JS depuis `automations/launchd/com.turfia.rafraichir-
+    analyser.plist`, volontairement — un compte à rebours client reste exact
+    même après l'heure de déclenchement passée, contrairement à un instant
+    figé récupéré une fois depuis le serveur). Vérifié en Node sur les cas
+    limites (avant 9h, entre deux créneaux, juste après 14h, tard le soir).
+  - Page Administration : les 7 blocs (`Supervision`/`Tableau de bord Cron`/
+    `Automatisations`/`Sauvegardes`/`Versions publiées`/`Paramètres`/
+    `Journaux`) sont désormais des `<details class="carte">` repliés par
+    défaut — tout le bandeau (`<summary><h2>`) est cliquable pour déplier,
+    comportement natif du navigateur (pas de JS ajouté pour le toggle lui-même,
+    seul le CSS `::before`/`[open]` gère le chevron). Le chargement des
+    données de chaque bloc reste déclenché au chargement de la page comme
+    avant : un `<details>` fermé garde son contenu dans le DOM (juste masqué
+    visuellement), donc les données sont déjà prêtes à l'ouverture.
+- **Troisième passe, 2026-07-10** (mêmes retours utilisateur) :
+  - Jauge « temps avant le départ » pour toute course pas encore partie
+    (Accueil, fiche course) : badge coloré (dégradé continu vert -> rouge,
+    rouge plein sous 30 min, vert plein au-delà de 90 min), texte "HH:MM
+    (dans Xh MM)", rafraîchi toutes les 30 s côté client (`construireBadgeDepart`/
+    `couleurJaugeDepart` dans `api.js`, partagés). Vérifié en Node sur les
+    seuils (5/29/30/45/60/89/90/120/180 min).
+  - **Vrai bug trouvé et corrigé : le déclenchement manuel d'analyse
+    (fiche course, `POST /courses/{id}/analyses/auto`) échouait quasi
+    systématiquement.** `html/static/js/course.js` n'envoyait jamais de
+    `version` dans le payload -> l'API utilisait toujours le défaut
+    `AnalyseAutoIn.version = 1`. Or l'automatisation horaire
+    (`analyse_courses_jour`) crée déjà une analyse en version 1 pour
+    quasiment toutes les courses du jour (cf. tableau de bord Cron) — tout
+    déclenchement manuel ultérieur retombait donc sur la même version et
+    recevait 409 (« Une analyse existe déjà… »), rendant le bouton « lancer
+    une analyse » de facto inutilisable après le premier passage du cron.
+    Corrigé en visant systématiquement, côté JS, la version suivant la plus
+    haute déjà connue pour la course (`GET /courses/{id}/analyses` avant
+    soumission) — jamais de conflit, l'analyse peut être relancée « quand on
+    veut » à tout moment. Aucune modification API nécessaire (la logique de
+    versionnement existait déjà, seul l'appelant JS ne s'en servait pas).
+    Vérifié réellement contre PostgreSQL (script direct, transaction
+    annulée) : rejouer la version 1 d'une course déjà analysée échoue bien
+    (409), viser la version 2 réussit. Fake `AnalyseRepository.create_analyse`
+    (tests) ne reproduisait pas non plus la contrainte UNIQUE(course_id,
+    version) réelle — corrigé en même temps, sinon ce bug serait resté
+    invisible à la suite de tests.
 - **Interface HTML (L018) — les 5 modules (Accueil/Courses-Analyses/
   Statistiques/Historique/Administration) sont désormais implémentés
   (2026-07-09)** (cf. section dédiée ci-dessus). Seul le module

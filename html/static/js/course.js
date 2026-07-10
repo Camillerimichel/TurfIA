@@ -10,9 +10,14 @@ async function chargerCourse() {
   document.getElementById("titre-course").textContent = `Course ${course.numero} — ${course.nom}`;
   const infos = document.getElementById("infos-course");
   infos.innerHTML = "";
+
+  const pDepart = document.createElement("p");
+  pDepart.textContent = "Heure de départ : ";
+  pDepart.appendChild(course.heure_depart ? construireBadgeDepart(course.heure_depart) : document.createTextNode("n/a"));
+  infos.appendChild(pDepart);
+
   const details = [
-    ["Heure de départ", course.heure_depart ?? "n/a"],
-    ["Allocation", course.allocation !== null ? `${course.allocation} €` : "n/a"],
+    ["Allocation", course.allocation !== null ? `${formaterMontant(course.allocation)} €` : "n/a"],
     ["Nombre de partants annoncé", course.nb_partants ?? "n/a"],
     ["Quinté+", course.quinte ? "Oui" : "Non"],
   ];
@@ -86,12 +91,17 @@ function formaterDetailAnalyse(detail) {
   titre.textContent = `Analyse #${detail.analyse.id} — décision : ${detail.analyse.decision ?? "n/a"}`;
   conteneur.appendChild(titre);
 
+  const miseAJour = document.createElement("p");
+  miseAJour.className = "note";
+  miseAJour.textContent = `Calculée le : ${detail.analyse.date_calcul ? formaterDateHeure(detail.analyse.date_calcul) : "n/a"}`;
+  conteneur.appendChild(miseAJour);
+
   const resume = document.createElement("p");
   resume.textContent =
     `Score de confiance : ${detail.analyse.score_confiance ?? "n/a"} — ` +
     `Risque : ${detail.analyse.risque ?? "n/a"} — ` +
     `ROI théorique : ${detail.analyse.roi_theorique ?? "n/a"} — ` +
-    `Budget : ${detail.analyse.budget} €`;
+    `Budget : ${formaterMontant(detail.analyse.budget)} €`;
   conteneur.appendChild(resume);
 
   const tableauPartants = document.createElement("table");
@@ -118,7 +128,7 @@ function formaterDetailAnalyse(detail) {
     const corpsParis = document.createElement("tbody");
     for (const pari of detail.paris) {
       const ligne = document.createElement("tr");
-      for (const valeur of [pari.type_pari, `${pari.mise} €`, pari.roi_estime ?? "—"]) {
+      for (const valeur of [pari.type_pari, `${formaterMontant(pari.mise)} €`, pari.roi_estime ?? "—"]) {
         const cellule = document.createElement("td");
         cellule.textContent = valeur;
         ligne.appendChild(cellule);
@@ -146,7 +156,8 @@ async function chargerAnalyses() {
     const item = document.createElement("li");
     const lien = document.createElement("a");
     lien.href = "#";
-    lien.textContent = `Analyse #${analyse.id} (v${analyse.version}) — ${analyse.decision ?? "n/a"}`;
+    const dateCalcul = analyse.date_calcul ? formaterDateHeure(analyse.date_calcul) : "n/a";
+    lien.textContent = `Analyse #${analyse.id} (v${analyse.version}) — ${analyse.decision ?? "n/a"} — ${dateCalcul}`;
     lien.addEventListener("click", async (evenement) => {
       evenement.preventDefault();
       const detail = await apiFetch(`/analyses/${analyse.id}`);
@@ -168,13 +179,23 @@ document.getElementById("formulaire-analyse").addEventListener("submit", async (
     return;
   }
 
-  const payload = {
-    mise_reference: parseFloat(document.getElementById("mise-reference").value),
-    budget_precedent: parseFloat(document.getElementById("budget-precedent").value),
-    perte_precedente: document.getElementById("perte-precedente").checked,
-  };
-
   try {
+    // Les analyses sont immuables par version (cf. L030.3 §1) : `analyses/auto`
+    // rejette en 409 un second déclenchement sur une version déjà calculée
+    // (ex. par l'automatisation horaire, cf. PROJECT_STATE.md). Pour pouvoir
+    // relancer une analyse « quand on veut » sans jamais tomber sur ce conflit,
+    // on vise systématiquement la version suivant la plus élevée déjà connue.
+    const analysesExistantes = await apiFetch(`/courses/${idCourse}/analyses`);
+    const prochaineVersion =
+      analysesExistantes.length > 0 ? Math.max(...analysesExistantes.map((a) => a.version)) + 1 : 1;
+
+    const payload = {
+      version: prochaineVersion,
+      mise_reference: parseFloat(document.getElementById("mise-reference").value),
+      budget_precedent: parseFloat(document.getElementById("budget-precedent").value),
+      perte_precedente: document.getElementById("perte-precedente").checked,
+    };
+
     const detail = await apiFetch(`/courses/${idCourse}/analyses/auto`, {
       method: "POST",
       body: JSON.stringify(payload),

@@ -24,40 +24,59 @@
   <main>
     <section class="carte">
       <h2>Filtres</h2>
-      <form id="formulaire-filtres">
-        <label for="filtre-date-debut">Du</label>
-        <input type="date" id="filtre-date-debut" />
+      <div class="colonnes-deux">
+        <form id="formulaire-filtres">
+          <label for="filtre-date-debut">Du</label>
+          <input type="date" id="filtre-date-debut" />
 
-        <label for="filtre-date-fin">Au</label>
-        <input type="date" id="filtre-date-fin" />
+          <label for="filtre-date-fin">Au</label>
+          <input type="date" id="filtre-date-fin" />
 
-        <label for="filtre-hippodrome">Hippodrome</label>
-        <select id="filtre-hippodrome">
-          <option value="">Tous</option>
-        </select>
+          <label for="filtre-hippodrome">Hippodrome</label>
+          <select id="filtre-hippodrome">
+            <option value="">Tous</option>
+          </select>
 
-        <label for="filtre-type-pari">Type de pari</label>
-        <select id="filtre-type-pari">
-          <option value="">Tous</option>
-          <option value="Simple Gagnant">Simple Gagnant</option>
-          <option value="Simple Placé">Simple Placé</option>
-          <option value="Couplé Gagnant">Couplé Gagnant</option>
-          <option value="Couplé Placé">Couplé Placé</option>
-          <option value="2 sur 4">2 sur 4</option>
-          <option value="Quinté Flexi">Quinté Flexi</option>
-        </select>
+          <label for="filtre-type-pari">Type de pari</label>
+          <select id="filtre-type-pari">
+            <option value="">Tous</option>
+            <option value="Simple Gagnant">Simple Gagnant</option>
+            <option value="Simple Placé">Simple Placé</option>
+            <option value="Couplé Gagnant">Couplé Gagnant</option>
+            <option value="Couplé Placé">Couplé Placé</option>
+            <option value="2 sur 4">2 sur 4</option>
+            <option value="Quinté Flexi">Quinté Flexi</option>
+          </select>
 
-        <label for="filtre-decision">Décision</label>
-        <select id="filtre-decision">
-          <option value="">Toutes</option>
-          <option value="Ne pas jouer">Ne pas jouer</option>
-          <option value="Jeu prudent">Jeu prudent</option>
-          <option value="Jeu normal">Jeu normal</option>
-          <option value="Forte opportunité">Forte opportunité</option>
-        </select>
+          <label for="filtre-decision">Décision</label>
+          <select id="filtre-decision">
+            <option value="">Toutes</option>
+            <option value="Ne pas jouer">Ne pas jouer</option>
+            <option value="Jeu prudent">Jeu prudent</option>
+            <option value="Jeu normal">Jeu normal</option>
+            <option value="Forte opportunité">Forte opportunité</option>
+          </select>
 
-        <button type="submit">Rechercher</button>
-      </form>
+          <button type="submit">Rechercher</button>
+        </form>
+
+        <div class="bloc-regles-decision">
+          <h3>Règles de décision (cf. L031.1 §9, L031.6 §6)</h3>
+          <p class="note">Décision et budget conseillé selon le score de confiance de la course :</p>
+          <table>
+            <thead>
+              <tr><th>Score de confiance</th><th>Décision</th><th>Budget conseillé</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>&lt; 60</td><td>Ne pas jouer</td><td>0 €</td></tr>
+              <tr><td>60 à 74</td><td>Jeu prudent</td><td>10 €</td></tr>
+              <tr><td>75 à 84</td><td>Jeu normal</td><td>25 €</td></tr>
+              <tr><td>≥ 85</td><td>Forte opportunité</td><td>50 €</td></tr>
+            </tbody>
+          </table>
+          <p class="note">Aucune augmentation de mise n'est autorisée après une perte (garde-fou anti-martingale).</p>
+        </div>
+      </div>
     </section>
 
     <section class="carte">

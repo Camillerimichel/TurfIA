@@ -26,10 +26,38 @@ async function chargerRoiGlobal() {
     taux.textContent = `Taux de réussite : ${derniere.taux_reussite !== null ? derniere.taux_reussite.toFixed(2) + " %" : "n/a"}`;
     const courses = document.createElement("p");
     courses.textContent = `${derniere.nb_courses} course(s) analysée(s), ${derniere.nb_jouees} jouée(s)`;
-    conteneur.append(roi, taux, courses);
+    const miseAJour = document.createElement("p");
+    miseAJour.className = "note";
+    miseAJour.textContent = `Dernière mise à jour : ${derniere.date_calcul ? formaterDateHeure(derniere.date_calcul) : "n/a"}`;
+    conteneur.append(roi, taux, courses, miseAJour);
   } catch (erreur) {
     conteneur.textContent = `Erreur : ${erreur.message}`;
   }
+}
+
+// -- Filtres --------------------------------------------------------------------
+
+async function chargerHippodromes() {
+  const select = document.getElementById("filtre-hippodrome-accueil");
+  try {
+    const hippodromes = await apiFetch("/hippodromes");
+    for (const hippodrome of hippodromes) {
+      const option = document.createElement("option");
+      option.value = hippodrome.id;
+      option.textContent = hippodrome.nom;
+      select.appendChild(option);
+    }
+  } catch (erreur) {
+    // Filtre non bloquant : la liste des réunions reste utilisable sans la liste des hippodromes.
+  }
+}
+
+// "Jouer" exclut les décisions "Ne pas jouer" ainsi que les courses pas
+// encore analysées (aucune décision) — seule "Toutes" les affiche.
+function decisionCorrespondAuFiltre(decision, filtre) {
+  if (filtre === "toutes") return true;
+  if (filtre === "ne_pas_jouer") return decision === "Ne pas jouer";
+  return decision != null && decision !== "Ne pas jouer";
 }
 
 // Dernière analyse d'une course (version la plus élevée = la plus récente,
@@ -49,8 +77,13 @@ function construireBlocParis(detail) {
   const entete = document.createElement("p");
   entete.textContent =
     `Décision : ${detail.analyse.decision ?? "n/a"} — ` +
-    `score ${detail.analyse.score_confiance ?? "n/a"} — budget ${detail.analyse.budget} €`;
+    `score ${detail.analyse.score_confiance ?? "n/a"} — budget ${formaterMontant(detail.analyse.budget)} €`;
   bloc.appendChild(entete);
+
+  const miseAJour = document.createElement("p");
+  miseAJour.className = "note";
+  miseAJour.textContent = `Analysée le : ${detail.analyse.date_calcul ? formaterDateHeure(detail.analyse.date_calcul) : "n/a"}`;
+  bloc.appendChild(miseAJour);
 
   if (detail.paris.length === 0) {
     const vide = document.createElement("p");
@@ -63,7 +96,7 @@ function construireBlocParis(detail) {
   liste.className = "liste-paris";
   for (const pari of detail.paris) {
     const item = document.createElement("li");
-    item.textContent = `${pari.type_pari} — combinaison ${pari.combinaison} — mise ${pari.mise} €`;
+    item.textContent = `${pari.type_pari} — combinaison ${pari.combinaison} — mise ${formaterMontant(pari.mise)} €`;
     liste.appendChild(item);
   }
   bloc.appendChild(liste);
@@ -73,66 +106,100 @@ function construireBlocParis(detail) {
 async function chargerReunions(dateJour) {
   const conteneur = document.getElementById("liste-reunions");
   conteneur.textContent = "Chargement…";
+  const hippodromeId = document.getElementById("filtre-hippodrome-accueil").value;
+  const filtreDecision = document.getElementById("filtre-decision-accueil").value;
   try {
-    const reunions = await apiFetch(`/reunions?date=${dateJour}`);
+    const parametres = new URLSearchParams({ date: dateJour });
+    if (hippodromeId) parametres.set("hippodrome_id", hippodromeId);
+    const reunions = await apiFetch(`/reunions?${parametres.toString()}`);
     if (reunions.length === 0) {
       conteneur.textContent = "Aucune réunion à cette date.";
       return;
     }
     conteneur.innerHTML = "";
+    let nbReunionsAffichees = 0;
     for (const reunion of reunions) {
       const bloc = document.createElement("div");
       bloc.className = "bloc-reunion";
       const titre = document.createElement("h3");
-      titre.textContent = `R${reunion.numero} — hippodrome #${reunion.hippodrome_id} (${reunion.statut})`;
+      titre.textContent = `R${reunion.numero} — ${reunion.hippodrome_nom ?? `hippodrome #${reunion.hippodrome_id}`} (${reunion.statut})`;
       bloc.appendChild(titre);
 
+      let nbCoursesAffichees = 0;
+      let erreurReunion = false;
       try {
         const courses = await apiFetch(`/reunions/${reunion.id}/courses`);
         for (const course of courses) {
+          let decision = null;
+          let contenuCourse;
+          try {
+            const detail = await chargerDerniereAnalyse(course.id);
+            decision = detail ? detail.analyse.decision : null;
+            if (!decisionCorrespondAuFiltre(decision, filtreDecision)) continue;
+            contenuCourse = detail
+              ? construireBlocParis(detail)
+              : (() => {
+                  const nonAnalysee = document.createElement("p");
+                  nonAnalysee.className = "note";
+                  nonAnalysee.textContent = "Pas encore analysée — cliquer sur la course pour lancer l'analyse.";
+                  return nonAnalysee;
+                })();
+          } catch (erreur) {
+            const erreurParis = document.createElement("p");
+            erreurParis.textContent = `Erreur paris : ${erreur.message}`;
+            contenuCourse = erreurParis;
+          }
+
           const blocCourse = document.createElement("div");
           blocCourse.className = "bloc-course";
-
           const titreCourse = document.createElement("h4");
           const lien = document.createElement("a");
           lien.href = `/course.html?id=${course.id}`;
           lien.textContent = `C${course.numero} — ${course.nom}`;
           titreCourse.appendChild(lien);
-          blocCourse.appendChild(titreCourse);
-
-          try {
-            const detail = await chargerDerniereAnalyse(course.id);
-            if (detail === null) {
-              const nonAnalysee = document.createElement("p");
-              nonAnalysee.className = "note";
-              nonAnalysee.textContent = "Pas encore analysée — cliquer sur la course pour lancer l'analyse.";
-              blocCourse.appendChild(nonAnalysee);
-            } else {
-              blocCourse.appendChild(construireBlocParis(detail));
-            }
-          } catch (erreur) {
-            const erreurParis = document.createElement("p");
-            erreurParis.textContent = `Erreur paris : ${erreur.message}`;
-            blocCourse.appendChild(erreurParis);
+          if (course.heure_depart) {
+            titreCourse.appendChild(document.createTextNode(" — "));
+            titreCourse.appendChild(construireBadgeDepart(course.heure_depart));
           }
+          blocCourse.appendChild(titreCourse);
+          blocCourse.appendChild(contenuCourse);
 
           bloc.appendChild(blocCourse);
+          nbCoursesAffichees += 1;
         }
       } catch (erreur) {
         const erreurCourses = document.createElement("p");
         erreurCourses.textContent = `Erreur : ${erreur.message}`;
         bloc.appendChild(erreurCourses);
+        erreurReunion = true;
       }
-      conteneur.appendChild(bloc);
+
+      // Une réunion sans aucune course correspondant au filtre décision est
+      // masquée entièrement (pas de bloc "R1 — hippodrome" vide) — sauf en cas
+      // d'erreur réelle, toujours affichée.
+      if (nbCoursesAffichees > 0 || erreurReunion) {
+        conteneur.appendChild(bloc);
+        nbReunionsAffichees += 1;
+      }
+    }
+    if (nbReunionsAffichees === 0) {
+      conteneur.textContent = "Aucune course ne correspond à ce filtre.";
     }
   } catch (erreur) {
     conteneur.textContent = `Erreur : ${erreur.message}`;
   }
 }
 
+// Pas de bouton de soumission (filtres appliqués au `change`) — évite qu'une
+// touche Entrée dans un des champs ne recharge la page (soumission implicite).
+document.getElementById("formulaire-filtres-accueil").addEventListener("submit", (evenement) => evenement.preventDefault());
+
 const selecteurDate = document.getElementById("selecteur-date");
 selecteurDate.value = formaterDate(new Date());
 selecteurDate.addEventListener("change", () => chargerReunions(selecteurDate.value));
+document.getElementById("filtre-hippodrome-accueil").addEventListener("change", () => chargerReunions(selecteurDate.value));
+document.getElementById("filtre-decision-accueil").addEventListener("change", () => chargerReunions(selecteurDate.value));
 
 chargerRoiGlobal();
+chargerHippodromes();
 chargerReunions(selecteurDate.value);

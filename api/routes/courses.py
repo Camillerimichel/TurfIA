@@ -67,12 +67,15 @@ def create_reunion(
 @router.get("/reunions", response_model=Enveloppe[list[ReunionOut]])
 def list_reunions(
     date_jour: date = Query(default_factory=date.today, alias="date"),
+    hippodrome_id: int | None = None,
     repo: CourseRepository = Depends(get_course_repository),
     _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
 ) -> Enveloppe[list[ReunionOut]]:
-    """Réunions d'une date donnée (défaut : aujourd'hui) — point d'entrée de
-    navigation pour l'interface HTML (cf. L018 §5)."""
-    reunions = repo.list_reunions_by_date(date_jour)
+    """Réunions d'une date donnée (défaut : aujourd'hui), avec le nom de
+    l'hippodrome joint pour l'affichage — point d'entrée de navigation pour
+    l'interface HTML (cf. L018 §5). `hippodrome_id` optionnel : filtre de la
+    page Accueil."""
+    reunions = repo.list_reunions_by_date(date_jour, hippodrome_id)
     return Enveloppe(data=[ReunionOut.model_validate(r) for r in reunions])
 
 

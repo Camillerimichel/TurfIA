@@ -9,6 +9,7 @@ from __future__ import annotations
 import psycopg
 from psycopg.rows import class_row
 
+from src.core.exceptions import BusinessRuleError
 from src.models.analyse import Analyse, AnalysePartant, ControleRoi, ControleRoiPari, Pari, Selection
 
 
@@ -17,29 +18,56 @@ class AnalyseRepository:
         self._conn = conn
 
     def create_analyse(self, analyse: Analyse) -> Analyse:
-        with self._conn.cursor(row_factory=class_row(Analyse)) as cur:
-            cur.execute(
-                """
-                INSERT INTO analyses (
-                    course_id, version, score_confiance, risque, roi_theorique,
-                    decision, budget, commentaire
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id, course_id, version, date_calcul, score_confiance, risque,
-                          roi_theorique, decision, budget, commentaire
-                """,
-                (
-                    analyse.course_id,
-                    analyse.version,
-                    analyse.score_confiance,
-                    analyse.risque,
-                    analyse.roi_theorique,
-                    analyse.decision,
-                    analyse.budget,
-                    analyse.commentaire,
-                ),
-            )
-            return cur.fetchone()
+        # `conn.transaction()` ouvre un SAVEPOINT : en cas de UniqueViolation
+        # (course_id, version) déjà analysée), seul ce SAVEPOINT est annulé —
+        # la transaction englobante (ex. AutomatisationService.
+        # analyser_courses_du_jour, qui traite plusieurs courses dans une même
+        # connexion/transaction) reste utilisable pour les courses suivantes.
+        # Sans ce SAVEPOINT, une seule course déjà analysée avortait toute la
+        # transaction ("current transaction is aborted"), donc tout le lot
+        # (vérifié réellement : 500 sur /administration/automatisations/
+        # analyse-jour dès qu'une course avait déjà une analyse en version 1).
+        try:
+            with self._conn.transaction():
+                with self._conn.cursor(row_factory=class_row(Analyse)) as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO analyses (
+                            course_id, version, score_confiance, risque, roi_theorique,
+                            decision, budget, commentaire
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id, course_id, version, date_calcul, score_confiance, risque,
+                                  roi_theorique, decision, budget, commentaire
+                        """,
+                        (
+                            analyse.course_id,
+                            analyse.version,
+                            analyse.score_confiance,
+                            analyse.risque,
+                            analyse.roi_theorique,
+                            analyse.decision,
+                            analyse.budget,
+                            analyse.commentaire,
+                        ),
+                    )
+                    return cur.fetchone()
+        except psycopg.errors.UniqueViolation as exc:
+            raise BusinessRuleError(
+                f"Une analyse existe déjà pour la course {analyse.course_id} en version {analyse.version}."
+            ) from exc
+
+    def existe_analyse(self, course_id: int, version: int) -> bool:
+        """Vérifie à l'avance si `(course_id, version)` a déjà une analyse —
+        cf. `AutomatisationService.analyser_courses_du_jour`, qui relance
+        l'analyse du jour à chaque exécution horaire (L033) : sans ce
+        contrôle, une course déjà analysée ne provoque une `BusinessRuleError`
+        (cf. `create_analyse`) qu'après avoir refait tout le travail de
+        préparation, et ce cas pourtant attendu (déjà traité à l'heure
+        précédente) était compté comme une vraie erreur."""
+        with self._conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM analyses WHERE course_id = %s AND version = %s LIMIT 1", (course_id, version))
+            return cur.fetchone() is not None
 
     def get_analyse(self, analyse_id: int) -> Analyse | None:
         with self._conn.cursor(row_factory=class_row(Analyse)) as cur:

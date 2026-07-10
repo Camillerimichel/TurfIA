@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
 
@@ -18,6 +18,7 @@ class HistoriqueLigneOut(BaseModel):
     course_nom: str
     analyse_id: int
     version: int
+    date_calcul: datetime | None = None
     decision: str | None = None
     score_confiance: float | None = None
     risque: float | None = None
