@@ -425,8 +425,9 @@ class FakeAnalyseRepository:
     def list_analyses_by_course(self, course_id: int):
         return [a for a in self.analyses.values() if a.course_id == course_id]
 
-    def existe_analyse(self, course_id: int, version: int) -> bool:
-        return any(a.course_id == course_id and a.version == version for a in self.analyses.values())
+    def get_derniere_version(self, course_id: int) -> int:
+        versions = [a.version for a in self.analyses.values() if a.course_id == course_id]
+        return max(versions) if versions else 0
 
     def create_analyse_partant(self, ap):
         ap = dataclasses.replace(ap, id=self._ids.next())

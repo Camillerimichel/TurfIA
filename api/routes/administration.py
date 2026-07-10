@@ -175,7 +175,6 @@ def declencher_collecte(
 
 @router.post("/automatisations/analyse-jour", response_model=Enveloppe[RapportAnalyseJourOut])
 def declencher_analyse_jour(
-    version: int = 1,
     service: AutomatisationService = Depends(get_automatisation_service),
     tache_repo: TacheRepository = Depends(get_tache_repository),
     audit_repo: AuditRepository = Depends(get_audit_repository),
@@ -183,7 +182,7 @@ def declencher_analyse_jour(
 ) -> Enveloppe[RapportAnalyseJourOut]:
     tache = tache_repo.demarrer("analyse_courses_jour", categorie="automatisation")
     try:
-        rapport = service.analyser_courses_du_jour(date.today(), version)
+        rapport = service.analyser_courses_du_jour(date.today())
     except Exception as exc:
         tache_repo.terminer(tache.id, "echec", commentaire=str(exc)[:2000])
         raise
@@ -191,7 +190,7 @@ def declencher_analyse_jour(
     tache_repo.terminer(
         tache.id, statut,
         commentaire=(
-            f"{rapport.nb_courses} course(s), {rapport.nb_deja_analysees} déjà à jour, "
+            f"{rapport.nb_courses} course(s), {rapport.nb_deja_parties} déjà partie(s), "
             f"{rapport.nb_erreurs} erreur(s)"
         ),
     )
@@ -199,7 +198,7 @@ def declencher_analyse_jour(
     return Enveloppe(data=RapportAnalyseJourOut(
         nb_courses=rapport.nb_courses,
         nb_erreurs=rapport.nb_erreurs,
-        nb_deja_analysees=rapport.nb_deja_analysees,
+        nb_deja_parties=rapport.nb_deja_parties,
         erreurs=[ErreurCourseOut(course_id=cid, message=msg) for cid, msg in rapport.erreurs],
     ))
 

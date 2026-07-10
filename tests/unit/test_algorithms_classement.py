@@ -88,6 +88,26 @@ def test_construire_paris_seulement_base_n1_genere_gagnant_et_place():
     assert mise_totale == pytest.approx(10.0, abs=0.05)
 
 
+def test_construire_paris_tete_de_liste_hors_base_et_chance_reguliere_genere_quand_meme_simple_place():
+    """Non-régression : `categoriser` peut classer la tête de liste en "Tocard"
+    (ex. score final 65, sous le seuil de 70 de Chance régulière) alors que
+    son score détermine un budget > 0 (Jeu prudent, cf. `calculer_budget`) —
+    sans filet, aucun pari n'était proposé (vérifié réellement en base :
+    2 analyses "Jeu prudent"/10 €, 0 pari créé)."""
+    partants = [_partant(1, 65, 1, "Tocard"), _partant(2, 40, 2, "Écarté")]
+    paris = construire_paris(partants, budget=10.0)
+    assert len(paris) == 1
+    type_pari, chevaux, mise = paris[0]
+    assert type_pari == "Simple Placé"
+    assert [c.partant_id for c in chevaux] == [1]
+    assert mise == pytest.approx(10.0, abs=0.05)
+
+
+def test_construire_paris_tete_de_liste_hors_categorie_sans_budget_ne_construit_rien():
+    partants = [_partant(1, 65, 1, "Tocard")]
+    assert construire_paris(partants, budget=0) == []
+
+
 def test_construire_paris_avec_toutes_les_categories_disponibles():
     partants = [
         _partant(1, 90, 1, "Base"),

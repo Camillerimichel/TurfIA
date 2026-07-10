@@ -57,17 +57,15 @@ class AnalyseRepository:
                 f"Une analyse existe déjà pour la course {analyse.course_id} en version {analyse.version}."
             ) from exc
 
-    def existe_analyse(self, course_id: int, version: int) -> bool:
-        """Vérifie à l'avance si `(course_id, version)` a déjà une analyse —
-        cf. `AutomatisationService.analyser_courses_du_jour`, qui relance
-        l'analyse du jour à chaque exécution horaire (L033) : sans ce
-        contrôle, une course déjà analysée ne provoque une `BusinessRuleError`
-        (cf. `create_analyse`) qu'après avoir refait tout le travail de
-        préparation, et ce cas pourtant attendu (déjà traité à l'heure
-        précédente) était compté comme une vraie erreur."""
+    def get_derniere_version(self, course_id: int) -> int:
+        """Version la plus élevée déjà connue pour cette course (0 si aucune
+        analyse) — cf. `AnalyseService.prochaine_version` : permet de relancer
+        une analyse (manuellement ou via l'automatisation horaire, L033) sans
+        jamais entrer en conflit avec une version déjà calculée, y compris
+        quand la décision doit pouvoir changer d'une heure à l'autre."""
         with self._conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM analyses WHERE course_id = %s AND version = %s LIMIT 1", (course_id, version))
-            return cur.fetchone() is not None
+            cur.execute("SELECT COALESCE(MAX(version), 0) FROM analyses WHERE course_id = %s", (course_id,))
+            return cur.fetchone()[0]
 
     def get_analyse(self, analyse_id: int) -> Analyse | None:
         with self._conn.cursor(row_factory=class_row(Analyse)) as cur:

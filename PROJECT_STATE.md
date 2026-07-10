@@ -873,6 +873,45 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
     (tests) ne reproduisait pas non plus la contrainte UNIQUE(course_id,
     version) réelle — corrigé en même temps, sinon ce bug serait resté
     invisible à la suite de tests.
+- **Quatrième passe, 2026-07-10** : re-analyse horaire à version toujours
+  croissante (la décision peut changer dans les deux sens) + vrai bug de
+  construction des paris trouvé et corrigé.
+  - `AutomatisationService.analyser_courses_du_jour` ne s'appuie plus sur une
+    `version` fixe passée par l'appelant : chaque course reçoit systématiquement
+    `AnalyseService.prochaine_version(course_id)` (= max version existante + 1),
+    comme le déclenchement manuel (cf. ci-dessus). Le paramètre `version` a été
+    retiré de la méthode, de `POST /administration/automatisations/analyse-jour`
+    et du schéma `AnalyseAutoIn` (`analyses/auto` ignore désormais tout
+    `version` fourni — toujours la version suivante, cf. `AnalyseRepository.
+    get_derniere_version`). Une course dont l'heure de départ est déjà passée
+    est ignorée (`RapportAnalyseJour.nb_deja_parties`, renommé depuis
+    `nb_deja_analysees` — son sens a changé : plus "déjà analysée à cette
+    version" mais "déjà partie", les paris étant clos) plutôt que réanalysée
+    inutilement.
+  - `scripts/rafraichir_et_analyser_jour.py` + `automations/launchd/
+    com.turfia.rafraichir-analyser.plist` : fenêtre de déclenchement élargie à
+    9h-23h (large, pour couvrir les réunions en nocturne — vérifié réellement
+    qu'une dernière course peut partir à 22h13) ; c'est le script lui-même qui
+    n'exécute l'étape d'analyse que si on est à plus de 30 minutes de la
+    dernière course réelle du jour (`CourseRepository.get_derniere_heure_depart`),
+    sinon il journalise un passage "hors fenêtre" sans rien recalculer — la
+    collecte, elle, continue de tourner à chaque passage. Agent réinstallé
+    (unload/copy/load) pour appliquer la nouvelle planification.
+  - **Vrai bug trouvé (indépendamment demandé par l'utilisateur) et corrigé :
+    une décision "Jeu prudent"/"Jeu normal" pouvait recommander un budget sans
+    proposer aucun pari pour le dépenser.** `categoriser` (seuils Base ≥85/
+    Chance régulière ≥70, cf. L031.6 §4, qualitatifs dans le SAD) est
+    indépendant des paliers de budget (60/75/85, cf. L031.6 §6) : une tête de
+    liste avec un score final entre 60 et 70 engage un budget de 10 € sans
+    forcément atteindre "Chance régulière", et `construire_paris` ne
+    construisait alors aucun pari (ne regarde que les catégories Base/Chance
+    régulière). Vérifié réellement en base : 2 analyses "Jeu prudent"/10 €,
+    0 ligne dans `pari`. Corrigé dans `construire_paris` : si aucune Base ni
+    Chance régulière n'existe du tout, un Simple Placé de secours est
+    construit sur la tête de liste (jamais Simple Gagnant, réservé à une
+    vraie Base) — sans changer sa catégorie affichée. Re-vérifié sur le même
+    cas réel (course 200, script direct, transaction annulée) : 1 pari Simple
+    Placé de 10 € désormais proposé.
 - **Interface HTML (L018) — les 5 modules (Accueil/Courses-Analyses/
   Statistiques/Historique/Administration) sont désormais implémentés
   (2026-07-09)** (cf. section dédiée ci-dessus). Seul le module

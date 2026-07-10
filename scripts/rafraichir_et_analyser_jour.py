@@ -13,15 +13,24 @@ Les cotes PMU se publient progressivement au fil de la journée : relancer la
 collecte à chaque exécution permet de récupérer les cotes nouvellement
 publiées pour des courses jusque-là sans partant exploitable (cf.
 PreparationDonneesService, qui exclut plutôt que d'inventer une cote
-manquante), avant de relancer l'analyse. Chaque étape est tracée dans
-`tache` (même repository que `POST /administration/automatisations/*`) —
-visible dans la page Administration au même titre qu'un déclenchement manuel.
+manquante), avant de relancer l'analyse — qui vise systématiquement une
+nouvelle version (cf. AnalyseService.prochaine_version) : la décision jouer/
+ne pas jouer peut donc changer d'une heure à l'autre, dans les deux sens.
+Chaque étape est tracée dans `tache` (même repository que `POST
+/administration/automatisations/*`) — visible dans la page Administration au
+même titre qu'un déclenchement manuel.
+
+Planifié toutes les heures de 9h à tard le soir (cf. automations/launchd/,
+large pour couvrir les réunions en nocturne) mais l'étape d'analyse s'arrête
+d'elle-même 30 minutes avant le départ de la dernière course du jour : au-delà,
+les paris sont clos et une nouvelle version n'a plus d'utilité opérationnelle
+(cf. CourseRepository.get_derniere_heure_depart).
 """
 
 from __future__ import annotations
 
 import sys
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from src.collecte.canalturf.client import CanalturfClient
 from src.collecte.pmu.client import PMUClient
@@ -37,6 +46,8 @@ from src.services.automatisation_service import AutomatisationService
 from src.services.collecte_service import CollecteService
 from src.services.consensus_presse_service import ConsensusPresseService
 from src.services.preparation_service import PreparationDonneesService
+
+MARGE_AVANT_DERNIERE_COURSE_MINUTES = 30
 
 
 def run() -> int:
@@ -64,25 +75,43 @@ def run() -> int:
             )
 
             tache_analyse = tache_repo.demarrer("analyse_courses_jour", categorie="automatisation")
-            try:
-                presse = ConsensusPresseService(canalturf_client, zoneturf_client)
-                preparation = PreparationDonneesService(course_repo, StatistiqueRepository(conn), presse)
-                automatisation = AutomatisationService(
-                    course_repo, preparation, AnalyseService(AnalyseRepository(conn))
-                )
-                rapport_analyse = automatisation.analyser_courses_du_jour(jour)
-            except Exception as exc:
-                tache_repo.terminer(tache_analyse.id, "echec", commentaire=str(exc)[:2000])
-                raise
-            statut = "succes" if rapport_analyse.nb_erreurs == 0 else "echec"
-            tache_repo.terminer(
-                tache_analyse.id,
-                statut,
-                commentaire=(
-                    f"{rapport_analyse.nb_courses} course(s), {rapport_analyse.nb_deja_analysees} déjà à jour, "
-                    f"{rapport_analyse.nb_erreurs} erreur(s)"
-                ),
+
+            derniere_heure_depart = course_repo.get_derniere_heure_depart(jour)
+            limite_analyse = (
+                derniere_heure_depart - timedelta(minutes=MARGE_AVANT_DERNIERE_COURSE_MINUTES)
+                if derniere_heure_depart is not None
+                else None
             )
+            if limite_analyse is not None and datetime.now() > limite_analyse:
+                rapport_analyse = None
+                tache_repo.terminer(
+                    tache_analyse.id,
+                    "succes",
+                    commentaire=(
+                        f"Hors fenêtre d'analyse (dernière course à {derniere_heure_depart:%H:%M}, "
+                        f"limite {limite_analyse:%H:%M}) — aucune analyse relancée."
+                    ),
+                )
+            else:
+                try:
+                    presse = ConsensusPresseService(canalturf_client, zoneturf_client)
+                    preparation = PreparationDonneesService(course_repo, StatistiqueRepository(conn), presse)
+                    automatisation = AutomatisationService(
+                        course_repo, preparation, AnalyseService(AnalyseRepository(conn))
+                    )
+                    rapport_analyse = automatisation.analyser_courses_du_jour(jour)
+                except Exception as exc:
+                    tache_repo.terminer(tache_analyse.id, "echec", commentaire=str(exc)[:2000])
+                    raise
+                statut = "succes" if rapport_analyse.nb_erreurs == 0 else "echec"
+                tache_repo.terminer(
+                    tache_analyse.id,
+                    statut,
+                    commentaire=(
+                        f"{rapport_analyse.nb_courses} course(s), {rapport_analyse.nb_deja_parties} déjà partie(s), "
+                        f"{rapport_analyse.nb_erreurs} erreur(s)"
+                    ),
+                )
 
     print(
         f"Collecte : {rapport_collecte.nb_reunions} réunion(s), {rapport_collecte.nb_courses} course(s), "
@@ -90,12 +119,15 @@ def run() -> int:
     )
     for erreur in rapport_collecte.erreurs:
         print(f"  - {erreur}")
-    print(
-        f"Analyse : {rapport_analyse.nb_courses} course(s) analysée(s), "
-        f"{rapport_analyse.nb_deja_analysees} déjà à jour, {rapport_analyse.nb_erreurs} erreur(s)"
-    )
-    for course_id, message in rapport_analyse.erreurs:
-        print(f"  - Course {course_id} : {message}")
+    if rapport_analyse is None:
+        print("Analyse : hors fenêtre (30 min avant la dernière course) — rien à faire.")
+    else:
+        print(
+            f"Analyse : {rapport_analyse.nb_courses} course(s) analysée(s), "
+            f"{rapport_analyse.nb_deja_parties} déjà partie(s), {rapport_analyse.nb_erreurs} erreur(s)"
+        )
+        for course_id, message in rapport_analyse.erreurs:
+            print(f"  - Course {course_id} : {message}")
     return 0
 
 

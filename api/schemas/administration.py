@@ -77,7 +77,7 @@ class ErreurCourseOut(BaseModel):
 class RapportAnalyseJourOut(BaseModel):
     nb_courses: int
     nb_erreurs: int
-    nb_deja_analysees: int = 0
+    nb_deja_parties: int = 0
     erreurs: list[ErreurCourseOut]
 
 

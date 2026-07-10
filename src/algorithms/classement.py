@@ -188,11 +188,25 @@ def construire_paris(
     non engagée, cas rare). Retourne une liste de
     `(type_pari, chevaux_impliqués, mise)`.
     """
-    if budget <= 0:
+    if budget <= 0 or not partants_classes:
         return []
 
     bases = [p for p in partants_classes if p.categorie == "Base"]
     chances = [p for p in partants_classes if p.categorie == "Chance régulière"]
+
+    # Le budget est engagé dès que la décision n'est pas "Ne pas jouer" (score de
+    # confiance de la course = score final de la tête de liste, cf. L031.1 §9,
+    # `AnalyseService.analyser_course`). Les seuils de `categoriser` (Base/Chance
+    # régulière) sont indépendants des paliers de budget (cf. L031.6 §4, critères
+    # qualitatifs non chiffrés dans le SAD) : la tête de liste peut donc engager
+    # un budget sans elle-même atteindre Base ni Chance régulière — auparavant
+    # aucun pari n'était alors proposé pour dépenser ce budget (vérifié
+    # réellement en base : 2 analyses "Jeu prudent"/10 €, 0 pari créé). Filet de
+    # sécurité : Simple Placé sur la tête de liste, jamais Simple Gagnant
+    # (réservé à une vraie Base, cf. L031.6 §5) ; sa catégorie affichée reste
+    # inchangée (ex. "Tocard"), seule la construction du pari en tient compte.
+    tete_de_liste = partants_classes[0]
+    secours_tete_de_liste = not bases and not chances
 
     groupes: dict[str, list[list[PartantClasse]]] = {}
     if bases:
@@ -200,6 +214,8 @@ def construire_paris(
     simple_place = [[bases[0]]] if bases else []
     if chances:
         simple_place.append([chances[0]])
+    if not simple_place and secours_tete_de_liste:
+        simple_place = [[tete_de_liste]]
     if simple_place:
         groupes["Simple Placé"] = simple_place
     if len(bases) >= 2:

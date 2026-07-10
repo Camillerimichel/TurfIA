@@ -32,10 +32,12 @@ class AnalyseTriggerIn(BaseModel):
 class AnalyseAutoIn(BaseModel):
     """Déclenchement automatique : les sous-scores et le risque sont calculés à
     partir des données déjà collectées (cf. PreparationDonneesService), seuls les
-    paramètres de mise/budget restent à la discrétion de l'appelant.
+    paramètres de mise/budget restent à la discrétion de l'appelant. Pas de champ
+    `version` : toujours la version suivante (cf. AnalyseService.prochaine_version),
+    pour pouvoir relancer une analyse à tout moment sans jamais entrer en conflit
+    avec une version déjà calculée (cf. PROJECT_STATE.md).
     """
 
-    version: int = 1
     mise_reference: float = 10.0
     budget_precedent: float = 0.0
     perte_precedente: bool = False

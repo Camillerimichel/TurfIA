@@ -205,7 +205,7 @@ const LIBELLES_RESULTAT_AUTOMATISATION = {
   nb_courses: "Courses importées",
   nb_partants: "Partants importés",
   nb_erreurs: "Erreurs",
-  nb_deja_analysees: "Déjà à jour (ignorées)",
+  nb_deja_parties: "Déjà parties (ignorées)",
   nb_controles_roi: "Contrôles ROI calculés",
 };
 
