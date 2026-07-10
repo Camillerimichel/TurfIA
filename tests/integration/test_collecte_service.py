@@ -60,6 +60,49 @@ def test_collecte_importe_reunion_courses_et_partants(programme_echantillon, par
     assert courses_creees[0].nom == "PRIX DU SOLEIL DE BRETAGNE"
     assert courses_creees[0].distance_id is not None
     assert courses_creees[0].surface_id is not None
+    # Le Quinté+ de l'échantillon (parisEvenement) cible la course 8, absente de
+    # cet échantillon réduit (2 courses) -> aucune des deux n'est marquée quinte.
+    assert all(c.quinte is False for c in courses_creees)
+
+
+def test_collecte_marque_quinte_la_course_visee_par_parisevenement(participants_echantillon):
+    """cf. programme PMU réel : le Quinté+ est signalé par `parisEvenement`
+    (codePari QUINTE_PLUS/E_QUINTE_PLUS) au niveau réunion, pas sur la course
+    elle-même — Course.quinte doit refléter cette correspondance."""
+    programme = {
+        "programme": {
+            "reunions": [
+                {
+                    "numOfficiel": 1,
+                    "hippodrome": {"libelleLong": "HIPPODROME DE TEST"},
+                    "pays": {"libelle": "FRANCE"},
+                    "parisEvenement": [
+                        {"codePari": "QUINTE_PLUS", "course": {"numReunion": 1, "numOrdre": 2}},
+                        {"codePari": "E_QUINTE_PLUS", "course": {"numReunion": 1, "numOrdre": 2}},
+                    ],
+                    "courses": [
+                        {
+                            "numOrdre": 1, "libelle": "Course ordinaire", "discipline": "PLAT",
+                            "distance": 2000, "distanceUnit": "METRE",
+                        },
+                        {
+                            "numOrdre": 2, "libelle": "Course Quinté+", "discipline": "PLAT",
+                            "distance": 2000, "distanceUnit": "METRE",
+                        },
+                    ],
+                }
+            ]
+        }
+    }
+    service, courses, _ = _construire_service(
+        programme, {(1, 1): participants_echantillon, (1, 2): participants_echantillon}
+    )
+
+    service.collecter_programme_du_jour(date(2026, 7, 10))
+
+    courses_par_numero = {c.numero: c for c in courses.courses.values()}
+    assert courses_par_numero[1].quinte is False
+    assert courses_par_numero[2].quinte is True
 
     chevaux = {c.nom for c in courses.chevaux.values()}
     assert "MASTER MAN" in chevaux

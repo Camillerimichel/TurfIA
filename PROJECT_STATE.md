@@ -473,12 +473,13 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
       PostgreSQL local (latence ~9 ms, ~96 Go disponibles).
 - **Tests** : 215 tests unitaires (dont `AutomatisationService`,
   `DbLogHandler` — anti-réentrance/absence de crash sur DB indisponible,
-  `SupervisionService`) + 140 tests d'intégration (dont Historique — filtres
+  `SupervisionService`) + 141 tests d'intégration (dont Historique — filtres
   date/hippodrome/type de pari/décision —, Administration — RBAC,
   journaux, les 3 automatisations, sauvegarde réussie/échouée, versions,
-  paramètres, supervision —, `CollecteService`, `ConsensusPresseService` et
-  la suite de non-régression par déterminisme, cf. ci-dessous) —
-  repositories/services en mémoire, `tests/integration/`), tous verts (355
+  paramètres, supervision —, `CollecteService` (dont détection `Course.quinte`
+  via `parisEvenement`), `ConsensusPresseService` et la suite de
+  non-régression par déterminisme, cf. ci-dessous) — repositories/services en
+  mémoire, `tests/integration/`), tous verts (356
   au total).
 - **Couverture de tests mesurée (2026-07-09, `pytest-cov`, cf. L020 §14.1
   cible ≥80 % sur `algorithms`/`services`)** : 90 % sur `src/algorithms`+
@@ -595,10 +596,19 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
   passait toujours à côté du sous-score Presse, y compris le jour du
   Quinté+. Vérifié réellement (course synthétique, script exécuté pour de
   vrai contre PostgreSQL local, aucune régression).
-- `Course.quinte` (colonne existante en base) n'est pas encore alimentée par le
-  collecteur PMU (`CollecteService`) — non nécessaire au fonctionnement du
-  consensus presse actuel, qui s'appuie sur le `R{réunion}C{course}` extrait de
-  Canalturf lui-même, pas sur cette colonne.
+- **Corrigé (2026-07-10)** : `Course.quinte` (colonne existante en base) n'était
+  jamais alimentée par le collecteur PMU — sans impact sur le consensus presse
+  (qui s'appuie sur le `R{réunion}C{course}` extrait de Canalturf lui-même),
+  mais un vrai bug visible côté HTML (`course.html` affiche « Quinté+ » à
+  partir de ce champ) : toute course, y compris le vrai Quinté+ du jour,
+  affichait « Non ». Le programme PMU signale le Quinté+ au niveau réunion
+  (`parisEvenement`, `codePari` `QUINTE_PLUS`/`E_QUINTE_PLUS`, avec le
+  `numOrdre` de la course visée), pas sur la course elle-même —
+  `CollecteService.collecter_programme_du_jour` calcule maintenant l'ensemble
+  des `numOrdre` visés par réunion et le transmet à
+  `_importer_course_et_partants`. Trouvé en préparant les tests manuels de
+  l'interface HTML (données de collecte réelles nettoyées avant relance avec
+  le correctif).
 
 ## Limites connues du module Statistiques (documentées, pas cachées)
 

@@ -65,9 +65,20 @@ class CollecteService:
 
             rapport.nb_reunions += 1
 
+            # Le programme PMU signale le Quinté+ du jour au niveau réunion
+            # (parisEvenement, codePari QUINTE_PLUS/E_QUINTE_PLUS) plutôt que sur
+            # la course elle-même — recherché une fois par réunion.
+            numeros_courses_quinte = {
+                pe["course"]["numOrdre"]
+                for pe in reunion_brute.get("parisEvenement", [])
+                if "QUINTE_PLUS" in pe.get("codePari", "")
+            }
+
             for course_brute in reunion_brute.get("courses", []):
                 try:
-                    nb_partants = self._importer_course_et_partants(jour, reunion, course_brute)
+                    nb_partants = self._importer_course_et_partants(
+                        jour, reunion, course_brute, quinte=course_brute["numOrdre"] in numeros_courses_quinte
+                    )
                 except Exception as exc:  # noqa: BLE001 - isolation volontaire par course
                     ref = f"R{reunion_brute.get('numOfficiel')}C{course_brute.get('numOrdre')}"
                     rapport.erreurs.append(f"Course {ref} : {exc}")
@@ -89,7 +100,9 @@ class CollecteService:
             Reunion(date=jour, hippodrome_id=hippodrome.id, numero=reunion_brute["numOfficiel"])
         )
 
-    def _importer_course_et_partants(self, jour: date, reunion: Reunion, course_brute: dict) -> int:
+    def _importer_course_et_partants(
+        self, jour: date, reunion: Reunion, course_brute: dict, quinte: bool = False
+    ) -> int:
         discipline = self._referentiels.get_or_create_discipline(mapper_discipline_code(course_brute["discipline"]))
 
         unite = UNITES_DISTANCE_PMU.get(course_brute.get("distanceUnit", ""))
@@ -115,6 +128,7 @@ class CollecteService:
                 etat_piste_id=etat_piste.id if etat_piste else None,
                 allocation=course_brute.get("montantPrix"),
                 nb_partants=course_brute.get("nombreDeclaresPartants"),
+                quinte=quinte,
             )
         )
 
