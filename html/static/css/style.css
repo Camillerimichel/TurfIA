@@ -16,6 +16,21 @@
   box-sizing: border-box;
 }
 
+/* Indicateur de chargement global — cf. html/static/js/api.js, injecté dans
+   toutes les pages, une seule requête en vol suffit à l'afficher. */
+#indicateur-chargement-global {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding: 0.4rem 1rem;
+  background: var(--couleur-accent);
+  color: #ffffff;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, "Segoe UI", Roboto, sans-serif;

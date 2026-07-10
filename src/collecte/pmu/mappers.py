@@ -14,13 +14,18 @@ from datetime import datetime
 from src.core.exceptions import ImportationError
 
 # Vérifié manuellement le 2026-07-07 sur le programme du jour (cf. plan de collecte) ;
-# code PMU -> libellé TurfIA (cf. L030.1 seed des référentiels).
+# code PMU -> libellé TurfIA (cf. L030.1 seed des référentiels). "HAIE"/"STEEPLECHASE"
+# (sans le S/le tiret) observés réellement le 2026-07-10 sur une réunion différente —
+# PMU n'est pas toujours cohérent sur l'orthographe exacte du code, complété au fur
+# et à mesure plutôt que deviné.
 DISCIPLINES_PMU: dict[str, str] = {
     "PLAT": "Plat",
     "ATTELE": "Trot Attelé",
     "MONTE": "Trot Monté",
     "HAIES": "Haies",
+    "HAIE": "Haies",
     "STEEPLE-CHASE": "Steeple",
+    "STEEPLECHASE": "Steeple",
     "CROSS": "Cross",
 }
 

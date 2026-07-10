@@ -94,15 +94,70 @@ function chargerTaches() {
   return chargerSection("/administration/automatisations", "section-taches", COLONNES_TACHES);
 }
 
+const LIBELLES_RESULTAT_AUTOMATISATION = {
+  nb_reunions: "Réunions importées",
+  nb_courses: "Courses importées",
+  nb_partants: "Partants importés",
+  nb_erreurs: "Erreurs",
+  nb_controles_roi: "Contrôles ROI calculés",
+};
+
+function construireResumeAutomatisation(resultat) {
+  const conteneur = document.createElement("div");
+
+  const titre = document.createElement("p");
+  titre.textContent = "Terminé.";
+  conteneur.appendChild(titre);
+
+  for (const [cle, valeur] of Object.entries(resultat)) {
+    if (cle === "erreurs" || cle === "tables") continue; // rendus à part ci-dessous
+    const p = document.createElement("p");
+    p.textContent = `${LIBELLES_RESULTAT_AUTOMATISATION[cle] ?? cle} : ${formaterValeur(valeur)}`;
+    conteneur.appendChild(p);
+  }
+
+  if (resultat.tables) {
+    const p = document.createElement("p");
+    p.textContent = "Tables recalculées :";
+    conteneur.appendChild(p);
+    const liste = document.createElement("ul");
+    liste.className = "liste-paris";
+    for (const [table, nb] of Object.entries(resultat.tables)) {
+      const li = document.createElement("li");
+      li.textContent = `${table} : ${nb} ligne(s)`;
+      liste.appendChild(li);
+    }
+    conteneur.appendChild(liste);
+  }
+
+  if (resultat.erreurs && resultat.erreurs.length > 0) {
+    const p = document.createElement("p");
+    p.textContent = `Erreurs (${resultat.erreurs.length}) :`;
+    conteneur.appendChild(p);
+    const liste = document.createElement("ul");
+    liste.className = "liste-paris";
+    for (const erreur of resultat.erreurs) {
+      const li = document.createElement("li");
+      // Selon l'automatisation : une chaîne (collecte) ou {course_id, message} (analyse-jour).
+      li.textContent = typeof erreur === "string" ? erreur : `Course ${erreur.course_id} : ${erreur.message}`;
+      liste.appendChild(li);
+    }
+    conteneur.appendChild(liste);
+  }
+
+  return conteneur;
+}
+
 async function declencherAutomatisation(chemin, libelleConfirmation) {
   const message = document.getElementById("message-automatisation");
   message.hidden = true;
+  message.innerHTML = "";
   if (!window.confirm(libelleConfirmation)) return;
 
   try {
     const resultat = await apiFetch(chemin, { method: "POST" });
     message.className = "message-succes";
-    message.textContent = `Terminé : ${JSON.stringify(resultat)}`;
+    message.appendChild(construireResumeAutomatisation(resultat));
   } catch (erreur) {
     message.className = "message-erreur";
     message.textContent = `Erreur : ${erreur.message}`;
