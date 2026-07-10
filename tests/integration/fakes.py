@@ -865,11 +865,17 @@ class FakeCollecteService:
     """Remplace CollecteService dans les tests d'intégration — aucun accès réseau
     PMU (cf. L020 §2.2). `rapport` configurable par le test."""
 
-    def __init__(self, rapport: RapportCollecte | None = None) -> None:
+    def __init__(self, rapport: RapportCollecte | None = None, nb_partants_resultats: int = 0) -> None:
         self.rapport = rapport if rapport is not None else RapportCollecte()
+        self.nb_partants_resultats = nb_partants_resultats
+        self.courses_resultats_collectees: list[int] = []
 
     def collecter_programme_du_jour(self, jour):
         return self.rapport
+
+    def collecter_resultats_course(self, course_id: int) -> int:
+        self.courses_resultats_collectees.append(course_id)
+        return self.nb_partants_resultats
 
 
 class FakeControleRoiService:

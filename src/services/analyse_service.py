@@ -105,7 +105,15 @@ class AnalyseService:
             p_turfia = probabilites_par_partant[p.partant_id]
             value_bet = est_value_bet(scores[p.partant_id], p_turfia, p_marche, risque_course)
 
-            esperance_pari = esperance(p_turfia, rapport_estime=p.cote, mise=mise_reference)
+            # `rapport_estime` est le gain total attendu en euros pour la mise
+            # réellement engagée (cf. L031.4 §5) : à cote décimale `p.cote`, une
+            # mise de `mise_reference` rapporte `mise_reference * p.cote` si le
+            # cheval gagne — jamais `p.cote` seul (bug réel corrigé : mélangeait
+            # une cote sans dimension avec une mise en euros, écrasée par le
+            # `- mise` du calcul d'espérance, ce qui donnait un ROI presque
+            # toujours proche de -100 % quelle que soit la vraie valeur du pari,
+            # vérifié réellement sur des analyses en base).
+            esperance_pari = esperance(p_turfia, rapport_estime=mise_reference * p.cote, mise=mise_reference)
             roi = roi_theorique(esperance_pari, mise_reference)
             rois_par_partant[p.partant_id] = roi
 

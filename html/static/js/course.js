@@ -62,17 +62,27 @@ async function chargerPartants() {
 }
 
 async function chargerResultats() {
-  const resultats = await apiFetch(`/courses/${idCourse}/resultats`);
-  if (resultats.length === 0) return;
-  document.getElementById("section-resultats").hidden = false;
+  const [resultats, partants] = await Promise.all([
+    apiFetch(`/courses/${idCourse}/resultats`),
+    apiFetch(`/courses/${idCourse}/partants`),
+  ]);
+  const conteneurTableau = document.getElementById("conteneur-tableau-resultats");
+  if (resultats.length === 0) {
+    conteneurTableau.hidden = true;
+    return;
+  }
+  conteneurTableau.hidden = false;
   const corpsTableau = document.querySelector("#tableau-resultats tbody");
   corpsTableau.innerHTML = "";
+  const partantParId = new Map(partants.map((p) => [p.id, p]));
   const tries = [...resultats].sort((a, b) => (a.classement ?? 999) - (b.classement ?? 999));
   for (const resultat of tries) {
+    const partant = partantParId.get(resultat.partant_id);
+    const partantLabel = partant ? `N°${partant.numero} ${partant.cheval_nom ?? ""}`.trim() : `#${resultat.partant_id}`;
     const ligne = document.createElement("tr");
     const cellules = [
       resultat.disqualification ? "Disqualifié" : (resultat.classement ?? "—"),
-      resultat.partant_id,
+      partantLabel,
       resultat.temps ?? "—",
       resultat.ecart ?? "—",
     ];
@@ -109,7 +119,8 @@ function formaterDetailAnalyse(detail) {
   const corps = document.createElement("tbody");
   for (const p of detail.partants) {
     const ligne = document.createElement("tr");
-    for (const valeur of [p.rang, p.partant_id, p.categorie ?? "—", p.confiance ?? "—"]) {
+    const partantLabel = p.numero != null ? `N°${p.numero} ${p.cheval_nom ?? ""}`.trim() : `#${p.partant_id}`;
+    for (const valeur of [p.rang, partantLabel, p.categorie ?? "—", p.confiance ?? "—"]) {
       const cellule = document.createElement("td");
       cellule.textContent = valeur;
       ligne.appendChild(cellule);
@@ -124,11 +135,12 @@ function formaterDetailAnalyse(detail) {
     titreParis.textContent = "Paris";
     conteneur.appendChild(titreParis);
     const tableauParis = document.createElement("table");
-    tableauParis.innerHTML = "<thead><tr><th>Type</th><th>Mise</th><th>ROI estimé</th></tr></thead>";
+    tableauParis.innerHTML = "<thead><tr><th>Type</th><th>Sélection</th><th>Mise</th><th>ROI estimé</th></tr></thead>";
     const corpsParis = document.createElement("tbody");
     for (const pari of detail.paris) {
       const ligne = document.createElement("tr");
-      for (const valeur of [pari.type_pari, `${formaterMontant(pari.mise)} €`, pari.roi_estime ?? "—"]) {
+      const selection = pari.combinaison_lisible ?? pari.combinaison ?? "—";
+      for (const valeur of [pari.type_pari, selection, `${formaterMontant(pari.mise)} €`, pari.roi_estime ?? "—"]) {
         const cellule = document.createElement("td");
         cellule.textContent = valeur;
         ligne.appendChild(cellule);
@@ -198,6 +210,23 @@ document.getElementById("formulaire-analyse").addEventListener("submit", async (
     message.hidden = false;
     await chargerAnalyses();
   } catch (erreur) {
+    message.textContent = `Erreur : ${erreur.message}`;
+    message.hidden = false;
+  }
+});
+
+document.getElementById("bouton-collecter-resultats").addEventListener("click", async () => {
+  const message = document.getElementById("message-resultats");
+  message.hidden = true;
+  try {
+    const rapport = await apiFetch(`/courses/${idCourse}/resultats/collecter`, { method: "POST" });
+    message.className = "message-succes";
+    message.textContent = `Résultats récupérés (${rapport.nb_partants} partant(s) mis à jour).`;
+    message.hidden = false;
+    await chargerResultats();
+    await chargerPartants();
+  } catch (erreur) {
+    message.className = "message-erreur";
     message.textContent = `Erreur : ${erreur.message}`;
     message.hidden = false;
   }

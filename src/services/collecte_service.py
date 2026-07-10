@@ -21,7 +21,7 @@ from src.collecte.pmu.mappers import (
     mapper_discipline_code,
     mapper_surface_code,
 )
-from src.core.exceptions import ImportationError
+from src.core.exceptions import BusinessRuleError, ImportationError
 from src.core.logging import get_logger
 from src.models.course import Cheval, Cote, Course, Entraineur, Jockey, Partant, Resultat, Reunion
 from src.repositories.course_repository import CourseRepository
@@ -89,6 +89,30 @@ class CollecteService:
                 rapport.nb_partants += nb_partants
 
         return rapport
+
+    def collecter_resultats_course(self, course_id: int) -> int:
+        """Récupère les cotes/résultats d'une course spécifique après son
+        départ (cf. L018 §6-7, bouton « Récupérer les résultats » de la fiche
+        course), sans attendre le prochain passage de la collecte horaire du
+        jour ni ré-importer tout le programme. Réutilise `_importer_partant`
+        (get_or_create, jamais de doublon) — mêmes données PMU
+        (`recuperer_participants`) que `_importer_course_et_partants`, la
+        course/réunion étant déjà connues. Retourne le nombre de partants
+        traités.
+        """
+        course = self._courses.get_course(course_id)
+        if course is None:
+            raise BusinessRuleError(f"Course {course_id} introuvable.")
+        reunion = self._courses.get_reunion(course.reunion_id)
+        if reunion is None:
+            raise BusinessRuleError(f"Réunion {course.reunion_id} introuvable pour la course {course_id}.")
+
+        participants_bruts = self._pmu.recuperer_participants(reunion.date, reunion.numero, course.numero)
+        nb_partants = 0
+        for participant_brut in participants_bruts.get("participants", []):
+            self._importer_partant(course, participant_brut)
+            nb_partants += 1
+        return nb_partants
 
     def _importer_reunion(self, jour: date, reunion_brute: dict) -> Reunion:
         hippodrome_brut = reunion_brute["hippodrome"]

@@ -262,6 +262,30 @@ form label {
   font-size: 0.9rem;
 }
 
+/* Filtre décision Accueil (cf. L018 §5) : choix multiples via cases à cocher
+   plutôt qu'un <select multiple> (Ctrl/Cmd+clic peu découvrable). */
+#filtre-decision-accueil {
+  margin-top: 0.75rem;
+  border: 1px solid var(--couleur-bordure);
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+}
+
+#filtre-decision-accueil legend {
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0 0.25rem;
+}
+
+#filtre-decision-accueil label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0.25rem 1rem 0.25rem 0;
+  font-weight: normal;
+  font-size: 0.9rem;
+}
+
 form input[type="text"],
 form input[type="password"],
 form input[type="number"],
@@ -294,6 +318,12 @@ button {
 
 button:hover {
   opacity: 0.9;
+}
+
+/* Bouton "Courses à jouer dans l'heure" (Accueil) à l'état actif — même
+   principe que .entete nav a.actif, un accent visuel de bascule. */
+#bouton-courses-imminentes.actif {
+  background: var(--couleur-erreur);
 }
 
 .message-erreur, #message-analyse {

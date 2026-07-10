@@ -45,12 +45,22 @@ def test_flux_complet_creation_et_analyse(client):
     assert detail["analyse"]["course_id"] == course["id"]
     assert len(detail["partants"]) == 3
     assert {p["rang"] for p in detail["partants"]} == {1, 2, 3}
+    # Non-régression : le numéro de course/nom du cheval doivent être joints à
+    # l'affichage (cf. PROJECT_STATE.md) — `partant_id` seul est un
+    # identifiant technique, pas un numéro exploitable pour parier réellement.
+    noms_par_partant = {p["partant_id"]: p["cheval_nom"] for p in detail["partants"]}
+    assert set(noms_par_partant.values()) == {"Cheval A", "Cheval B", "Cheval C"}
+    assert all(p["numero"] is not None for p in detail["partants"])
+    if detail["paris"]:
+        assert all(p["combinaison_lisible"] for p in detail["paris"])
+        assert any(nom in detail["paris"][0]["combinaison_lisible"] for nom in noms_par_partant.values())
 
     relecture = client.get(f"/api/v1/analyses/{detail['analyse']['id']}")
     assert relecture.status_code == 200
     detail_relu = relecture.json()["data"]
     assert detail_relu["analyse"]["id"] == detail["analyse"]["id"]
     assert len(detail_relu["partants"]) == 3
+    assert all(p["cheval_nom"] is not None for p in detail_relu["partants"])
 
 
 def test_enveloppe_de_reponse_normalisee(client):
@@ -231,6 +241,28 @@ def test_analyse_sur_course_inconnue_retourne_404(client):
         "/api/v1/courses/999/analyses",
         json={"partants": [], "sous_risques_course": {}},
     )
+    assert reponse.status_code == 404
+
+
+def test_collecter_resultats_course(client, repos):
+    reunion = client.post(
+        "/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": 1, "numero": 1}
+    ).json()["data"]
+    course = client.post(
+        f"/api/v1/reunions/{reunion['id']}/courses", json={"numero": 1, "nom": "Prix Test"}
+    ).json()["data"]
+    repos["collecte"].nb_partants_resultats = 7
+
+    reponse = client.post(f"/api/v1/courses/{course['id']}/resultats/collecter")
+
+    assert reponse.status_code == 200
+    assert reponse.json()["data"]["nb_partants"] == 7
+    assert repos["collecte"].courses_resultats_collectees == [course["id"]]
+    assert repos["audit"].entrees[-1].action == "collecte_resultats_course"
+
+
+def test_collecter_resultats_course_inconnue_retourne_404(client):
+    reponse = client.post("/api/v1/courses/999/resultats/collecter")
     assert reponse.status_code == 404
 
 

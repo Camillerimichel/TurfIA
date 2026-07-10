@@ -61,11 +61,16 @@ class AnalyseOut(BaseModel):
 class AnalysePartantOut(BaseModel):
     """Reflet de la table `analyse_partant` (cf. L030.3 §4) — `score` est le Score
     TurfIA brut, `confiance` est le score final après bonus/malus (cf. L031.6 §3).
+    `numero`/`cheval_nom` sont joints à l'affichage (cf. `CourseRepository.
+    list_partants_detail_by_course`) : `partant_id` seul est un identifiant
+    technique, pas un numéro de course exploitable pour parier réellement.
     """
 
     model_config = ConfigDict(from_attributes=True)
 
     partant_id: int
+    numero: int | None = None
+    cheval_nom: str | None = None
     score: float | None = None
     rang: int | None = None
     consensus: float | None = None
@@ -80,6 +85,7 @@ class ParisOut(BaseModel):
 
     type_pari: str
     combinaison: str | None = None
+    combinaison_lisible: str | None = None
     mise: float
     gain_estime: float | None = None
     roi_estime: float | None = None

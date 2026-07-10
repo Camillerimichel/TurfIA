@@ -41,9 +41,11 @@
       </div>
     </section>
 
-    <section class="carte" id="section-resultats" hidden>
+    <section class="carte">
       <h2>Résultat</h2>
-      <div class="tableau-scroll">
+      <button type="button" id="bouton-collecter-resultats">Récupérer les résultats</button>
+      <p id="message-resultats" hidden></p>
+      <div class="tableau-scroll" id="conteneur-tableau-resultats" hidden>
         <table id="tableau-resultats">
           <thead><tr><th>Classement</th><th>N°</th><th>Temps</th><th>Écart</th></tr></thead>
           <tbody></tbody>
