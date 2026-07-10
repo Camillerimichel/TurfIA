@@ -680,23 +680,37 @@ class FakeStatistiqueRepository:
         self.modeles.append(stat)
         return stat
 
+    @staticmethod
+    def _dernier_par_groupe(items, cle):
+        """Une entrée par valeur de `cle(item)`, la dernière insérée gagne —
+        même sémantique que `StatistiqueRepository._list_dernier_par_groupe`
+        (SQL réel : `DISTINCT ON (...) ORDER BY ..., cree_le DESC`). Contrairement
+        aux `calculer_X` (agrégation SQL sur `controle_roi`, non réimplémentée
+        ici par choix, cf. docstring de la classe), ce dédoublonnage est une
+        logique simple sur des objets déjà en mémoire, reproduite pour de
+        vrai plutôt que déléguée entièrement à la vérification PostgreSQL."""
+        dernier_par_cle: dict = {}
+        for item in items:
+            dernier_par_cle[cle(item)] = item
+        return list(dernier_par_cle.values())
+
     def list_globale(self):
-        return list(self.globale)
+        return [self.globale[-1]] if self.globale else []
 
     def list_scores(self):
-        return list(self.scores)
+        return self._dernier_par_groupe(self.scores, lambda s: (s.score_min, s.score_max))
 
     def list_hippodromes(self):
-        return list(self.hippodromes)
+        return self._dernier_par_groupe(self.hippodromes, lambda s: s.hippodrome_id)
 
     def list_disciplines(self):
-        return list(self.disciplines)
+        return self._dernier_par_groupe(self.disciplines, lambda s: s.discipline_id)
 
     def list_paris(self):
-        return list(self.paris)
+        return self._dernier_par_groupe(self.paris, lambda s: s.type_pari)
 
     def list_modeles(self):
-        return list(self.modeles)
+        return self._dernier_par_groupe(self.modeles, lambda s: s.version_modele)
 
 
 class FakeHistoriqueRepository:

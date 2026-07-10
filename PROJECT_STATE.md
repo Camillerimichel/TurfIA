@@ -715,6 +715,59 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
   ligne par table (cf. L030.4 §10, volontaire), mais rien ne limite leur nombre
   dans le temps.
 
+**Double bug de duplication corrigé (2026-07-10)** : retour utilisateur — « je
+ne comprends rien aux scores par tranches, idem par hippodrome et tous les
+autres car je pense qu'il y a des duplications ». Vérifié réel, deux causes
+distinctes cumulées :
+1. Une course réanalysée plusieurs fois avant son départ (L033, automatisation
+   horaire à version croissante) était comptée une fois **par version**
+   historique dans `calculer_globale`/`calculer_scores`/`calculer_hippodromes`/
+   `calculer_disciplines`/`calculer_paris`/`calculer_modeles` — vérifié en
+   base : les courses 146 et 147 avaient chacune 4 lignes `controle_roi` (une
+   par version 1 à 4) au lieu d'une seule, gonflant `nb_courses`/mises/gains
+   d'autant. `list_analyses_sans_controle_roi` (`AnalyseRepository`) créait ces
+   doublons en amont. Corrigé en restreignant partout à
+   `a.version = (SELECT MAX(a2.version) FROM analyses a2 WHERE a2.course_id = a.course_id)`
+   (constante `_DERNIERE_VERSION_COURSE` dans `StatistiqueRepository`).
+2. Chaque recalcul horaire (3ᵉ étape de l'automatisation, cf. ci-dessus)
+   **ajoute** une ligne par table sans jamais remplacer l'ancienne (L030.4
+   §10, volontaire pour l'audit) — mais les `list_*` de `StatistiqueRepository`
+   renvoyaient tout l'historique accumulé au lieu du dernier calcul, affichant
+   des dizaines de lignes quasi identiques après quelques heures
+   d'automatisation. Corrigé : `list_globale` ne renvoie plus que la dernière
+   ligne (`ORDER BY date_calcul DESC LIMIT 1`) ; `list_scores`/`list_hippodromes`/
+   `list_disciplines`/`list_paris`/`list_modeles` utilisent désormais
+   `DISTINCT ON (groupe) ... ORDER BY groupe, cree_le DESC` (une ligne par
+   tranche de score / hippodrome / discipline / type de pari / version, la plus
+   récente) via le nouvel helper `_list_dernier_par_groupe`.
+
+Vérifié contre PostgreSQL réel après correctif : `statistique_globale` a 6
+lignes historisées, `list_globale()` n'en renvoie plus qu'1 ; `statistique_hippodrome`
+a 8 lignes pour seulement 2 hippodromes distincts, `list_hippodromes()` n'en
+renvoie plus que 2. `calculer_globale()`/`calculer_hippodromes()` ne comptent
+plus plusieurs fois les courses 146/147.
+
+**Nettoyage des données obsolètes effectué (2026-07-10)** : les 6 lignes
+`controle_roi` (et leurs `controle_roi_pari` associés) attachées aux versions
+non-finales des courses 146/147 (analyses 502/508/520 et 503/521/526) ont été
+supprimées. `turfia_app` n'a volontairement pas le droit `DELETE` sur ces
+tables (cf. `sql/schema/06_grants.sql`, principe du moindre privilège) ; la
+suppression a été faite avec le rôle `turfia_migration` (propriétaire des
+tables). Chaque course ne conserve plus qu'un seul `controle_roi`, celui de sa
+dernière version.
+
+**Point restant, non corrigé** (hors périmètre de cette demande, à surveiller) :
+la course 200 a un `controle_roi` attaché à sa version 3, mais sa version la
+plus récente est désormais 7 (réanalysée après coup) — avec le correctif, elle
+est donc exclue des statistiques tant qu'aucun `controle_roi` n'existe pour sa
+version 7. Comportement cohérent avec la règle « dernière version uniquement »
+mais signale une question distincte (une course ne devrait normalement plus
+être réanalysée après que son résultat a été contrôlé) — non résolu ici, pas
+demandé par l'utilisateur.
+Tests : `tests/integration/test_api_statistiques.py::test_list_globale_ne_montre_que_le_dernier_calcul`,
+`test_list_hippodromes_ne_montre_que_le_dernier_calcul_par_hippodrome`,
+`test_list_scores_ne_montre_que_le_dernier_calcul_par_tranche`.
+
 ## Limites connues de l'authentification/RBAC (documentées, pas cachées)
 
 - Limiteur de débit (`src/core/rate_limiter.py`) en mémoire, un seul processus —
@@ -1166,6 +1219,20 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
   une sélection de 6+ chevaux, cf. les limites de démarrage documentées
   ci-dessus), donc pas de vérification bout-en-bout possible sur données
   réelles cette fois, limite assumée et signalée honnêtement.
+- **Bloc "Pari" dédié sur la fiche course (retour utilisateur, 2026-07-10)** :
+  jusqu'ici, le choix des combinaisons de jeu (type de pari, sélection, mise,
+  combinaisons Quinté Flexi) n'était visible qu'en cliquant dans "Analyses"
+  puis en sélectionnant une version — l'information la plus directement
+  actionnable de la page était donc masquée par défaut. Nouvelle section
+  "Pari" (`html/templates/course.html`, entre Partants et Résultat) toujours
+  peuplée avec la DERNIÈRE analyse connue dès le chargement de la page, sans
+  clic supplémentaire ; rafraîchie aussi après un nouveau déclenchement
+  manuel d'analyse. `construireTableauParis` extrait du code déjà existant
+  de `formaterDetailAnalyse` (partagé entre les deux, pas de logique
+  dupliquée) — celui-ci reste inchangé pour consulter le détail complet
+  (classement des partants inclus) d'une version passée au choix. Vérifié
+  réellement contre PostgreSQL (course 112, analyse v9 réelle, décision
+  "Jeu prudent", pari Simple Placé mise 10 €).
 - **Interface HTML (L018) — les 5 modules (Accueil/Courses-Analyses/
   Statistiques/Historique/Administration) sont désormais implémentés
   (2026-07-09)** (cf. section dédiée ci-dessus). Seul le module
