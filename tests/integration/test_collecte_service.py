@@ -202,3 +202,35 @@ def test_collecte_isole_une_unite_de_distance_pmu_inconnue(programme_echantillon
     assert rapport.nb_courses == 1  # seule la course 2 réussit
     assert len(rapport.erreurs) == 1
     assert "Unité de distance PMU inconnue" in rapport.erreurs[0]
+
+
+def test_collecter_resultats_course_specifique(participants_echantillon):
+    """cf. bouton « Récupérer les résultats » de la fiche course (L018 §6-7) :
+    une seule course peut être rafraîchie à la demande, sans attendre le
+    prochain passage de la collecte horaire ni ré-importer tout le programme.
+    L'échantillon réel a un `ordreArrivee` renseigné pour chaque participant
+    (course déjà arrivée)."""
+    from src.models.course import Course, Reunion
+
+    pmu = FakePMUClient(participants_par_course={(3, 5): participants_echantillon})
+    referentiels = FakeReferentielRepository()
+    courses = FakeCourseRepository()
+    reunion = courses.create_reunion(Reunion(date=date(2026, 7, 7), hippodrome_id=1, numero=3))
+    course = courses.create_course(Course(reunion_id=reunion.id, numero=5, nom="Course Test"))
+    service = CollecteService(pmu, referentiels, courses)
+
+    nb_partants = service.collecter_resultats_course(course.id)
+
+    assert nb_partants == 3
+    resultats = courses.list_resultats_by_course(course.id)
+    assert sorted(r.classement for r in resultats) == [2, 3, 5]
+
+
+def test_collecter_resultats_course_inconnue_leve_business_rule_error():
+    from src.core.exceptions import BusinessRuleError
+
+    pmu = FakePMUClient()
+    service = CollecteService(pmu, FakeReferentielRepository(), FakeCourseRepository())
+
+    with pytest.raises(BusinessRuleError):
+        service.collecter_resultats_course(999)

@@ -19,6 +19,7 @@ PROJECT_STATE.md, bug corrigé le 2026-07-08).
 from __future__ import annotations
 
 import itertools
+from datetime import datetime, timedelta
 
 from src.algorithms.controle_roi import (
     calculer_gains_couple,
@@ -37,6 +38,7 @@ from src.collecte.pmu.mappers import (
 from src.core.exceptions import ImportationError
 from src.core.logging import get_logger
 from src.models.analyse import Analyse, ControleRoi, ControleRoiPari, Pari
+from src.models.course import Course
 from src.repositories.analyse_repository import AnalyseRepository
 from src.repositories.course_repository import CourseRepository
 
@@ -44,6 +46,14 @@ logger = get_logger("controle_roi")
 
 TYPES_PARI_SIMPLE = ("Simple Gagnant", "Simple Placé")
 TYPES_PARI_COUPLE = ("Couplé Gagnant", "Couplé Placé")
+
+# Délai d'homologation PMU (cf. vérifié réellement le 2026-07-10 : les
+# rapports définitifs d'une course ne sont pas publiés instantanément à son
+# départ). Sans cette marge, chaque relance de "Calculer les statistiques"
+# retentait pour rien les mêmes analyses en attente (course pas encore
+# partie, ou partie il y a trop peu de temps), noyant le journal Administration
+# de WARNING "Rapports PMU indisponibles" répétés pour les mêmes courses.
+MARGE_HOMOLOGATION_MINUTES = 15
 
 
 class ControleRoiService:
@@ -54,20 +64,32 @@ class ControleRoiService:
         self._analyses = analyse_repository
         self._courses = course_repository
 
-    def calculer_controles_manquants(self) -> list[ControleRoi]:
+    def calculer_controles_manquants(self, maintenant: datetime | None = None) -> list[ControleRoi]:
         """Calcule et persiste le contrôle ROI de chaque analyse qui en manque
         encore. L'échec d'une analyse (rapport PMU pas encore disponible, réseau)
         est journalisé et n'empêche jamais les suivantes (cf. isolation déjà en
-        place dans `CollecteService`/`ConsensusPresseService`)."""
+        place dans `CollecteService`/`ConsensusPresseService`).
+
+        Une course dont le départ est inconnu, à venir, ou trop récent
+        (`MARGE_HOMOLOGATION_MINUTES`) est ignorée sans tentative ni WARNING :
+        les rapports définitifs ne peuvent de toute façon pas encore exister,
+        retenter ne ferait que reproduire le même échec à chaque appel (vérifié
+        réellement : le journal Administration se remplissait de WARNING
+        identiques pour les mêmes courses pas encore arrivées)."""
+        maintenant = maintenant if maintenant is not None else datetime.now()
         controles: list[ControleRoi] = []
         for analyse in self._analyses.list_analyses_sans_controle_roi():
-            controle = self._calculer_un_controle(analyse)
+            course = self._courses.get_course(analyse.course_id)
+            if course.heure_depart is not None and course.heure_depart + timedelta(
+                minutes=MARGE_HOMOLOGATION_MINUTES
+            ) > maintenant:
+                continue
+            controle = self._calculer_un_controle(analyse, course)
             if controle is not None:
                 controles.append(controle)
         return controles
 
-    def _calculer_un_controle(self, analyse: Analyse) -> ControleRoi | None:
-        course = self._courses.get_course(analyse.course_id)
+    def _calculer_un_controle(self, analyse: Analyse, course: Course) -> ControleRoi | None:
         reunion = self._courses.get_reunion(course.reunion_id)
 
         try:

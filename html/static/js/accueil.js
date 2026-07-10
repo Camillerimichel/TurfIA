@@ -52,13 +52,33 @@ async function chargerHippodromes() {
   }
 }
 
-// "Jouer" exclut les décisions "Ne pas jouer" ainsi que les courses pas
-// encore analysées (aucune décision) — seule "Toutes" les affiche.
-function decisionCorrespondAuFiltre(decision, filtre) {
-  if (filtre === "toutes") return true;
-  if (filtre === "ne_pas_jouer") return decision === "Ne pas jouer";
-  return decision != null && decision !== "Ne pas jouer";
+// cf. src/core/constants.py::DECISIONS — même liste, même ordre.
+const TOUTES_DECISIONS = ["Ne pas jouer", "Jeu prudent", "Jeu normal", "Forte opportunité"];
+const MARGE_COURSES_IMMINENTES_MINUTES = 60;
+
+function decisionsSelectionnees() {
+  return [...document.querySelectorAll('#filtre-decision-accueil input[type="checkbox"]:checked')].map(
+    (case_) => case_.value
+  );
 }
+
+// Toutes les décisions cochées = pas de filtrage réel -> tout affiché, y
+// compris les courses pas encore analysées (aucune décision). Dès qu'au moins
+// une décision est décochée, une course sans décision ne correspond à aucun
+// choix et est donc exclue.
+function decisionCorrespondAuFiltre(decision, decisions) {
+  if (decisions.length === TOUTES_DECISIONS.length) return true;
+  if (decision == null) return false;
+  return decisions.includes(decision);
+}
+
+function departImminent(heureDepartIso) {
+  if (!heureDepartIso) return false;
+  const minutesRestantes = (new Date(heureDepartIso) - new Date()) / 60000;
+  return minutesRestantes > 0 && minutesRestantes <= MARGE_COURSES_IMMINENTES_MINUTES;
+}
+
+let filtreImminentActif = false;
 
 // Dernière analyse d'une course (version la plus élevée = la plus récente,
 // cf. `analyses.version` Pré/Finale) et ses paris — `null` si pas encore
@@ -96,7 +116,8 @@ function construireBlocParis(detail) {
   liste.className = "liste-paris";
   for (const pari of detail.paris) {
     const item = document.createElement("li");
-    item.textContent = `${pari.type_pari} — combinaison ${pari.combinaison} — mise ${formaterMontant(pari.mise)} €`;
+    const selection = pari.combinaison_lisible ?? pari.combinaison ?? "—";
+    item.textContent = `${pari.type_pari} — ${selection} — mise ${formaterMontant(pari.mise)} €`;
     liste.appendChild(item);
   }
   bloc.appendChild(liste);
@@ -107,7 +128,7 @@ async function chargerReunions(dateJour) {
   const conteneur = document.getElementById("liste-reunions");
   conteneur.textContent = "Chargement…";
   const hippodromeId = document.getElementById("filtre-hippodrome-accueil").value;
-  const filtreDecision = document.getElementById("filtre-decision-accueil").value;
+  const decisions = decisionsSelectionnees();
   try {
     const parametres = new URLSearchParams({ date: dateJour });
     if (hippodromeId) parametres.set("hippodrome_id", hippodromeId);
@@ -130,12 +151,14 @@ async function chargerReunions(dateJour) {
       try {
         const courses = await apiFetch(`/reunions/${reunion.id}/courses`);
         for (const course of courses) {
+          if (filtreImminentActif && !departImminent(course.heure_depart)) continue;
+
           let decision = null;
           let contenuCourse;
           try {
             const detail = await chargerDerniereAnalyse(course.id);
             decision = detail ? detail.analyse.decision : null;
-            if (!decisionCorrespondAuFiltre(decision, filtreDecision)) continue;
+            if (!decisionCorrespondAuFiltre(decision, decisions)) continue;
             contenuCourse = detail
               ? construireBlocParis(detail)
               : (() => {
@@ -195,10 +218,41 @@ async function chargerReunions(dateJour) {
 document.getElementById("formulaire-filtres-accueil").addEventListener("submit", (evenement) => evenement.preventDefault());
 
 const selecteurDate = document.getElementById("selecteur-date");
+const boutonCoursesImminentes = document.getElementById("bouton-courses-imminentes");
+
+function desactiverFiltreImminent() {
+  filtreImminentActif = false;
+  boutonCoursesImminentes.classList.remove("actif");
+}
+
 selecteurDate.value = formaterDate(new Date());
-selecteurDate.addEventListener("change", () => chargerReunions(selecteurDate.value));
-document.getElementById("filtre-hippodrome-accueil").addEventListener("change", () => chargerReunions(selecteurDate.value));
-document.getElementById("filtre-decision-accueil").addEventListener("change", () => chargerReunions(selecteurDate.value));
+selecteurDate.addEventListener("change", () => {
+  desactiverFiltreImminent();
+  chargerReunions(selecteurDate.value);
+});
+document.getElementById("filtre-hippodrome-accueil").addEventListener("change", () => {
+  desactiverFiltreImminent();
+  chargerReunions(selecteurDate.value);
+});
+document.getElementById("filtre-decision-accueil").addEventListener("change", () => {
+  desactiverFiltreImminent();
+  chargerReunions(selecteurDate.value);
+});
+
+// Raccourci : "tout sauf Ne pas jouer" + départ dans l'heure qui suit — force
+// la date du jour et les décisions pour que le bouton reflète toujours
+// exactement ce qu'il promet, quels que soient les filtres déjà en place.
+boutonCoursesImminentes.addEventListener("click", () => {
+  filtreImminentActif = !filtreImminentActif;
+  boutonCoursesImminentes.classList.toggle("actif", filtreImminentActif);
+  if (filtreImminentActif) {
+    selecteurDate.value = formaterDate(new Date());
+    for (const case_ of document.querySelectorAll('#filtre-decision-accueil input[type="checkbox"]')) {
+      case_.checked = case_.value !== "Ne pas jouer";
+    }
+  }
+  chargerReunions(selecteurDate.value);
+});
 
 chargerRoiGlobal();
 chargerHippodromes();

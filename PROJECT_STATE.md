@@ -912,6 +912,98 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
     vraie Base) — sans changer sa catégorie affichée. Re-vérifié sur le même
     cas réel (course 200, script direct, transaction annulée) : 1 pari Simple
     Placé de 10 € désormais proposé.
+  - **Vrai bug trouvé (retour utilisateur : « c'est quoi ces numéros de
+    partant et quelle est la combinaison à jouer ? ») et corrigé : la fiche
+    course affichait des `partant_id` bruts (identifiants techniques, ex.
+    « 2130 ») au lieu du numéro de course et du nom du cheval — inexploitable
+    pour placer un pari réel.** Concerne 3 endroits : le tableau des partants
+    d'une analyse (colonne « Partant »), la sélection d'un pari (`Pari.
+    combinaison`, une liste de `partant_id` jointés par des tirets, ex.
+    « 2130 »), et le tableau des résultats d'arrivée (colonne « N° »).
+    Corrigé en joignant `CourseRepository.list_partants_detail_by_course`
+    (déjà utilisé pour la fiche partant, pas de nouvel N+1) : `AnalysePartantOut`
+    gagne `numero`/`cheval_nom`, `ParisOut` gagne `combinaison_lisible` (ex.
+    « N°1 SOMMERKONIG »), affichés par `course.js` (partants/paris/résultats)
+    et `accueil.js` (bloc paris) à la place des identifiants bruts — `Pari.
+    combinaison` reste inchangé en base (référence technique). Vérifié
+    réellement contre le cas exact remonté par l'utilisateur (analyse #489,
+    course 200) : `partant_id=2130` -> « N°1 SOMMERKONIG », le pari Simple
+    Placé affiche désormais cette même sélection au lieu de « combinaison
+    2130 ». Vérifié aussi sur un vrai tableau de résultats d'arrivée
+    (course 114).
+- **Cinquième passe, 2026-07-10** : filtre décision Accueil élargi + raccourci
+  "courses imminentes".
+  - Le filtre décision de l'Accueil devient un choix multiple (cases à cocher,
+    `#filtre-decision-accueil`) sur les 4 décisions réelles (cf.
+    `src/core/constants.py::DECISIONS` : Ne pas jouer/Jeu prudent/Jeu normal/
+    Forte opportunité), plus seulement un choix binaire jouer/ne pas jouer.
+    Par défaut à l'ouverture : tout coché sauf "Ne pas jouer" (même
+    comportement qu'avant, exprimé différemment). Une course pas encore
+    analysée (aucune décision) n'est affichée que si les 4 cases sont
+    cochées (pas de filtrage réel) — cohérent avec l'ancien comportement de
+    l'option "Toutes".
+  - Nouveau bouton "Courses à jouer dans l'heure" : force la date du jour et
+    les décisions ("tout sauf Ne pas jouer"), puis ajoute un filtre
+    départ ≤ 60 minutes (`departImminent`, calcul client, pas d'appel réseau
+    supplémentaire — le filtre s'applique avant même de charger l'analyse
+    d'une course exclue). Bouton à bascule (état visuel actif/inactif) ;
+    toute modification manuelle des filtres désactive le raccourci pour
+    éviter un état visuel trompeur. Vérifié en Node sur les seuils (30 min/
+    90 min/départ déjà passé). Confirmé : le choix multiple est bien une
+    condition « ou » (`decisions.includes(decision)`, cf. `accueil.js`), pas
+    un « et » — déjà le comportement implémenté, pas de changement nécessaire.
+  - **Vrai bug trouvé (retour utilisateur : « tu dois calculer les ROI sur
+    toutes tes propositions de jeux ») et corrigé : le ROI théorique
+    (`Analyse.roi_theorique`, `Pari.roi_estime`) était presque toujours proche
+    de -90 %, quelle que soit la vraie valeur du pari.** `AnalyseService.
+    analyser_course` appelait `esperance(p_turfia, rapport_estime=p.cote,
+    mise=mise_reference)` — `rapport_estime` doit être le gain total attendu
+    en euros pour la mise réellement engagée (cf. L031.4 §5 : « Espérance =
+    Probabilité_TurfIA × Rapport_estimé − Mise »), soit `mise_reference *
+    p.cote`, pas `p.cote` seul (une cote décimale sans dimension). L'ancien
+    calcul mélangeait les deux, avec `p_turfia × cote` (typiquement < 3)
+    presque toujours écrasé par `- mise_reference` (10 par défaut), donnant un
+    ROI quasi systématiquement ≈ -90 % à -100 % indépendamment de la vraie
+    valeur du pari. Corrigé (une ligne) ; propriété vérifiée par test : le ROI
+    (un pourcentage) est désormais indépendant de `mise_reference` (invariant
+    mathématique qui n'était pas respecté avant, cf. `tests/integration/
+    test_analyse_service.py::test_roi_theorique_independant_de_la_mise_reference`).
+    Référence figée de non-régression (L020 §8.3) régénérée en conséquence
+    (`tests/fixtures/reference_analyse_non_regression.json`, raison
+    documentée dans le fichier). Vérifié réellement contre PostgreSQL (course
+    200, transaction annulée) : ROI éclatés et plausibles (-52 % à +116 %
+    selon les partants) au lieu d'un bloc uniforme ≈ -85 %.
+  - **Nouvelle capacité : récupérer les résultats d'une course spécifique
+    après son départ, à la demande**, sans attendre le prochain passage de la
+    collecte horaire (qui couvre déjà tout le programme du jour, cf.
+    `CollecteService.collecter_programme_du_jour` — les résultats y sont déjà
+    extraits via `extraire_classement` sur le même appel PMU `/participants`)
+    ni ré-importer tout le programme pour une seule course. Nouvelle méthode
+    `CollecteService.collecter_resultats_course(course_id)` (réutilise
+    `_importer_partant`, get_or_create donc idempotent) + route `POST
+    /courses/{id}/resultats/collecter` (rôle `DECLENCHEMENT_ANALYSE`, même
+    tier que le déclenchement d'analyse) + bouton « Récupérer les résultats »
+    sur la fiche course (visible en permanence, pas seulement quand des
+    résultats existent déjà). Vérifié réellement contre l'API PMU (course
+    114, déjà arrivée) : 8 partants traités, 8 résultats en base avant/après
+    (idempotent, aucun doublon), transaction annulée.
+  - **Vrai bug trouvé (retour utilisateur, capture d'écran du journal
+    Administration : rafale de WARNING « Rapports PMU indisponibles ») et
+    corrigé.** `ControleRoiService.calculer_controles_manquants()` retentait,
+    à chaque déclenchement de « Calculer les statistiques », le contrôle ROI
+    de TOUTES les analyses sans `controle_roi` — y compris celles dont la
+    course n'était pas encore partie ou venait tout juste de partir (rapports
+    définitifs PMU pas encore homologués), échouant à tous les coups et
+    journalisant le même WARNING en boucle pour les mêmes courses (constaté
+    réellement : 3 courses R6C8/R7C1/R7C2, départs 19h50/18h30/19h00, alors
+    qu'il était 18h37). Corrigé : une course dont le départ est inconnu (`None`,
+    comportement historique préservé) est traitée comme avant, mais une
+    course dont le départ est connu et à moins de 15 min (passés ou à venir,
+    `MARGE_HOMOLOGATION_MINUTES`) est ignorée en amont, sans appel PMU ni
+    WARNING — les rapports ne peuvent de toute façon pas encore exister.
+    Vérifié réellement (transaction annulée) : 9 analyses candidates avant
+    filtre, 4 réellement tentées et calculées avec succès, 0 WARNING (contre
+    plusieurs dizaines observées dans le journal avant ce correctif).
 - **Interface HTML (L018) — les 5 modules (Accueil/Courses-Analyses/
   Statistiques/Historique/Administration) sont désormais implémentés
   (2026-07-09)** (cf. section dédiée ci-dessus). Seul le module

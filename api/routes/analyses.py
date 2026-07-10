@@ -24,7 +24,8 @@ from api.schemas.common import Enveloppe
 from src.algorithms.classement import PartantClasse
 from src.core.audit import serialiser_etat
 from src.core.exceptions import ValidationError
-from src.models.analyse import AnalysePartant, Selection
+from src.models.analyse import AnalysePartant, Pari, Selection
+from src.models.course import PartantDetail
 from src.models.utilisateur import Utilisateur
 from src.repositories.analyse_repository import AnalyseRepository
 from src.repositories.audit_repository import AuditRepository
@@ -35,13 +36,34 @@ from src.services.preparation_service import PreparationDonneesService
 router = APIRouter(tags=["Analyses"])
 
 
-def _partant_classe_vers_out(partant_classe: PartantClasse) -> AnalysePartantOut:
+def _partants_detail_par_id(course_repo: CourseRepository, course_id: int) -> dict[int, PartantDetail]:
+    """`{partant_id: PartantDetail}` — pour joindre numéro de course/nom du
+    cheval à l'affichage des analyses (cf. L018 §6-7) : `partant_id` seul (clé
+    technique) ne permet pas de savoir sur quel cheval parier réellement."""
+    return {pd.id: pd for pd in course_repo.list_partants_detail_by_course(course_id)}
+
+
+def _libelle_partant(partant_id: int, partants_detail: dict[int, PartantDetail]) -> str:
+    detail = partants_detail.get(partant_id)
+    return f"N°{detail.numero} {detail.cheval_nom}" if detail is not None else f"partant #{partant_id}"
+
+
+def _resoudre_combinaison(combinaison: str | None, partants_detail: dict[int, PartantDetail]) -> str | None:
+    if not combinaison:
+        return None
+    return " + ".join(_libelle_partant(int(pid), partants_detail) for pid in combinaison.split("-"))
+
+
+def _partant_classe_vers_out(partant_classe: PartantClasse, partants_detail: dict[int, PartantDetail]) -> AnalysePartantOut:
     """Traduit le résultat en mémoire (`PartantClasse`) vers la forme persistée
     (`AnalysePartantOut`) : `score` = Score TurfIA brut, `confiance` = score final
     après bonus Value Bet / malus risque (cf. L031.6 §3).
     """
+    detail = partants_detail.get(partant_classe.partant_id)
     return AnalysePartantOut(
         partant_id=partant_classe.partant_id,
+        numero=detail.numero if detail is not None else None,
+        cheval_nom=detail.cheval_nom if detail is not None else None,
         score=partant_classe.score_turfia,
         rang=partant_classe.rang,
         consensus=partant_classe.consensus,
@@ -52,9 +74,14 @@ def _partant_classe_vers_out(partant_classe: PartantClasse) -> AnalysePartantOut
     )
 
 
-def _persistance_vers_out(analyse_partant: AnalysePartant, categorie: str | None) -> AnalysePartantOut:
+def _persistance_vers_out(
+    analyse_partant: AnalysePartant, categorie: str | None, partants_detail: dict[int, PartantDetail]
+) -> AnalysePartantOut:
+    detail = partants_detail.get(analyse_partant.partant_id)
     return AnalysePartantOut(
         partant_id=analyse_partant.partant_id,
+        numero=detail.numero if detail is not None else None,
+        cheval_nom=detail.cheval_nom if detail is not None else None,
         score=analyse_partant.score,
         rang=analyse_partant.rang,
         consensus=analyse_partant.consensus,
@@ -62,6 +89,17 @@ def _persistance_vers_out(analyse_partant: AnalysePartant, categorie: str | None
         value_bet=analyse_partant.value_bet,
         confiance=analyse_partant.confiance,
         categorie=categorie,
+    )
+
+
+def _pari_vers_out(pari: Pari, partants_detail: dict[int, PartantDetail]) -> ParisOut:
+    return ParisOut(
+        type_pari=pari.type_pari,
+        combinaison=pari.combinaison,
+        combinaison_lisible=_resoudre_combinaison(pari.combinaison, partants_detail),
+        mise=pari.mise,
+        gain_estime=pari.gain_estime,
+        roi_estime=pari.roi_estime,
     )
 
 
@@ -95,10 +133,11 @@ def trigger_analyse(
         utilisateur.id, "declenchement_analyse", objet=str(resultat.analyse.id),
         nouvel_etat=serialiser_etat(resultat.analyse),
     )
+    partants_detail = _partants_detail_par_id(course_repo, course_id)
     detail = AnalyseDetailOut(
         analyse=AnalyseOut.model_validate(resultat.analyse),
-        partants=[_partant_classe_vers_out(pc) for pc in resultat.partants_classes],
-        paris=[ParisOut.model_validate(p) for p in resultat.paris],
+        partants=[_partant_classe_vers_out(pc, partants_detail) for pc in resultat.partants_classes],
+        paris=[_pari_vers_out(p, partants_detail) for p in resultat.paris],
     )
     return Enveloppe(data=detail)
 
@@ -141,10 +180,11 @@ def trigger_analyse_auto(
         utilisateur.id, "declenchement_analyse", objet=str(resultat.analyse.id),
         nouvel_etat=serialiser_etat(resultat.analyse),
     )
+    partants_detail = _partants_detail_par_id(course_repo, course_id)
     detail = AnalyseDetailOut(
         analyse=AnalyseOut.model_validate(resultat.analyse),
-        partants=[_partant_classe_vers_out(pc) for pc in resultat.partants_classes],
-        paris=[ParisOut.model_validate(p) for p in resultat.paris],
+        partants=[_partant_classe_vers_out(pc, partants_detail) for pc in resultat.partants_classes],
+        paris=[_pari_vers_out(p, partants_detail) for p in resultat.paris],
     )
     return Enveloppe(data=detail)
 
@@ -163,6 +203,7 @@ def list_analyses(
 def get_analyse(
     analyse_id: int,
     repo: AnalyseRepository = Depends(get_analyse_repository),
+    course_repo: CourseRepository = Depends(get_course_repository),
     _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
 ) -> Enveloppe[AnalyseDetailOut]:
     analyse = repo.get_analyse(analyse_id)
@@ -173,10 +214,14 @@ def get_analyse(
     selections: list[Selection] = repo.list_selections_by_analyse(analyse_id)
     categorie_par_partant = {s.partant_id: s.categorie for s in selections}
     paris = repo.list_paris_by_analyse(analyse_id)
+    partants_detail = _partants_detail_par_id(course_repo, analyse.course_id)
 
     detail = AnalyseDetailOut(
         analyse=AnalyseOut.model_validate(analyse),
-        partants=[_persistance_vers_out(ap, categorie_par_partant.get(ap.partant_id)) for ap in analyse_partants],
-        paris=[ParisOut.model_validate(p) for p in paris],
+        partants=[
+            _persistance_vers_out(ap, categorie_par_partant.get(ap.partant_id), partants_detail)
+            for ap in analyse_partants
+        ],
+        paris=[_pari_vers_out(p, partants_detail) for p in paris],
     )
     return Enveloppe(data=detail)

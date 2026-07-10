@@ -1,9 +1,9 @@
 {
-  "_note": "Référence figée pour tests/integration/test_non_regression_determinisme.py (cf. L020 §8.3). Tout écart doit être expliqué et validé explicitement (nouvelle version de règles, cf. L009 §5.1) avant de régénérer ce fichier — jamais un ajustement silencieux.",
+  "_note": "Référence figée pour tests/integration/test_non_regression_determinisme.py (cf. L020 §8.3). Tout écart doit être expliqué et validé explicitement (nouvelle version de règles, cf. L009 §5.1) avant de régénérer ce fichier — jamais un ajustement silencieux. Régénérée le 2026-07-10 : fix du calcul d'espérance/ROI (AnalyseService.analyser_course) qui utilisait `p.cote` brute comme rapport_estime au lieu de `mise_reference * p.cote` (le gain total attendu pour la mise réellement engagée, cf. L031.4 §5) — l'ancien calcul donnait un ROI presque toujours proche de -90 % quelle que soit la vraie valeur du pari (vérifié réellement sur des analyses en base, cf. PROJECT_STATE.md).",
   "analyse": {
     "score_confiance": 90.43,
     "risque": 0.0,
-    "roi_theorique": -88.18,
+    "roi_theorique": 18.18,
     "decision": "Forte opportunité",
     "budget": 50.0
   },
@@ -14,7 +14,7 @@
       "score_final": 90.4320987654321,
       "categorie": "Base",
       "value_bet": false,
-      "roi_theorique": -88.18247431434152
+      "roi_theorique": 18.17525685658488
     },
     "2": {
       "rang": 2,
@@ -22,7 +22,7 @@
       "score_final": 73.46978557504873,
       "categorie": "Chance régulière",
       "value_bet": true,
-      "roi_theorique": -85.68396026152672
+      "roi_theorique": 43.16039738473297
     },
     "3": {
       "rang": 3,
@@ -30,13 +30,13 @@
       "score_final": 32.40740740740741,
       "categorie": "Écarté",
       "value_bet": false,
-      "roi_theorique": -79.67224250658063
+      "roi_theorique": 103.27757493419381
     }
   },
   "paris": [
-    {"type_pari": "Simple Gagnant", "numeros": [1], "mise": 15.38, "roi_estime": -88.18},
-    {"type_pari": "Simple Placé", "numeros": [1], "mise": 11.54, "roi_estime": -88.18},
-    {"type_pari": "Simple Placé", "numeros": [2], "mise": 11.54, "roi_estime": -85.68},
-    {"type_pari": "Couplé Placé", "numeros": [1, 2], "mise": 11.54, "roi_estime": -86.93}
+    {"type_pari": "Simple Gagnant", "numeros": [1], "mise": 15.38, "roi_estime": 18.18},
+    {"type_pari": "Simple Placé", "numeros": [1], "mise": 11.54, "roi_estime": 18.18},
+    {"type_pari": "Simple Placé", "numeros": [2], "mise": 11.54, "roi_estime": 43.16},
+    {"type_pari": "Couplé Placé", "numeros": [1, 2], "mise": 11.54, "roi_estime": 30.67}
   ]
 }

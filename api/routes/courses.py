@@ -12,8 +12,9 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from api.dependencies.auth import ECRITURE_DONNEES, LECTURE, exiger_roles
+from api.dependencies.auth import DECLENCHEMENT_ANALYSE, ECRITURE_DONNEES, LECTURE, exiger_roles
 from api.dependencies.db import get_audit_repository, get_course_repository, get_referentiel_repository
+from api.dependencies.services import get_collecte_service
 from api.schemas.common import Enveloppe
 from api.schemas.courses import (
     ChevalIn,
@@ -45,6 +46,7 @@ from src.models.utilisateur import Utilisateur
 from src.repositories.audit_repository import AuditRepository
 from src.repositories.course_repository import CourseRepository
 from src.repositories.referentiel_repository import ReferentielRepository
+from src.services.collecte_service import CollecteService
 
 router = APIRouter(tags=["Courses"])
 
@@ -519,6 +521,24 @@ def list_resultats(
         raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
     resultats = repo.list_resultats_by_course(course_id)
     return Enveloppe(data=[ResultatOut.model_validate(r) for r in resultats])
+
+
+@router.post("/courses/{course_id}/resultats/collecter", response_model=Enveloppe[dict])
+def collecter_resultats(
+    course_id: int,
+    course_repo: CourseRepository = Depends(get_course_repository),
+    collecte_service: CollecteService = Depends(get_collecte_service),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*DECLENCHEMENT_ANALYSE)),
+) -> Enveloppe[dict]:
+    """Récupère à la demande les cotes/résultats d'une course spécifique après
+    son départ (cf. L018 §6-7) — pas besoin d'attendre le prochain passage de
+    la collecte horaire ni de relancer tout le programme du jour."""
+    if course_repo.get_course(course_id) is None:
+        raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
+    nb_partants = collecte_service.collecter_resultats_course(course_id)
+    audit_repo.enregistrer(utilisateur.id, "collecte_resultats_course", objet=str(course_id))
+    return Enveloppe(data={"nb_partants": nb_partants})
 
 
 @router.post("/partants/{partant_id}/cotes", response_model=Enveloppe[CoteOut], status_code=201)

@@ -1,7 +1,7 @@
 """Teste ControleRoiService avec des repositories/client en mémoire (cf.
 tests/integration/fakes.py), sans base réelle ni accès réseau."""
 
-from datetime import date
+from datetime import date, datetime, timedelta
 
 import pytest
 
@@ -302,3 +302,53 @@ def test_rapport_indisponible_pour_ce_type_de_pari_est_ignore_sans_planter():
     service = ControleRoiService(pmu_client, analyse_repo, course_repo)
 
     assert service.calculer_controles_manquants() == []
+
+
+def test_course_pas_encore_partie_est_ignoree_sans_appel_pmu():
+    """Non-régression : une course dont le départ est à venir (ou trop récent
+    pour que PMU ait homologué les rapports) est ignorée sans tentative — les
+    rapports définitifs ne peuvent de toute façon pas encore exister. Avant ce
+    filtre, chaque relance de "Calculer les statistiques" retentait pour rien
+    et journalisait un WARNING identique (vérifié réellement en base,
+    cf. PROJECT_STATE.md)."""
+    course_repo = FakeCourseRepository()
+    analyse_repo = FakeAnalyseRepository()
+    maintenant = datetime(2026, 7, 10, 18, 37)
+    reunion = course_repo.create_reunion(Reunion(date=date(2026, 7, 10), hippodrome_id=1, numero=1))
+    course = course_repo.create_course(
+        Course(reunion_id=reunion.id, numero=1, nom="Prix Test", heure_depart=maintenant + timedelta(minutes=5))
+    )
+    cheval = course_repo.create_cheval(Cheval(nom="Cheval Choisi"))
+    partant = course_repo.create_partant(Partant(course_id=course.id, cheval_id=cheval.id, numero=4))
+    analyse = analyse_repo.create_analyse(Analyse(course_id=course.id, version=1, budget=10.0))
+    analyse_repo.create_pari(
+        Pari(analyse_id=analyse.id, type_pari="Simple Gagnant", combinaison=str(partant.id), mise=10.0)
+    )
+    pmu_client = FakePMUClient()  # aucun rapport configuré : lèverait une erreur si appelé
+
+    service = ControleRoiService(pmu_client, analyse_repo, course_repo)
+    controles = service.calculer_controles_manquants(maintenant=maintenant)
+
+    assert controles == []
+
+
+def test_course_partie_depuis_assez_longtemps_est_bien_tentee():
+    course_repo = FakeCourseRepository()
+    analyse_repo = FakeAnalyseRepository()
+    maintenant = datetime(2026, 7, 10, 18, 37)
+    reunion = course_repo.create_reunion(Reunion(date=date(2026, 7, 10), hippodrome_id=1, numero=1))
+    course = course_repo.create_course(
+        Course(reunion_id=reunion.id, numero=1, nom="Prix Test", heure_depart=maintenant - timedelta(minutes=30))
+    )
+    cheval = course_repo.create_cheval(Cheval(nom="Cheval Choisi"))
+    partant = course_repo.create_partant(Partant(course_id=course.id, cheval_id=cheval.id, numero=4))
+    analyse = analyse_repo.create_analyse(Analyse(course_id=course.id, version=1, budget=10.0))
+    analyse_repo.create_pari(
+        Pari(analyse_id=analyse.id, type_pari="Simple Gagnant", combinaison=str(partant.id), mise=10.0)
+    )
+    pmu_client = FakePMUClient(rapports_par_course={(1, 1): RAPPORT_GAGNANT})
+
+    service = ControleRoiService(pmu_client, analyse_repo, course_repo)
+    controles = service.calculer_controles_manquants(maintenant=maintenant)
+
+    assert len(controles) == 1

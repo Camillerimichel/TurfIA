@@ -38,13 +38,15 @@
           <option value="">Tous</option>
         </select>
 
-        <label for="filtre-decision-accueil">Décision</label>
-        <select id="filtre-decision-accueil">
-          <option value="jouer" selected>Jouer</option>
-          <option value="ne_pas_jouer">Ne pas jouer</option>
-          <option value="toutes">Toutes</option>
-        </select>
+        <fieldset id="filtre-decision-accueil">
+          <legend>Décision</legend>
+          <label><input type="checkbox" value="Ne pas jouer" /> Ne pas jouer</label>
+          <label><input type="checkbox" value="Jeu prudent" checked /> Jeu prudent</label>
+          <label><input type="checkbox" value="Jeu normal" checked /> Jeu normal</label>
+          <label><input type="checkbox" value="Forte opportunité" checked /> Forte opportunité</label>
+        </fieldset>
       </form>
+      <button type="button" id="bouton-courses-imminentes">Courses à jouer dans l'heure</button>
       <div id="liste-reunions">Chargement…</div>
     </section>
   </main>
