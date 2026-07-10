@@ -34,6 +34,36 @@ function exigerConnexion() {
   }
 }
 
+// Indicateur de chargement global — un seul point de câblage pour toutes les
+// pages (plutôt que de dupliquer un état de chargement par bouton/formulaire).
+// Compteur de requêtes en vol : reste visible tant qu'au moins un appel est
+// en cours, retiré uniquement quand le dernier se termine (succès ou échec).
+let _nbRequetesEnCours = 0;
+
+function _obtenirIndicateurChargement() {
+  let indicateur = document.getElementById("indicateur-chargement-global");
+  if (!indicateur) {
+    indicateur = document.createElement("div");
+    indicateur.id = "indicateur-chargement-global";
+    indicateur.textContent = "Chargement…";
+    indicateur.hidden = true;
+    document.body.prepend(indicateur);
+  }
+  return indicateur;
+}
+
+function _signalerDebutRequete() {
+  _nbRequetesEnCours += 1;
+  _obtenirIndicateurChargement().hidden = false;
+}
+
+function _signalerFinRequete() {
+  _nbRequetesEnCours = Math.max(0, _nbRequetesEnCours - 1);
+  if (_nbRequetesEnCours === 0) {
+    _obtenirIndicateurChargement().hidden = true;
+  }
+}
+
 async function apiFetch(chemin, options = {}) {
   const jeton = obtenirJeton();
   const entetes = { "Content-Type": "application/json", ...(options.headers || {}) };
@@ -41,19 +71,24 @@ async function apiFetch(chemin, options = {}) {
     entetes["Authorization"] = `Bearer ${jeton}`;
   }
 
-  const reponse = await fetch(`${API_PREFIX}${chemin}`, { ...options, headers: entetes });
+  _signalerDebutRequete();
+  try {
+    const reponse = await fetch(`${API_PREFIX}${chemin}`, { ...options, headers: entetes });
 
-  if (reponse.status === 401) {
-    effacerSession();
-    window.location.href = "/login.html";
-    throw new Error("Session expirée, reconnexion nécessaire.");
-  }
+    if (reponse.status === 401) {
+      effacerSession();
+      window.location.href = "/login.html";
+      throw new Error("Session expirée, reconnexion nécessaire.");
+    }
 
-  const corps = await reponse.json();
-  if (!corps.success) {
-    throw new Error(corps.error?.message || `Erreur ${reponse.status}`);
+    const corps = await reponse.json();
+    if (!corps.success) {
+      throw new Error(corps.error?.message || `Erreur ${reponse.status}`);
+    }
+    return corps.data;
+  } finally {
+    _signalerFinRequete();
   }
-  return corps.data;
 }
 
 // Bootstrap commun des pages protégées : exige une session, affiche

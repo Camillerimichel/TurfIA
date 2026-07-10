@@ -365,7 +365,13 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
     dynamique vient du JS via `fetch()` (`html/static/js/api.js` centralise
     l'appel API, l'en-tête `Authorization: Bearer`, le parsing de l'enveloppe
     `{success, data}`/`{success:false, error}`, et la redirection vers
-    `login.html` sur 401). Navigation par query string
+    `login.html` sur 401). **Indicateur de chargement global ajouté
+    (2026-07-10)** : `apiFetch` incrémente/décrémente un compteur de requêtes
+    en vol (bloc `try/finally`, donc retiré même en cas d'erreur) et
+    affiche/masque une bannière injectée dynamiquement
+    (`#indicateur-chargement-global`) — un seul point de câblage couvre
+    tous les appels de toutes les pages, aucune page n'a eu besoin d'être
+    modifiée individuellement. Navigation par query string
     (`course.html?id=42`), pas de routeur JS. Jeton stocké en `localStorage`
     (pas de cookies -> pas de CSRF à protéger, L018 §15 satisfait par
     construction). `api/main.py` monte `StaticFiles` (déjà fourni par
@@ -430,6 +436,10 @@ PostgreSQL locale réelle (migration, insertion, lecture via l'API).
       3 routes `POST /administration/automatisations/*`, RBAC
       `ADMINISTRATION` (plus restrictif que `DECLENCHEMENT_ANALYSE` — choix
       documenté, sans conséquence pratique avec un seul compte Administrateur).
+      **Affichage du résultat amélioré (2026-07-10)** : le premier test manuel
+      réel a montré un JSON brut peu lisible — `administration.js` construit
+      désormais un résumé structuré (compteurs, tableau des tables
+      recalculées, liste des erreurs) au lieu de `JSON.stringify`.
     - *Vérifier les sauvegardes* : `scripts/sauvegarder_base.py` (nouveau) —
       `pg_dump --format=custom` vers `data/sauvegardes/`, mot de passe transmis
       via `PGPASSWORD` (jamais en argument de ligne de commande, cf. L021
@@ -609,6 +619,13 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
   `_importer_course_et_partants`. Trouvé en préparant les tests manuels de
   l'interface HTML (données de collecte réelles nettoyées avant relance avec
   le correctif).
+- **Corrigé (2026-07-10)** : `DISCIPLINES_PMU` (`src/collecte/pmu/mappers.py`)
+  ne connaissait que `HAIES`/`STEEPLE-CHASE` — une vraie collecte réelle du
+  2026-07-10 a rencontré `HAIE`/`STEEPLECHASE` (sans le S/le tiret) sur une
+  autre réunion, faisant échouer 8 courses (`Code discipline PMU inconnu`).
+  PMU n'est pas cohérent sur l'orthographe exacte du code selon les réunions ;
+  les deux variantes sont désormais acceptées (mappées vers les mêmes
+  libellés `Haies`/`Steeple`), complété au fur et à mesure comme documenté.
 
 ## Limites connues du module Statistiques (documentées, pas cachées)
 

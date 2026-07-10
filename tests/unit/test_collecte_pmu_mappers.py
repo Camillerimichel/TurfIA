@@ -55,6 +55,15 @@ def test_mapper_discipline_code_connu():
     assert mapper_discipline_code("ATTELE") == "Trot Attelé"
 
 
+def test_mapper_discipline_code_variantes_haies_steeplechase_observees_reellement():
+    """cf. réunion réelle du 2026-07-10 : PMU utilise parfois 'HAIE'/'STEEPLECHASE'
+    (sans le S/le tiret) plutôt que 'HAIES'/'STEEPLE-CHASE'."""
+    assert mapper_discipline_code("HAIE") == "Haies"
+    assert mapper_discipline_code("HAIES") == "Haies"
+    assert mapper_discipline_code("STEEPLECHASE") == "Steeple"
+    assert mapper_discipline_code("STEEPLE-CHASE") == "Steeple"
+
+
 def test_mapper_discipline_code_inconnu_leve_erreur():
     with pytest.raises(ImportationError):
         mapper_discipline_code("CODE_INEXISTANT")
