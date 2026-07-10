@@ -15,6 +15,10 @@ class Reunion:
     heure_debut: datetime | None = None
     heure_fin: datetime | None = None
     statut: str = "Prévue"
+    # Peuplé uniquement par les requêtes qui joignent `hippodrome` (cf.
+    # `CourseRepository.list_reunions_by_date`/`get_reunion`) — affichage
+    # (page Accueil, cf. L018 §5) sans exiger un aller-retour supplémentaire.
+    hippodrome_nom: str | None = None
 
 
 @dataclass

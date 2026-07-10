@@ -14,7 +14,7 @@ from src.models.historique import HistoriqueFiltres, HistoriqueLigne
 _COLONNES = """
     re.date AS date, re.hippodrome_id AS hippodrome_id, h.nom AS hippodrome_nom,
     c.id AS course_id, c.numero AS course_numero, c.nom AS course_nom,
-    a.id AS analyse_id, a.version AS version, a.decision AS decision,
+    a.id AS analyse_id, a.version AS version, a.date_calcul AS date_calcul, a.decision AS decision,
     a.score_confiance AS score_confiance, a.risque AS risque, a.budget AS budget,
     p.id AS pari_id, p.type_pari AS type_pari, p.mise AS mise,
     p.gain_estime AS gain_estime, p.roi_estime AS roi_estime,

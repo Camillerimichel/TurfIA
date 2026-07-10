@@ -27,19 +27,25 @@ class _CanalturfStub:
     def __init__(self, html_quinte_php: str, page_course: str | None = None) -> None:
         self.html_quinte_php = html_quinte_php
         self.page_course = page_course
+        self.nb_appels_quinte_php = 0
+        self.nb_appels_page_course = 0
 
     def recuperer_page_quinte_du_jour(self) -> str:
+        self.nb_appels_quinte_php += 1
         return self.html_quinte_php
 
     def recuperer_page_course(self, url: str) -> str:
+        self.nb_appels_page_course += 1
         return self.page_course
 
 
 class _ZoneTurfStub:
     def __init__(self, html_quinte: str) -> None:
         self.html_quinte = html_quinte
+        self.nb_appels = 0
 
     def recuperer_page_quinte_du_jour(self) -> str:
+        self.nb_appels += 1
         return self.html_quinte
 
 
@@ -134,3 +140,21 @@ def test_recuperer_classements_presse_aucune_source_ne_repond():
     service = ConsensusPresseService(canalturf, zoneturf)
 
     assert service.recuperer_classements_presse(numero_reunion=1, numero_course=1) == []
+
+
+def test_recuperer_classements_presse_ne_refait_pas_les_appels_reseau_par_course():
+    """cf. AutomatisationService.analyser_courses_du_jour : appelé une fois par
+    course d'un même jour (jusqu'à plusieurs dizaines) — le Quinté+ du jour ne
+    doit être récupéré qu'une seule fois par instance de service, jamais une
+    fois par course consultée (bug réel trouvé le 2026-07-10 : ~10 s/course
+    sans ce cache, >9 min pour 55 courses)."""
+    canalturf = _CanalturfStub(_CANALTURF_QUINTE_PHP_R1C1, _CANALTURF_COURSE_R1C1)
+    zoneturf = _ZoneTurfStub(_ZONETURF_QUINTE_R1C1)
+    service = ConsensusPresseService(canalturf, zoneturf)
+
+    for numero_course in range(1, 6):
+        service.recuperer_classements_presse(numero_reunion=1, numero_course=numero_course)
+
+    assert canalturf.nb_appels_quinte_php == 1
+    assert canalturf.nb_appels_page_course == 1
+    assert zoneturf.nb_appels == 1

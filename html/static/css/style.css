@@ -109,6 +109,36 @@ main {
   font-size: 1.1rem;
 }
 
+/* Blocs Administration repliés par défaut (cf. L018 §10) — <details>/<summary>
+   natifs : tout le bandeau (le <h2>) est cliquable pour déplier/replier, pas
+   seulement un bouton dédié. */
+details.carte > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+details.carte > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.carte > summary::before {
+  content: "▸ ";
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+details.carte[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+details.carte > summary h2 {
+  display: inline;
+}
+
+details.carte[open] > summary {
+  margin-bottom: 1rem;
+}
+
 .note {
   color: #555b66;
   font-size: 0.85rem;
@@ -134,6 +164,54 @@ th {
    en page sur petit écran (cf. L018 §12). */
 .tableau-scroll {
   overflow-x: auto;
+}
+
+#journal-cron {
+  max-height: 20rem;
+  overflow: auto;
+  background: var(--couleur-accent-clair);
+  border: 1px solid var(--couleur-bordure);
+  border-radius: 4px;
+  padding: 0.75rem;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Bloc de filtres Historique : filtres à gauche, règles de décision à droite
+   (cf. L018 §8) — empilés verticalement sur petit écran. */
+.colonnes-deux {
+  display: flex;
+  gap: 2rem;
+  align-items: flex-start;
+}
+
+.colonnes-deux > * {
+  flex: 1;
+  min-width: 260px;
+}
+
+.bloc-regles-decision h3 {
+  margin-top: 0;
+  font-size: 1rem;
+}
+
+@media (max-width: 640px) {
+  .colonnes-deux {
+    flex-direction: column;
+  }
+}
+
+/* Jauge "temps avant le départ" (cf. L018 §5-6) — couleur posée en inline JS
+   (dégradé continu vert -> rouge), ce bloc ne fixe que la forme. */
+.jauge-depart {
+  display: inline-block;
+  color: white;
+  padding: 0.15rem 0.55rem;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .bloc-reunion, .bloc-modele {

@@ -52,3 +52,32 @@ def test_analyse_auto_sans_cote_collectee_retourne_422(client):
 def test_analyse_auto_course_inconnue_retourne_404(client):
     reponse = client.post("/api/v1/courses/999/analyses/auto", json={})
     assert reponse.status_code == 404
+
+
+def test_analyse_auto_meme_version_retourne_409(client, repos):
+    course = _creer_course_avec_partants(client, [("Cheval A", 3.5, "1p2p1p")])
+    partants = repos["course"].list_partants_by_course(course["id"])
+    repos["course"].cotes[partants[0].id] = 3.5
+
+    premiere = client.post(f"/api/v1/courses/{course['id']}/analyses/auto", json={"version": 1})
+    assert premiere.status_code == 201
+
+    deuxieme = client.post(f"/api/v1/courses/{course['id']}/analyses/auto", json={"version": 1})
+    assert deuxieme.status_code == 409
+
+
+def test_analyse_auto_version_suivante_permet_de_relancer_quand_on_veut(client, repos):
+    """Verrou de non-régression pour le déclenchement manuel « à volonté »
+    (cf. html/static/js/course.js) : viser la version suivante plutôt que de
+    rejouer la même doit toujours réussir, même après une analyse déjà
+    existante (ex. automatisation horaire en version 1)."""
+    course = _creer_course_avec_partants(client, [("Cheval A", 3.5, "1p2p1p")])
+    partants = repos["course"].list_partants_by_course(course["id"])
+    repos["course"].cotes[partants[0].id] = 3.5
+
+    premiere = client.post(f"/api/v1/courses/{course['id']}/analyses/auto", json={"version": 1})
+    assert premiere.status_code == 201
+
+    deuxieme = client.post(f"/api/v1/courses/{course['id']}/analyses/auto", json={"version": 2})
+    assert deuxieme.status_code == 201
+    assert deuxieme.json()["data"]["analyse"]["version"] == 2

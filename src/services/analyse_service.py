@@ -64,6 +64,9 @@ class AnalyseService:
         self._poids_score = poids_score
         self._poids_risque = poids_risque
 
+    def deja_analysee(self, course_id: int, version: int) -> bool:
+        return self._repo.existe_analyse(course_id, version)
+
     def analyser_course(
         self,
         course_id: int,

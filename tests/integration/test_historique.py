@@ -36,6 +36,7 @@ def test_historique_sans_filtre_retourne_les_lignes(client):
     ligne = next(l for l in lignes if l["analyse_id"] == detail["analyse"]["id"])
     assert ligne["course_id"] == course["id"]
     assert ligne["hippodrome_id"] == reunion["hippodrome_id"]
+    assert ligne["date_calcul"] == detail["analyse"]["date_calcul"]
 
 
 def test_historique_filtre_par_hippodrome_inconnu_est_vide(client):

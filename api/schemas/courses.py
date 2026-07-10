@@ -22,6 +22,7 @@ class ReunionOut(BaseModel):
     id: int
     date: date
     hippodrome_id: int
+    hippodrome_nom: str | None = None
     numero: int
     heure_debut: datetime | None = None
     heure_fin: datetime | None = None

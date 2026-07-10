@@ -4,7 +4,7 @@ seule sur analyses/paris/ROI, jamais persistés (pas de table dédiée)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 
 @dataclass(frozen=True)
@@ -32,6 +32,7 @@ class HistoriqueLigne:
     course_nom: str
     analyse_id: int
     version: int
+    date_calcul: datetime | None
     decision: str | None
     score_confiance: float | None
     risque: float | None

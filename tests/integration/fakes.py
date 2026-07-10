@@ -114,8 +114,9 @@ class FakeReferentielRepository:
 
 
 class FakeCourseRepository:
-    def __init__(self) -> None:
+    def __init__(self, referentiel_repo: "FakeReferentielRepository | None" = None) -> None:
         self._ids = _AutoId()
+        self._referentiels = referentiel_repo
         self.reunions: dict[int, object] = {}
         self.courses: dict[int, object] = {}
         self.chevaux: dict[int, object] = {}
@@ -159,11 +160,24 @@ class FakeCourseRepository:
         self.reunions[reunion.id] = reunion
         return reunion
 
-    def get_reunion(self, reunion_id: int):
-        return self.reunions.get(reunion_id)
+    def _avec_hippodrome_nom(self, reunion):
+        if reunion is None or self._referentiels is None:
+            return reunion
+        hippodrome = self._referentiels.hippodromes.get(reunion.hippodrome_id)
+        if hippodrome is None:
+            return reunion
+        return dataclasses.replace(reunion, hippodrome_nom=hippodrome.nom)
 
-    def list_reunions_by_date(self, jour):
-        return sorted((r for r in self.reunions.values() if r.date == jour), key=lambda r: r.numero)
+    def get_reunion(self, reunion_id: int):
+        return self._avec_hippodrome_nom(self.reunions.get(reunion_id))
+
+    def list_reunions_by_date(self, jour, hippodrome_id: int | None = None):
+        reunions = (
+            r
+            for r in self.reunions.values()
+            if r.date == jour and (hippodrome_id is None or r.hippodrome_id == hippodrome_id)
+        )
+        return [self._avec_hippodrome_nom(r) for r in sorted(reunions, key=lambda r: r.numero)]
 
     def update_reunion(self, reunion_id: int, champs: dict):
         return self._appliquer_patch(self.reunions, reunion_id, champs)
@@ -387,7 +401,18 @@ class FakeAnalyseRepository:
         self.controle_roi_paris: dict[int, object] = {}  # keyed by pari_id
 
     def create_analyse(self, analyse):
-        analyse = dataclasses.replace(analyse, id=self._ids.next())
+        # Reproduit la contrainte UNIQUE(course_id, version) réelle (cf.
+        # sql/schema/03_analyses.sql, AnalyseRepository.create_analyse) : sans
+        # ce contrôle, le fake acceptait silencieusement des doublons que
+        # PostgreSQL rejette en vrai, cachant en test un vrai 409 de l'API.
+        if any(a.course_id == analyse.course_id and a.version == analyse.version for a in self.analyses.values()):
+            raise BusinessRuleError(
+                f"Une analyse existe déjà pour la course {analyse.course_id} en version {analyse.version}."
+            )
+        # `date_calcul` par défaut à `now()` côté SQL réel (cf. sql/schema/03_analyses.sql) —
+        # reproduit ici puisque `AnalyseService.analyser_course` ne la fixe jamais lui-même.
+        date_calcul = analyse.date_calcul if analyse.date_calcul is not None else datetime.now(timezone.utc)
+        analyse = dataclasses.replace(analyse, id=self._ids.next(), date_calcul=date_calcul)
         self.analyses[analyse.id] = analyse
         self.analyse_partants[analyse.id] = []
         self.selections[analyse.id] = []
@@ -399,6 +424,9 @@ class FakeAnalyseRepository:
 
     def list_analyses_by_course(self, course_id: int):
         return [a for a in self.analyses.values() if a.course_id == course_id]
+
+    def existe_analyse(self, course_id: int, version: int) -> bool:
+        return any(a.course_id == course_id and a.version == version for a in self.analyses.values())
 
     def create_analyse_partant(self, ap):
         ap = dataclasses.replace(ap, id=self._ids.next())
@@ -699,7 +727,8 @@ class FakeHistoriqueRepository:
                     base = dict(
                         date=reunion.date, hippodrome_id=reunion.hippodrome_id, hippodrome_nom=hippodrome_nom,
                         course_id=course.id, course_numero=course.numero, course_nom=course.nom,
-                        analyse_id=analyse.id, version=analyse.version, decision=analyse.decision,
+                        analyse_id=analyse.id, version=analyse.version, date_calcul=analyse.date_calcul,
+                        decision=analyse.decision,
                         score_confiance=analyse.score_confiance, risque=analyse.risque, budget=analyse.budget,
                     )
                     paris = self._analyses.list_paris_by_analyse(analyse.id)
@@ -770,6 +799,10 @@ class FakeTacheRepository:
     def lister(self, categorie: str | None = None, limite: int = 50) -> list[Tache]:
         resultat = [t for t in self.taches.values() if categorie is None or t.categorie == categorie]
         return sorted(resultat, key=lambda t: t.debut, reverse=True)[:limite]
+
+    def get_derniere_par_nom(self, nom: str) -> Tache | None:
+        candidats = sorted((t for t in self.taches.values() if t.nom == nom), key=lambda t: t.debut, reverse=True)
+        return candidats[0] if candidats else None
 
     def compter_echecs_recents(self, depuis, categorie: str | None = None) -> int:
         return len([
