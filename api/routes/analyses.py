@@ -115,7 +115,10 @@ def trigger_analyse_auto(
 ) -> Enveloppe[AnalyseDetailOut]:
     """Referme la boucle collecte -> analyse : les sous-scores (marché, forme) et
     le risque sont calculés à partir des données déjà collectées
-    (cf. PreparationDonneesService), sans saisie manuelle.
+    (cf. PreparationDonneesService), sans saisie manuelle. Vise toujours la
+    version suivante (cf. AnalyseService.prochaine_version) : peut être
+    déclenchée à tout moment, y compris après une analyse déjà existante
+    (ex. automatisation horaire), sans jamais échouer en conflit de version.
     """
     if course_repo.get_course(course_id) is None:
         raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
@@ -124,7 +127,7 @@ def trigger_analyse_auto(
         donnees_partants, sous_risques_course = preparation.preparer_donnees_partants(course_id)
         resultat = service.analyser_course(
             course_id=course_id,
-            version=payload.version,
+            version=service.prochaine_version(course_id),
             partants=donnees_partants,
             sous_risques_course=sous_risques_course,
             mise_reference=payload.mise_reference,

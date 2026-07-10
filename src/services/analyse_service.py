@@ -64,8 +64,11 @@ class AnalyseService:
         self._poids_score = poids_score
         self._poids_risque = poids_risque
 
-    def deja_analysee(self, course_id: int, version: int) -> bool:
-        return self._repo.existe_analyse(course_id, version)
+    def prochaine_version(self, course_id: int) -> int:
+        """Version à viser pour un nouveau déclenchement (manuel ou
+        automatisé) : toujours la suivante, jamais en conflit avec une
+        analyse déjà calculée (cf. L030.3 §1, analyses immuables)."""
+        return self._repo.get_derniere_version(course_id) + 1
 
     def analyser_course(
         self,

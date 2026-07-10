@@ -180,17 +180,11 @@ document.getElementById("formulaire-analyse").addEventListener("submit", async (
   }
 
   try {
-    // Les analyses sont immuables par version (cf. L030.3 §1) : `analyses/auto`
-    // rejette en 409 un second déclenchement sur une version déjà calculée
-    // (ex. par l'automatisation horaire, cf. PROJECT_STATE.md). Pour pouvoir
-    // relancer une analyse « quand on veut » sans jamais tomber sur ce conflit,
-    // on vise systématiquement la version suivant la plus élevée déjà connue.
-    const analysesExistantes = await apiFetch(`/courses/${idCourse}/analyses`);
-    const prochaineVersion =
-      analysesExistantes.length > 0 ? Math.max(...analysesExistantes.map((a) => a.version)) + 1 : 1;
-
+    // Pas de `version` à fournir : le serveur vise toujours la version
+    // suivante (cf. AnalyseService.prochaine_version) — l'analyse peut donc
+    // être relancée à tout moment, y compris après un passage de
+    // l'automatisation horaire, sans jamais échouer en conflit de version.
     const payload = {
-      version: prochaineVersion,
       mise_reference: parseFloat(document.getElementById("mise-reference").value),
       budget_precedent: parseFloat(document.getElementById("budget-precedent").value),
       perte_precedente: document.getElementById("perte-precedente").checked,

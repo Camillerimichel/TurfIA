@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 import psycopg
 from psycopg.rows import class_row
@@ -257,6 +257,22 @@ class CourseRepository:
                 (reunion_id,),
             )
             return cur.fetchall()
+
+    def get_derniere_heure_depart(self, jour: date) -> datetime | None:
+        """Heure de départ de la dernière course du jour, toutes réunions
+        confondues — cf. `scripts/rafraichir_et_analyser_jour.py`, qui arrête
+        de relancer l'analyse horaire 30 minutes avant cette heure (au-delà,
+        toutes les courses du jour ont un départ passé, cf. `deja_partie`)."""
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT MAX(c.heure_depart) FROM course c
+                JOIN reunion re ON re.id = c.reunion_id
+                WHERE re.date = %s
+                """,
+                (jour,),
+            )
+            return cur.fetchone()[0]
 
     def list_courses_avec_resultat(self, date_debut: date, date_fin: date) -> list[Course]:
         """Courses déjà arrivées (résultat officiel connu) dans une fenêtre de

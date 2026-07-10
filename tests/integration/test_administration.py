@@ -3,7 +3,7 @@ automatisations, sauvegardes, versions, paramètres, supervision. Utilise le
 client par défaut (utilisateur Administrateur fictif, cf. conftest.py) sauf
 pour le test RBAC dédié."""
 
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from api.dependencies.auth import get_utilisateur_courant
@@ -132,7 +132,11 @@ def test_declencher_analyse_jour_relance_les_courses_du_jour(client, repos):
     assert corps["nb_erreurs"] == 0
 
 
-def test_declencher_analyse_jour_relance_une_deuxieme_fois_ne_remonte_pas_en_echec(client, repos):
+def test_declencher_analyse_jour_relance_une_deuxieme_fois_cree_une_nouvelle_version(client, repos):
+    """Non-régression : chaque déclenchement (manuel ou automatisation
+    horaire, cf. L033) doit viser une nouvelle version plutôt que de rejouer
+    la même — jamais de conflit, la décision peut changer d'une heure à
+    l'autre dans les deux sens."""
     reunion = repos["course"].create_reunion(Reunion(date=date.today(), hippodrome_id=1, numero=1))
     course = repos["course"].create_course(Course(reunion_id=reunion.id, numero=1, nom="Prix Test"))
     cheval = repos["course"].create_cheval(Cheval(nom="Cheval Test"))
@@ -144,11 +148,28 @@ def test_declencher_analyse_jour_relance_une_deuxieme_fois_ne_remonte_pas_en_ech
 
     assert reponse.status_code == 200
     corps = reponse.json()["data"]
-    assert corps["nb_courses"] == 0
-    assert corps["nb_deja_analysees"] == 1
+    assert corps["nb_courses"] == 1
+    assert corps["nb_deja_parties"] == 0
     assert corps["nb_erreurs"] == 0
     taches = repos["tache"].lister(categorie="automatisation")
     assert taches[0].statut == "succes"
+    analyses = repos["analyse"].list_analyses_by_course(course.id)
+    assert sorted(a.version for a in analyses) == [1, 2]
+
+
+def test_declencher_analyse_jour_ignore_les_courses_deja_parties(client, repos):
+    reunion = repos["course"].create_reunion(Reunion(date=date.today(), hippodrome_id=1, numero=1))
+    repos["course"].create_course(
+        Course(reunion_id=reunion.id, numero=1, nom="Course déjà partie", heure_depart=datetime.now() - timedelta(hours=1))
+    )
+
+    reponse = client.post("/api/v1/administration/automatisations/analyse-jour")
+
+    assert reponse.status_code == 200
+    corps = reponse.json()["data"]
+    assert corps["nb_courses"] == 0
+    assert corps["nb_deja_parties"] == 1
+    assert corps["nb_erreurs"] == 0
 
 
 def test_declencher_statistiques_recalcule_et_journalise(client, repos):

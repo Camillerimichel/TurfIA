@@ -1,10 +1,16 @@
 # Tâche planifiée locale (launchd)
 
 Automatisation "collecte + analyse du jour" (cf. `scripts/rafraichir_et_analyser_jour.py`),
-programmée toutes les heures de 9h à 14h. Décision du 2026-07-10 : pas de
-scheduler générique dans l'application (cf. PROJECT_STATE.md) — `launchd`
-(natif macOS) appelle le script existant, qui réutilise les mêmes services
-que l'API/l'Administration HTML (cf. L033 ADR-002).
+déclenchée toutes les heures de 9h à 23h (fenêtre volontairement large pour
+couvrir les réunions en nocturne) — c'est le script lui-même qui arrête de
+relancer l'analyse 30 minutes avant le départ de la dernière course réelle du
+jour (`CourseRepository.get_derniere_heure_depart`), pas la planification
+`launchd`. Décision du 2026-07-10 : pas de scheduler générique dans
+l'application (cf. PROJECT_STATE.md) — `launchd` (natif macOS) appelle le
+script existant, qui réutilise les mêmes services que l'API/l'Administration
+HTML (cf. L033 ADR-002). Chaque passage vise une nouvelle version d'analyse
+(jamais un conflit avec la précédente) : la décision jouer/ne pas jouer peut
+donc changer d'une heure à l'autre, dans les deux sens.
 
 ## Installer
 

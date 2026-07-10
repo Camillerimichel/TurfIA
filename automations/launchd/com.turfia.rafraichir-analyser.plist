@@ -15,7 +15,12 @@
     <key>WorkingDirectory</key>
     <string>/Users/MichelCamilleri 1/Documents/TurfIA</string>
 
-    <!-- Toutes les heures de 9h à 14h inclus (cf. décision du 2026-07-10) -->
+    <!-- Toutes les heures de 9h à 23h inclus (cf. décision du 2026-07-10) : la
+         fenêtre couvre large (jusqu'aux réunions en nocturne), c'est le script
+         lui-même qui s'arrête de relancer l'analyse 30 minutes avant le départ
+         de la dernière course réelle du jour (cf. rafraichir_et_analyser_jour.py,
+         CourseRepository.get_derniere_heure_depart) — un déclenchement horaire
+         après ce point ne fait donc rien (collecte quand même, analyse sautée). -->
     <key>StartCalendarInterval</key>
     <array>
         <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
@@ -24,6 +29,15 @@
         <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
         <dict><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
         <dict><key>Hour</key><integer>14</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>15</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>16</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>17</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>19</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>20</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>22</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>23</integer><key>Minute</key><integer>0</integer></dict>
     </array>
 
     <key>StandardOutPath</key>
