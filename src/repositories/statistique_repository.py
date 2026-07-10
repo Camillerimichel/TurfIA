@@ -25,6 +25,16 @@ def _ratio_pourcentage(numerateur: float, denominateur: float) -> float | None:
     return (numerateur / denominateur) * 100 if denominateur else None
 
 
+# Une course réanalysée plusieurs fois avant son départ (cf. L033,
+# automatisation horaire à version croissante) ne doit compter qu'une fois
+# dans les statistiques — jamais une fois par version historique. Bug réel
+# corrigé le 2026-07-10 (cf. PROJECT_STATE.md) : `controle_roi` recevait une
+# ligne par version dès qu'une course devenait éligible, gonflant nb_courses/
+# mises/gains d'autant. `a` doit être l'alias de la table `analyses` dans la
+# requête où ce filtre est inséré.
+_DERNIERE_VERSION_COURSE = "a.version = (SELECT MAX(a2.version) FROM analyses a2 WHERE a2.course_id = a.course_id)"
+
+
 class StatistiqueRepository:
     def __init__(self, conn: psycopg.Connection) -> None:
         self._conn = conn
@@ -33,11 +43,20 @@ class StatistiqueRepository:
         with self._conn.cursor() as cur:
             cur.execute("SELECT COUNT(DISTINCT course_id) FROM analyses")
             (nb_courses,) = cur.fetchone()
-            cur.execute("SELECT COUNT(DISTINCT course_id) FROM analyses WHERE budget > 0")
+            cur.execute(
+                f"""
+                SELECT COUNT(DISTINCT course_id) FROM analyses a
+                WHERE budget > 0 AND {_DERNIERE_VERSION_COURSE}
+                """
+            )
             (nb_jouees,) = cur.fetchone()
             cur.execute(
-                "SELECT COALESCE(SUM(mise), 0), COALESCE(SUM(gains), 0), COUNT(*), COUNT(*) FILTER (WHERE valide) "
-                "FROM controle_roi"
+                f"""
+                SELECT COALESCE(SUM(cr.mise), 0), COALESCE(SUM(cr.gains), 0), COUNT(*), COUNT(*) FILTER (WHERE cr.valide)
+                FROM controle_roi cr
+                JOIN analyses a ON a.id = cr.analyse_id
+                WHERE {_DERNIERE_VERSION_COURSE}
+                """
             )
             mises, gains, nb_controles, nb_valides = cur.fetchone()
 
@@ -95,6 +114,7 @@ class StatistiqueRepository:
                     FROM controle_roi cr
                     JOIN analyses a ON a.id = cr.analyse_id
                     WHERE a.score_confiance >= %s AND a.score_confiance {operateur_max} %s
+                      AND {_DERNIERE_VERSION_COURSE}
                     """,
                     (score_min, score_max),
                 )
@@ -127,12 +147,13 @@ class StatistiqueRepository:
     def calculer_hippodromes(self) -> list[StatistiqueHippodrome]:
         with self._conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT re.hippodrome_id, COUNT(*), COALESCE(SUM(cr.mise), 0), COALESCE(SUM(cr.gains), 0)
                 FROM controle_roi cr
                 JOIN analyses a ON a.id = cr.analyse_id
                 JOIN course c ON c.id = a.course_id
                 JOIN reunion re ON re.id = c.reunion_id
+                WHERE {_DERNIERE_VERSION_COURSE}
                 GROUP BY re.hippodrome_id
                 """
             )
@@ -177,12 +198,12 @@ class StatistiqueRepository:
     def calculer_disciplines(self) -> list[StatistiqueDiscipline]:
         with self._conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT c.discipline_id, COUNT(*), COALESCE(SUM(cr.mise), 0), COALESCE(SUM(cr.gains), 0)
                 FROM controle_roi cr
                 JOIN analyses a ON a.id = cr.analyse_id
                 JOIN course c ON c.id = a.course_id
-                WHERE c.discipline_id IS NOT NULL
+                WHERE c.discipline_id IS NOT NULL AND {_DERNIERE_VERSION_COURSE}
                 GROUP BY c.discipline_id
                 """
             )
@@ -218,11 +239,13 @@ class StatistiqueRepository:
         2026-07-08, cf. PROJECT_STATE.md)."""
         with self._conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT p.type_pari, COUNT(*), COUNT(*) FILTER (WHERE crp.valide),
                        COALESCE(SUM(crp.mise), 0), COALESCE(SUM(crp.gains), 0)
                 FROM controle_roi_pari crp
                 JOIN pari p ON p.id = crp.pari_id
+                JOIN analyses a ON a.id = p.analyse_id
+                WHERE {_DERNIERE_VERSION_COURSE}
                 GROUP BY p.type_pari
                 """
             )
@@ -260,16 +283,23 @@ class StatistiqueRepository:
         le jeu de poids testé, sans lien avec `analyses.version`) — les deux
         alimentent la même table avec des sémantiques différentes, à ne pas
         confondre en lisant `GET /statistiques/modeles` (limite documentée,
-        cf. PROJECT_STATE.md, non corrigée ici, hors périmètre)."""
+        cf. PROJECT_STATE.md, non corrigée ici, hors périmètre). Le filtre
+        `_DERNIERE_VERSION_COURSE` (cf. plus haut) reste appliqué même ici :
+        sans lui, une course réanalysée plusieurs fois comptait plusieurs fois
+        (une fois par ancienne version), gonflant plusieurs des buckets
+        `a.version` simultanément — la confusion Pré/Finale vs jeu de
+        paramètres demeure (hors périmètre), mais chaque course ne compte
+        désormais qu'une fois, dans le bucket de sa version actuelle."""
         with self._conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT a.version, MIN(re.date), MAX(re.date), COUNT(*),
                        COUNT(*) FILTER (WHERE cr.valide), COALESCE(SUM(cr.mise), 0), COALESCE(SUM(cr.gains), 0)
                 FROM controle_roi cr
                 JOIN analyses a ON a.id = cr.analyse_id
                 JOIN course c ON c.id = a.course_id
                 JOIN reunion re ON re.id = c.reunion_id
+                WHERE {_DERNIERE_VERSION_COURSE}
                 GROUP BY a.version
                 """
             )
@@ -317,34 +347,68 @@ class StatistiqueRepository:
             return cur.fetchone()
 
     def list_globale(self) -> list[StatistiqueGlobale]:
-        return self._list("statistique_globale", StatistiqueGlobale,
-                           "id, date_calcul, nb_courses, nb_jouees, nb_ignorees, mises, gains, profit, roi, taux_reussite",
-                           "date_calcul")
+        """Une seule ligne : la plus récente. `statistique_globale` n'a pas de
+        clé de regroupement naturelle (un seul agrégat global) — chaque
+        recalcul horaire (cf. L033) insère une nouvelle ligne sans jamais
+        remplacer l'ancienne (L030.4 §10, historique conservé pour audit),
+        mais l'affichage ne doit montrer que l'état actuel, pas la pile de
+        chaque passage horaire (bug réel signalé par l'utilisateur, cf.
+        PROJECT_STATE.md : « je ne comprends rien », des dizaines de lignes
+        quasi identiques après plusieurs jours d'automatisation horaire)."""
+        with self._conn.cursor(row_factory=class_row(StatistiqueGlobale)) as cur:
+            cur.execute(
+                "SELECT id, date_calcul, nb_courses, nb_jouees, nb_ignorees, mises, gains, profit, roi, taux_reussite "
+                "FROM statistique_globale ORDER BY date_calcul DESC LIMIT 1"
+            )
+            ligne = cur.fetchone()
+            return [ligne] if ligne is not None else []
 
     def list_scores(self) -> list[StatistiqueScore]:
-        return self._list("statistique_score", StatistiqueScore,
-                           "id, score_min, score_max, nb_courses, nb_gagnantes, roi, taux_reussite", "cree_le")
+        return self._list_dernier_par_groupe(
+            "statistique_score", StatistiqueScore,
+            "id, score_min, score_max, nb_courses, nb_gagnantes, roi, taux_reussite",
+            "score_min, score_max", "cree_le",
+        )
 
     def list_hippodromes(self) -> list[StatistiqueHippodrome]:
-        return self._list("statistique_hippodrome", StatistiqueHippodrome,
-                           "id, hippodrome_id, nb_courses, mises, gains, profit, roi", "cree_le")
+        return self._list_dernier_par_groupe(
+            "statistique_hippodrome", StatistiqueHippodrome,
+            "id, hippodrome_id, nb_courses, mises, gains, profit, roi",
+            "hippodrome_id", "cree_le",
+        )
 
     def list_disciplines(self) -> list[StatistiqueDiscipline]:
-        return self._list("statistique_discipline", StatistiqueDiscipline,
-                           "id, discipline_id, nb_courses, mises, gains, profit, roi", "cree_le")
+        return self._list_dernier_par_groupe(
+            "statistique_discipline", StatistiqueDiscipline,
+            "id, discipline_id, nb_courses, mises, gains, profit, roi",
+            "discipline_id", "cree_le",
+        )
 
     def list_paris(self) -> list[StatistiquePari]:
-        return self._list("statistique_pari", StatistiquePari,
-                           "id, type_pari, nb_paris, mises, gains, profit, roi, taux_reussite", "cree_le")
+        return self._list_dernier_par_groupe(
+            "statistique_pari", StatistiquePari,
+            "id, type_pari, nb_paris, mises, gains, profit, roi, taux_reussite",
+            "type_pari", "cree_le",
+        )
 
     def list_modeles(self) -> list[StatistiqueModele]:
-        return self._list("statistique_modele", StatistiqueModele,
-                           "id, version_modele, date_debut, date_fin, nb_courses, roi, taux_reussite, commentaire",
-                           "cree_le")
+        return self._list_dernier_par_groupe(
+            "statistique_modele", StatistiqueModele,
+            "id, version_modele, date_debut, date_fin, nb_courses, roi, taux_reussite, commentaire",
+            "version_modele", "cree_le",
+        )
 
-    def _list(self, table: str, modele: type, colonnes: str, colonne_tri: str) -> list:
-        """`table`/`colonnes`/`colonne_tri` sont toujours des littéraux fournis par
-        le code appelant ci-dessus, jamais dérivés d'une entrée utilisateur."""
+    def _list_dernier_par_groupe(
+        self, table: str, modele: type, colonnes: str, groupe_par: str, colonne_tri: str
+    ) -> list:
+        """Une ligne par valeur distincte de `groupe_par`, la plus récente (même
+        raison que `list_globale` ci-dessus : l'historique complet reste en
+        base, seul l'affichage se limite à l'état actuel). `table`/`colonnes`/
+        `groupe_par`/`colonne_tri` sont toujours des littéraux fournis par le
+        code appelant, jamais dérivés d'une entrée utilisateur."""
         with self._conn.cursor(row_factory=class_row(modele)) as cur:
-            cur.execute(f"SELECT {colonnes} FROM {table} ORDER BY {colonne_tri} DESC")
+            cur.execute(
+                f"SELECT DISTINCT ON ({groupe_par}) {colonnes} FROM {table} "
+                f"ORDER BY {groupe_par}, {colonne_tri} DESC"
+            )
             return cur.fetchall()

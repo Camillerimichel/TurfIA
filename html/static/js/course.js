@@ -95,6 +95,96 @@ async function chargerResultats() {
   }
 }
 
+// Tableau des paris proposés (+ expansion des combinaisons Quinté Flexi,
+// cf. L031.6 §5) — partagé entre le bloc "Pari" (dernière analyse, toujours
+// visible) et le détail d'une analyse choisie dans "Analyses" (historique).
+function construireTableauParis(detail) {
+  const conteneur = document.createElement("div");
+  if (detail.paris.length === 0) {
+    const vide = document.createElement("p");
+    vide.textContent = "Aucun pari proposé (budget nul ou aucune catégorie constructible).";
+    conteneur.appendChild(vide);
+    return conteneur;
+  }
+
+  const tableauParis = document.createElement("table");
+  tableauParis.innerHTML = "<thead><tr><th>Type</th><th>Sélection</th><th>Mise</th><th>ROI estimé</th></tr></thead>";
+  const corpsParis = document.createElement("tbody");
+  for (const pari of detail.paris) {
+    const ligne = document.createElement("tr");
+    const selection = pari.combinaison_lisible ?? pari.combinaison ?? "—";
+    for (const valeur of [pari.type_pari, selection, `${formaterMontant(pari.mise)} €`, pari.roi_estime ?? "—"]) {
+      const cellule = document.createElement("td");
+      cellule.textContent = valeur;
+      ligne.appendChild(cellule);
+    }
+    corpsParis.appendChild(ligne);
+  }
+  tableauParis.appendChild(corpsParis);
+  conteneur.appendChild(tableauParis);
+
+  // Un Quinté Flexi joue plusieurs combinaisons de 5 chevaux à la fois
+  // (cf. L031.6 §5) — `combinaison_lisible` seule ne montre que le pool de
+  // chevaux retenus, pas les tickets individuellement joués.
+  for (const pari of detail.paris) {
+    if (!pari.sous_combinaisons) continue;
+    const titreCombinaisons = document.createElement("h5");
+    titreCombinaisons.textContent = `Combinaisons jouées (${pari.type_pari}, ${formaterMontant(pari.mise_par_combinaison)} € chacune)`;
+    conteneur.appendChild(titreCombinaisons);
+    const listeCombinaisons = document.createElement("ul");
+    listeCombinaisons.className = "liste-paris";
+    for (const combinaison of pari.sous_combinaisons) {
+      const item = document.createElement("li");
+      item.textContent = combinaison;
+      listeCombinaisons.appendChild(item);
+    }
+    conteneur.appendChild(listeCombinaisons);
+  }
+  return conteneur;
+}
+
+// Dernière analyse d'une course (version la plus élevée = la plus récente) et
+// ses paris — `null` si pas encore analysée (cf. accueil.js, même logique).
+async function chargerDerniereAnalyse() {
+  const analyses = await apiFetch(`/courses/${idCourse}/analyses`);
+  if (analyses.length === 0) return null;
+  const derniere = [...analyses].sort((a, b) => b.version - a.version)[0];
+  return apiFetch(`/analyses/${derniere.id}`);
+}
+
+// Bloc "Pari" : toujours la dernière analyse connue, sans avoir à cliquer
+// dans "Analyses" — c'est l'information la plus directement actionnable de
+// la fiche course (retour utilisateur, cf. PROJECT_STATE.md).
+async function chargerPari() {
+  const conteneur = document.getElementById("section-pari");
+  conteneur.textContent = "Chargement…";
+  try {
+    const detail = await chargerDerniereAnalyse();
+    if (detail === null) {
+      conteneur.textContent = "Pas encore analysée — déclencher une analyse ci-dessous.";
+      return;
+    }
+    conteneur.innerHTML = "";
+
+    const resume = document.createElement("p");
+    resume.textContent =
+      `Décision : ${detail.analyse.decision ?? "n/a"} — ` +
+      `score ${detail.analyse.score_confiance ?? "n/a"} — budget ${formaterMontant(detail.analyse.budget)} €`;
+    conteneur.appendChild(resume);
+
+    const miseAJour = document.createElement("p");
+    miseAJour.className = "note";
+    miseAJour.textContent = `Analyse #${detail.analyse.id} (v${detail.analyse.version}) — calculée le ${
+      detail.analyse.date_calcul ? formaterDateHeure(detail.analyse.date_calcul) : "n/a"
+    }`;
+    conteneur.appendChild(miseAJour);
+
+    conteneur.appendChild(construireTableauParis(detail));
+  } catch (erreur) {
+    conteneur.textContent = `Erreur : ${erreur.message}`;
+  }
+}
+
 function formaterDetailAnalyse(detail) {
   const conteneur = document.createElement("div");
   const titre = document.createElement("h3");
@@ -130,44 +220,11 @@ function formaterDetailAnalyse(detail) {
   tableauPartants.appendChild(corps);
   conteneur.appendChild(tableauPartants);
 
-  if (detail.paris.length > 0) {
-    const titreParis = document.createElement("h4");
-    titreParis.textContent = "Paris";
-    conteneur.appendChild(titreParis);
-    const tableauParis = document.createElement("table");
-    tableauParis.innerHTML = "<thead><tr><th>Type</th><th>Sélection</th><th>Mise</th><th>ROI estimé</th></tr></thead>";
-    const corpsParis = document.createElement("tbody");
-    for (const pari of detail.paris) {
-      const ligne = document.createElement("tr");
-      const selection = pari.combinaison_lisible ?? pari.combinaison ?? "—";
-      for (const valeur of [pari.type_pari, selection, `${formaterMontant(pari.mise)} €`, pari.roi_estime ?? "—"]) {
-        const cellule = document.createElement("td");
-        cellule.textContent = valeur;
-        ligne.appendChild(cellule);
-      }
-      corpsParis.appendChild(ligne);
-    }
-    tableauParis.appendChild(corpsParis);
-    conteneur.appendChild(tableauParis);
+  const titreParis = document.createElement("h4");
+  titreParis.textContent = "Paris";
+  conteneur.appendChild(titreParis);
+  conteneur.appendChild(construireTableauParis(detail));
 
-    // Un Quinté Flexi joue plusieurs combinaisons de 5 chevaux à la fois
-    // (cf. L031.6 §5) — `combinaison_lisible` seule ne montre que le pool de
-    // chevaux retenus, pas les tickets individuellement joués.
-    for (const pari of detail.paris) {
-      if (!pari.sous_combinaisons) continue;
-      const titreCombinaisons = document.createElement("h5");
-      titreCombinaisons.textContent = `Combinaisons jouées (${pari.type_pari}, ${formaterMontant(pari.mise_par_combinaison)} € chacune)`;
-      conteneur.appendChild(titreCombinaisons);
-      const listeCombinaisons = document.createElement("ul");
-      listeCombinaisons.className = "liste-paris";
-      for (const combinaison of pari.sous_combinaisons) {
-        const item = document.createElement("li");
-        item.textContent = combinaison;
-        listeCombinaisons.appendChild(item);
-      }
-      conteneur.appendChild(listeCombinaisons);
-    }
-  }
   return conteneur;
 }
 
@@ -227,6 +284,7 @@ document.getElementById("formulaire-analyse").addEventListener("submit", async (
     message.textContent = `Analyse #${detail.analyse.id} créée — décision : ${detail.analyse.decision ?? "n/a"}.`;
     message.hidden = false;
     await chargerAnalyses();
+    await chargerPari();
   } catch (erreur) {
     message.textContent = `Erreur : ${erreur.message}`;
     message.hidden = false;
@@ -252,5 +310,6 @@ document.getElementById("bouton-collecter-resultats").addEventListener("click", 
 
 chargerCourse();
 chargerPartants();
+chargerPari();
 chargerResultats();
 chargerAnalyses();

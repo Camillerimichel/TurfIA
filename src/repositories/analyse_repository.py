@@ -177,7 +177,16 @@ class AnalyseRepository:
 
     def list_analyses_sans_controle_roi(self) -> list[Analyse]:
         """Analyses ayant au moins un pari (donc une mise réellement engagée) mais
-        pas encore de `controle_roi` — cf. `ControleRoiService`."""
+        pas encore de `controle_roi` — cf. `ControleRoiService`.
+
+        Restreint à la DERNIÈRE version de chaque course (`a.version = MAX(...)`) :
+        sans ce filtre, une course réanalysée plusieurs fois avant son départ
+        (cf. L033, automatisation horaire à version croissante) recevait un
+        `controle_roi` distinct pour CHACUNE de ses anciennes versions dès
+        qu'elle devenait éligible (départ + marge d'homologation) — bug réel
+        corrigé le 2026-07-10 (cf. PROJECT_STATE.md) : vérifié en base, une
+        course réanalysée 4 fois avant son départ comptait pour 4 dans
+        `statistique_globale`/`statistique_score`/etc. au lieu d'une seule."""
         with self._conn.cursor(row_factory=class_row(Analyse)) as cur:
             cur.execute(
                 """
@@ -185,7 +194,9 @@ class AnalyseRepository:
                        a.roi_theorique, a.decision, a.budget, a.commentaire
                 FROM analyses a
                 LEFT JOIN controle_roi cr ON cr.analyse_id = a.id
-                WHERE cr.id IS NULL AND EXISTS (SELECT 1 FROM pari p WHERE p.analyse_id = a.id)
+                WHERE cr.id IS NULL
+                  AND EXISTS (SELECT 1 FROM pari p WHERE p.analyse_id = a.id)
+                  AND a.version = (SELECT MAX(a2.version) FROM analyses a2 WHERE a2.course_id = a.course_id)
                 ORDER BY a.id
                 """
             )
