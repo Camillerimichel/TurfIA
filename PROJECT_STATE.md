@@ -1274,6 +1274,29 @@ Tests : `tests/integration/test_api_statistiques.py::test_list_globale_ne_montre
   durcir "pour la production" n'a plus de sens, l'app tourne strictement en
   local mono-utilisateur (cf. décisions déjà actées sur l'interface HTML/
   l'administration des utilisateurs) ; pas un report, un non-objectif.
+- **Sixième passe, 2026-07-10** (retour utilisateur : « dans le bloc ROI
+  global, mets la liste des paris en cours à surveiller avant leur course
+  avec un lien vers la course ») : nouvelle méthode
+  `HistoriqueRepository.list_paris_en_cours()` (+ `FakeHistoriqueRepository`,
+  même composition course_repo/analyse_repo/referentiel_repo que
+  `rechercher`) — courses dont la dernière analyse (restreinte à la dernière
+  version, même raison que `rechercher`, cf. L033) engage un budget réel
+  (`budget > 0`) et dont l'heure de départ n'est pas encore passée
+  (`heure_depart IS NULL OR heure_depart > now()`). Nouvelle route `GET
+  /historique/paris-en-cours` (`ParisEnCoursLigneOut`), nouveau modèle
+  `ParisEnCoursLigne` (`src/models/historique.py`). Page Accueil : le bloc
+  « ROI global » affiche désormais, sous les indicateurs, la liste de ces
+  courses avec un lien direct vers `course.html?id=` (même page que le bloc
+  « Pari » détaillé) — pas de nouveau bloc séparé, même sujet que le ROI
+  global. Vérifié : `pytest` (4 nouveaux tests — course à venir listée,
+  course déjà partie exclue, budget nul exclu, dédoublonnage par dernière
+  version) ; vérifié contre PostgreSQL réel (requête directe, transaction
+  annulée) — 0 ligne actuellement, cohérent avec 0 course à `heure_depart`
+  future en base au moment du test (pas un bug, absence réelle de données
+  futures). Limite honnête : pas de compte utilisateur de test disponible
+  pour une vérification visuelle complète dans le navigateur — vérifié par
+  lecture du code, `node --check`, et réponse API réelle (401 sans jeton,
+  confirmant le câblage de la route).
 
 ## Prochaine étape
 

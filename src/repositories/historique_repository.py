@@ -9,7 +9,7 @@ from __future__ import annotations
 import psycopg
 from psycopg.rows import class_row
 
-from src.models.historique import HistoriqueFiltres, HistoriqueLigne
+from src.models.historique import HistoriqueFiltres, HistoriqueLigne, ParisEnCoursLigne
 
 _COLONNES = """
     re.date AS date, re.hippodrome_id AS hippodrome_id, h.nom AS hippodrome_nom,
@@ -68,5 +68,31 @@ class HistoriqueRepository:
                 LIMIT %s
                 """,
                 valeurs,
+            )
+            return cur.fetchall()
+
+    def list_paris_en_cours(self) -> list[ParisEnCoursLigne]:
+        """Courses dont la dernière analyse engage un budget réel (`budget > 0`)
+        mais qui ne sont pas encore parties — cf. page Accueil, bloc « ROI
+        global » (retour utilisateur : « mets la liste des paris en cours à
+        surveiller avant leur course avec un lien... vers la course »).
+        Restreint à la dernière version de chaque course, même raison que
+        `rechercher` (cf. L033, réanalyse horaire à version croissante)."""
+        with self._conn.cursor(row_factory=class_row(ParisEnCoursLigne)) as cur:
+            cur.execute(
+                """
+                SELECT c.id AS course_id, c.numero AS course_numero, c.nom AS course_nom,
+                       c.heure_depart AS heure_depart, h.nom AS hippodrome_nom,
+                       a.id AS analyse_id, a.decision AS decision,
+                       a.score_confiance AS score_confiance, a.budget AS budget
+                FROM course c
+                JOIN reunion re ON re.id = c.reunion_id
+                JOIN hippodrome h ON h.id = re.hippodrome_id
+                JOIN analyses a ON a.course_id = c.id
+                    AND a.version = (SELECT MAX(a2.version) FROM analyses a2 WHERE a2.course_id = c.id)
+                WHERE a.budget > 0
+                  AND (c.heure_depart IS NULL OR c.heure_depart > now())
+                ORDER BY c.heure_depart NULLS LAST
+                """
             )
             return cur.fetchall()
