@@ -1332,6 +1332,55 @@ Tests : `tests/integration/test_api_statistiques.py::test_list_globale_ne_montre
   pour une vérification visuelle complète dans le navigateur — vérifié par
   lecture du code, `node --check`, et réponse API réelle (401 sans jeton,
   confirmant le câblage de la route).
+- **Vrai bug trouvé et corrigé (2026-07-11, retour utilisateur : « Analyser
+  les courses du jour : Erreur : Une erreur interne est survenue »).**
+  Reproduit directement (script Python, transaction annulée) : `Score TurfIA
+  = 100` + Bonus Value Bet (5) − Malus Risque (18,75 × 0,2 = 3,75) =
+  `101,25`, rejeté par la contrainte SQL `ck_analyse_score`
+  (`score_confiance` doit être dans `[0, 100]`). `calculer_score_final`
+  (`src/algorithms/classement.py`, cf. L031.6 §3) ne bornait jamais son
+  résultat — le SAD donne la formule comme une simple somme, sans borne
+  explicite, mais toute la chaîne en aval (contrainte SQL, seuils de
+  décision/budget) présuppose une échelle 0-100. Corrigé : `max(0.0,
+  min(100.0, ...))`.
+  - **Deuxième bug, plus grave, découvert en creusant celui-ci** :
+    `AutomatisationService.analyser_courses_du_jour` n'isolait que
+    `ValidationError`/`BusinessRuleError` par course — une erreur SQL
+    inattendue (comme cette `CheckViolation`) remontait jusqu'à la route
+    HTTP, qui la journalise puis la relance (`raise`) après avoir déjà
+    appelé `tache_repo.terminer(..., "echec", ...)` ; ce `raise` fait
+    remonter l'exception jusqu'au gestionnaire de session (`src/database/
+    connection.py::session`), qui fait un `rollback()` de **toute la
+    transaction de la requête** — y compris le `tache_repo.demarrer`/
+    `terminer` déjà exécutés. Résultat vérifié réellement : aucune trace
+    dans `tache` pour la tentative de l'utilisateur (alors que 10 lignes
+    `echec`/`succes` existaient déjà pour des jours précédents, provenant
+    d'un chemin différent — un rapport terminé sans exception mais avec des
+    erreurs internes déjà capturées), et surtout **aucune des autres courses
+    du jour n'était analysée**, une seule course à score aberrant suffisant à
+    tout bloquer. Corrigé en élargissant la capture à `Exception` (même motif
+    d'isolation par élément que `CollecteService.collecter_programme_du_jour`,
+    `# noqa: BLE001 - isolation volontaire`) : une erreur imprévue sur une
+    course n'interrompt plus les autres, et reste visible dans le rapport
+    (`erreurs`) au lieu d'un 500 opaque.
+  - `agreger_par_tranche_score` (`src/algorithms/rejeu.py`, utilisé par
+    `scripts/rejouer_versions.py`) avait un commentaire/test documentant
+    l'ancien comportement non borné comme une limite acceptée — mis à jour :
+    ce n'est plus atteignable via `calculer_score_final` désormais, le
+    garde-fou (score hors tranche omis plutôt que planté) reste en défense
+    pour des données historiques antérieures au correctif.
+  - Vérifié réellement (script direct, PUIS un second passage validé/commité
+    car sans risque — l'automatisation horaire aurait de toute façon relancé
+    la même analyse à l'heure suivante) : la course 1190 (celle qui faisait
+    planter tout le lot) est maintenant analysée avec succès, `score_confiance
+    = 100.00`, décision « Forte opportunité ». Sur les 10 courses éligibles du
+    jour au moment du test, 9 ont échoué pour une raison légitime et
+    préexistante (« Aucun partant exploitable », cotes PMU pas encore
+    publiées pour les courses R8 US collectées la veille, cf. limite déjà
+    documentée) — aucun crash, rapport d'erreurs normal.
+  - Tests ajoutés : `test_calculer_score_final_borne_a_100`/`_borne_a_0`
+    (`tests/unit/test_algorithms_classement.py`). Suite complète : 400
+    passed.
 
 ## Prochaine étape
 

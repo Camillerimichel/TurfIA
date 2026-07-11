@@ -72,8 +72,9 @@ def test_agreger_par_tranche_score_derniere_tranche_borne_haute_incluse():
 
 
 def test_agreger_par_tranche_score_au_dela_de_100_est_omis():
-    # calculer_score_final n'écrête pas le bonus value bet (limite déjà
-    # présente dans StatistiqueRepository.calculer_scores, héritée telle quelle).
+    # Garde-fou défensif : ne devrait plus se produire depuis que
+    # calculer_score_final borne son résultat à [0, 100] (2026-07-11), mais
+    # une entrée hors bornes (ex. donnée historique) reste omise, pas plantée.
     assert agreger_par_tranche_score([(102.5, 10.0, 20.0)]) == []
 
 

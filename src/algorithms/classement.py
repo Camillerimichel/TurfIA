@@ -67,9 +67,20 @@ def calculer_score_final(
     bonus_value_bet: float = BONUS_VALUE_BET_PAR_DEFAUT,
     malus_risque: float = MALUS_RISQUE_PAR_DEFAUT,
 ) -> float:
-    """Score Final = Score TurfIA + Bonus Value Bet - Malus Risque (cf. L031.6 §3)."""
+    """Score Final = Score TurfIA + Bonus Value Bet - Malus Risque (cf. L031.6 §3).
+
+    Borné à [0, 100] : le SAD ne le précise pas explicitement, mais
+    `analyses.score_confiance` (`ck_analyse_score`) et tous les seuils qui en
+    dépendent (`determiner_decision`, `calculer_budget`) présupposent une
+    échelle 0-100. Sans borne, un Score TurfIA déjà élevé + Bonus Value Bet
+    peut dépasser 100 (vérifié réellement le 2026-07-11 : score_turfia=100,
+    value_bet=True, risque=18.75 -> 100 + 5 - 3.75 = 101.25), violant la
+    contrainte SQL et faisant échouer l'analyse (et, en cascade, toute la
+    course dans `AutomatisationService.analyser_courses_du_jour` — cf.
+    PROJECT_STATE.md).
+    """
     bonus = bonus_value_bet if value_bet else 0.0
-    return score_turfia + bonus - (risque * malus_risque)
+    return max(0.0, min(100.0, score_turfia + bonus - (risque * malus_risque)))
 
 
 def trier_partants(partants: list[PartantClasse]) -> list[PartantClasse]:
