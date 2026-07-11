@@ -73,6 +73,18 @@ def test_mapper_surface_code_connu():
     assert mapper_surface_code("HERBE") == "Gazon"
 
 
+def test_mapper_surface_code_gazon():
+    assert mapper_surface_code("GAZON") == "Gazon"
+
+
+def test_mapper_surface_code_dirt():
+    assert mapper_surface_code("DIRT") == "Dirt"
+
+
+def test_mapper_surface_code_sable():
+    assert mapper_surface_code("SABLE") == "Sable"
+
+
 def test_mapper_surface_code_absent():
     assert mapper_surface_code(None) is None
 

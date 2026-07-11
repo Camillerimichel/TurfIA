@@ -682,6 +682,41 @@ délai de politesse entre requêtes (`DELAI_ENTRE_APPELS_SECONDES`, cf.
   PMU n'est pas cohérent sur l'orthographe exacte du code selon les réunions ;
   les deux variantes sont désormais acceptées (mappées vers les mêmes
   libellés `Haies`/`Steeple`), complété au fur et à mesure comme documenté.
+- **Corrigé (2026-07-11)** : `SURFACES_PMU` ne connaissait que `HERBE` — une
+  vraie collecte réelle du 2026-07-11 a rencontré `GAZON` sur une réunion
+  internationale (R8, hippodrome américain, ex. Belmont), faisant échouer 5
+  courses (`Code surface PMU inconnu`). `GAZON` mappé vers le même libellé
+  `Gazon` que `HERBE`. **Anomalie PMU restant non résolue, documentée sans
+  contournement** : ces 5 courses portent dans leur nom `(DIRT)` (piste en
+  terre, pas en herbe), mais PMU leur attribue tout de même le code surface
+  `GAZON` — la table `surface` locale n'a aucune entrée « Dirt »/« Terre »
+  (seulement Gazon/PSF/Cendrée/Sable fibré, cf. seed L030.1), et rien
+  n'indique que PMU distingue réellement Dirt du Gazon pour les réunions
+  internationales dans ce champ. Corriger cela nécessiterait de deviner la
+  surface depuis le texte libre du nom de course plutôt que depuis un champ
+  structuré (contraire à L009 §2.1, « ne fais aucune hypothèse ») — laissé
+  tel quel, l'indicateur Aptitude (surface) sera donc incorrect pour ces
+  courses précises tant que PMU ne fournit pas un code distinct. Programme du
+  11/07/2026 recollecté après correctif (transaction réelle, pas annulée) :
+  les 5 courses R8C1/C2/C3/C6/C9 sont désormais importées.
+- **`DIRT`/`SABLE` ajoutés à `SURFACES_PMU` à la demande explicite de
+  l'utilisateur (2026-07-11)**, mappés vers de nouveaux libellés `Dirt`/
+  `Sable` (créés automatiquement en base au premier usage via
+  `ReferentielRepository.get_or_create_surface`, comme toute nouvelle
+  surface — aucune migration nécessaire). Contrairement aux autres entrées
+  de cette table, ni `DIRT` ni `SABLE` n'ont été observés littéralement dans
+  un appel PMU réel — ajoutés par anticipation pour les futures réunions
+  internationales sur piste en terre/sable ; seules de futures courses où
+  PMU enverrait réellement `DIRT`/`SABLE` bénéficieraient automatiquement de
+  ce mapping (le code reçu, pas le nom de la course, détermine la surface).
+  **Correction ponctuelle des données demandée et effectuée (2026-07-11)** :
+  les 5 courses R8 déjà collectées avec le mauvais code PMU (`GAZON` au lieu
+  de `DIRT`, cf. ci-dessus) ont été corrigées manuellement en base
+  (`surface_id` -> `Dirt`), sur la seule base du texte `DIRT` explicitement
+  présent dans leur nom (`(2 YO - DIRT)`, etc.) — exception ponctuelle et
+  assumée à la règle « ne fais aucune hypothèse », faite à la demande
+  explicite de l'utilisateur pour ce cas précis, pas une nouvelle logique
+  automatique généralisée à toutes les collectes futures.
 
 ## Limites connues du module Statistiques (documentées, pas cachées)
 

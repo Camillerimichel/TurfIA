@@ -30,8 +30,21 @@ DISCIPLINES_PMU: dict[str, str] = {
 }
 
 # Idem, uniquement les codes réellement observés ; complété au fur et à mesure.
+# "GAZON" observé réellement le 2026-07-11 (réunion R8) en plus de "HERBE" —
+# même incohérence PMU que HAIE/HAIES ou STEEPLE-CHASE/STEEPLECHASE ci-dessus.
+# "DIRT"/"SABLE" ajoutés le 2026-07-11 à la demande explicite de l'utilisateur,
+# par anticipation (pas encore observés littéralement) pour les réunions
+# internationales sur piste en terre/sable (ex. hippodromes américains) — la
+# réunion R8 du 2026-07-11 elle-même envoyait "GAZON" pour des courses
+# pourtant "(DIRT)" dans leur nom (anomalie PMU documentée dans
+# PROJECT_STATE.md, non corrigée ici : le code PMU reçu reste "GAZON" pour
+# ces 5 courses précises, ce mapping ne s'applique qu'aux futures courses où
+# PMU envoie réellement "DIRT"/"SABLE").
 SURFACES_PMU: dict[str, str] = {
     "HERBE": "Gazon",
+    "GAZON": "Gazon",
+    "DIRT": "Dirt",
+    "SABLE": "Sable",
 }
 
 # Vérifié réellement le 2026-07-08 (course Quinté+ R1C8, programme du jour) :
