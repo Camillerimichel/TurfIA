@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 from src.core.exceptions import BusinessRuleError, ImportationError
 from src.models.audit import Audit
-from src.models.historique import HistoriqueLigne
+from src.models.historique import HistoriqueLigne, ParisEnCoursLigne
 from src.models.referentiels import Discipline, Distance, EtatPiste, Hippodrome, Surface
 from src.models.technique import Journal, Tache
 from src.services.collecte_service import RapportCollecte
@@ -771,6 +771,34 @@ class FakeHistoriqueRepository:
                     ))
         lignes.sort(key=lambda l: (l.date, l.course_numero, l.version), reverse=True)
         return lignes[: filtres.limite]
+
+    def list_paris_en_cours(self) -> list[ParisEnCoursLigne]:
+        # `heure_depart` est un TIMESTAMP sans fuseau côté SQL (cf.
+        # sql/schema/02_metier.sql) — comparaison avec un datetime naïf ici
+        # aussi, pour éviter un TypeError sur les courses créées avec une
+        # heure_depart naïve (cf. schémas API `CourseIn`/`CourseOut`).
+        maintenant = datetime.now()
+        lignes: list[ParisEnCoursLigne] = []
+        for reunion in self._courses.reunions.values():
+            hippodrome = self._referentiels.hippodromes.get(reunion.hippodrome_id)
+            hippodrome_nom = hippodrome.nom if hippodrome is not None else "?"
+            for course in self._courses.list_courses_by_reunion(reunion.id):
+                analyses_course = self._analyses.list_analyses_by_course(course.id)
+                if not analyses_course:
+                    continue
+                analyse = max(analyses_course, key=lambda a: a.version)
+                if analyse.budget <= 0:
+                    continue
+                if course.heure_depart is not None and course.heure_depart <= maintenant:
+                    continue
+                lignes.append(ParisEnCoursLigne(
+                    course_id=course.id, course_numero=course.numero, course_nom=course.nom,
+                    heure_depart=course.heure_depart, hippodrome_nom=hippodrome_nom,
+                    analyse_id=analyse.id, decision=analyse.decision,
+                    score_confiance=analyse.score_confiance, budget=analyse.budget,
+                ))
+        lignes.sort(key=lambda l: (l.heure_depart is None, l.heure_depart))
+        return lignes
 
 
 class FakeJournalRepository:

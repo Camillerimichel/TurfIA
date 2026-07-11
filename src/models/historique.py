@@ -47,3 +47,21 @@ class HistoriqueLigne:
     roi_reel: float | None = None
     profit_reel: float | None = None
     valide: bool | None = None
+
+
+@dataclass(frozen=True)
+class ParisEnCoursLigne:
+    """Une ligne = une course dont la dernière analyse engage un budget réel
+    (`budget > 0`) mais qui n'est pas encore partie — cf. page Accueil, bloc
+    « ROI global » (retour utilisateur : liste des paris à surveiller avant
+    leur course, avec lien vers la fiche course pour le détail complet)."""
+
+    course_id: int
+    course_numero: int
+    course_nom: str
+    heure_depart: datetime | None
+    hippodrome_nom: str
+    analyse_id: int
+    decision: str | None
+    score_confiance: float | None
+    budget: float

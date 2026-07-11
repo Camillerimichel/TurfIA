@@ -14,25 +14,78 @@ async function chargerRoiGlobal() {
   const conteneur = document.getElementById("widget-roi-global");
   try {
     const lignes = await apiFetch("/statistiques/globale");
-    if (lignes.length === 0) {
-      conteneur.textContent = "Aucune statistique calculée pour l'instant.";
-      return;
-    }
-    const derniere = [...lignes].sort((a, b) => new Date(b.date_calcul) - new Date(a.date_calcul))[0];
     conteneur.innerHTML = "";
-    const roi = document.createElement("p");
-    roi.textContent = `ROI : ${derniere.roi !== null ? derniere.roi.toFixed(2) + " %" : "n/a"}`;
-    const taux = document.createElement("p");
-    taux.textContent = `Taux de réussite : ${derniere.taux_reussite !== null ? derniere.taux_reussite.toFixed(2) + " %" : "n/a"}`;
-    const courses = document.createElement("p");
-    courses.textContent = `${derniere.nb_courses} course(s) analysée(s), ${derniere.nb_jouees} jouée(s)`;
-    const miseAJour = document.createElement("p");
-    miseAJour.className = "note";
-    miseAJour.textContent = `Dernière mise à jour : ${derniere.date_calcul ? formaterDateHeure(derniere.date_calcul) : "n/a"}`;
-    conteneur.append(roi, taux, courses, miseAJour);
+    if (lignes.length === 0) {
+      const vide = document.createElement("p");
+      vide.textContent = "Aucune statistique calculée pour l'instant.";
+      conteneur.appendChild(vide);
+    } else {
+      const derniere = [...lignes].sort((a, b) => new Date(b.date_calcul) - new Date(a.date_calcul))[0];
+      const roi = document.createElement("p");
+      roi.textContent = `ROI : ${derniere.roi !== null ? derniere.roi.toFixed(2) + " %" : "n/a"}`;
+      const taux = document.createElement("p");
+      taux.textContent = `Taux de réussite : ${derniere.taux_reussite !== null ? derniere.taux_reussite.toFixed(2) + " %" : "n/a"}`;
+      const courses = document.createElement("p");
+      courses.textContent = `${derniere.nb_courses} course(s) analysée(s), ${derniere.nb_jouees} jouée(s)`;
+      const miseAJour = document.createElement("p");
+      miseAJour.className = "note";
+      miseAJour.textContent = `Dernière mise à jour : ${derniere.date_calcul ? formaterDateHeure(derniere.date_calcul) : "n/a"}`;
+      conteneur.append(roi, taux, courses, miseAJour);
+    }
   } catch (erreur) {
     conteneur.textContent = `Erreur : ${erreur.message}`;
+    return;
   }
+  await chargerParisEnCours(conteneur);
+}
+
+// Paris déjà engagés (budget > 0) sur des courses pas encore parties — retour
+// utilisateur : « il faut afficher la liste des paris en cours à surveiller
+// avant leur course, avec un lien vers la course ». Rattaché au bloc ROI
+// global (même carte) plutôt qu'un bloc séparé : c'est le même sujet
+// (« où en est mon argent engagé »).
+async function chargerParisEnCours(conteneur) {
+  let lignes;
+  try {
+    lignes = await apiFetch("/historique/paris-en-cours");
+  } catch (erreur) {
+    const erreurParis = document.createElement("p");
+    erreurParis.textContent = `Erreur (paris en cours) : ${erreur.message}`;
+    conteneur.appendChild(erreurParis);
+    return;
+  }
+
+  const titre = document.createElement("h3");
+  titre.textContent = "Paris en cours à surveiller";
+  conteneur.appendChild(titre);
+
+  if (lignes.length === 0) {
+    const vide = document.createElement("p");
+    vide.className = "note";
+    vide.textContent = "Aucun pari en attente sur une course à venir.";
+    conteneur.appendChild(vide);
+    return;
+  }
+
+  const liste = document.createElement("ul");
+  liste.className = "liste-paris";
+  for (const ligne of lignes) {
+    const item = document.createElement("li");
+    const lien = document.createElement("a");
+    lien.href = `/course.html?id=${ligne.course_id}`;
+    lien.textContent = `C${ligne.course_numero} — ${ligne.course_nom} (${ligne.hippodrome_nom})`;
+    item.appendChild(lien);
+    item.appendChild(document.createTextNode(" — "));
+    if (ligne.heure_depart) {
+      item.appendChild(construireBadgeDepart(ligne.heure_depart));
+      item.appendChild(document.createTextNode(" — "));
+    }
+    item.appendChild(
+      document.createTextNode(`${ligne.decision ?? "n/a"} — budget ${formaterMontant(ligne.budget)} €`)
+    );
+    liste.appendChild(item);
+  }
+  conteneur.appendChild(liste);
 }
 
 // -- Filtres --------------------------------------------------------------------

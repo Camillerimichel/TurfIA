@@ -101,6 +101,117 @@ def test_historique_ne_montre_que_la_derniere_version_par_course(client):
     assert {l["version"] for l in lignes} == {2}
 
 
+def _creer_reunion_et_course(client, heure_depart=None, numero_reunion=1):
+    reunion = client.post(
+        "/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": 1, "numero": numero_reunion}
+    ).json()["data"]
+    corps_course = {"numero": 1, "nom": "Prix Test"}
+    if heure_depart is not None:
+        corps_course["heure_depart"] = heure_depart
+    course = client.post(f"/api/v1/reunions/{reunion['id']}/courses", json=corps_course).json()["data"]
+    return reunion, course
+
+
+def test_paris_en_cours_liste_une_course_a_venir_a_budget_engage(client):
+    """cf. page Accueil, bloc ROI global — retour utilisateur : liste des paris
+    à surveiller avant leur course, avec lien vers la fiche course."""
+    reunion, course = _creer_reunion_et_course(client)
+    cheval = client.post("/api/v1/chevaux", json={"nom": "Cheval Test"}).json()["data"]
+    partant = client.post(
+        f"/api/v1/courses/{course['id']}/partants", json={"cheval_id": cheval["id"], "numero": 1}
+    ).json()["data"]
+    detail = client.post(
+        f"/api/v1/courses/{course['id']}/analyses",
+        json={
+            "version": 1,
+            "partants": [{"partant_id": partant["id"], "sous_scores": {"marche": 90}, "cote": 3.0}],
+            "sous_risques_course": {"marche": 20},
+            "mise_reference": 10,
+        },
+    ).json()["data"]
+    assert detail["analyse"]["budget"] > 0
+
+    reponse = client.get("/api/v1/historique/paris-en-cours")
+
+    assert reponse.status_code == 200
+    lignes = reponse.json()["data"]
+    ligne = next(l for l in lignes if l["course_id"] == course["id"])
+    assert ligne["analyse_id"] == detail["analyse"]["id"]
+    assert ligne["budget"] == detail["analyse"]["budget"]
+    assert ligne["hippodrome_nom"]
+
+
+def test_paris_en_cours_exclut_les_courses_deja_parties(client):
+    reunion, course = _creer_reunion_et_course(client, heure_depart="2020-01-01T12:00:00")
+    cheval = client.post("/api/v1/chevaux", json={"nom": "Cheval Test"}).json()["data"]
+    partant = client.post(
+        f"/api/v1/courses/{course['id']}/partants", json={"cheval_id": cheval["id"], "numero": 1}
+    ).json()["data"]
+    detail = client.post(
+        f"/api/v1/courses/{course['id']}/analyses",
+        json={
+            "version": 1,
+            "partants": [{"partant_id": partant["id"], "sous_scores": {"marche": 90}, "cote": 3.0}],
+            "sous_risques_course": {"marche": 20},
+            "mise_reference": 10,
+        },
+    ).json()["data"]
+    assert detail["analyse"]["budget"] > 0
+
+    reponse = client.get("/api/v1/historique/paris-en-cours")
+
+    assert reponse.status_code == 200
+    assert all(l["course_id"] != course["id"] for l in reponse.json()["data"])
+
+
+def test_paris_en_cours_exclut_quand_aucun_budget_engage(client):
+    """Décision « Ne pas jouer » (score < 60, cf. L031.1 §9) -> budget 0 (cf.
+    PALIERS_BUDGET_PAR_DEFAUT) : rien à surveiller, la course est exclue."""
+    reunion, course = _creer_reunion_et_course(client)
+    cheval = client.post("/api/v1/chevaux", json={"nom": "Cheval Test"}).json()["data"]
+    partant = client.post(
+        f"/api/v1/courses/{course['id']}/partants", json={"cheval_id": cheval["id"], "numero": 1}
+    ).json()["data"]
+    detail = client.post(
+        f"/api/v1/courses/{course['id']}/analyses",
+        json={
+            "version": 1,
+            "partants": [{"partant_id": partant["id"], "sous_scores": {"marche": 10}, "cote": 3.0}],
+            "sous_risques_course": {"marche": 80},
+            "mise_reference": 10,
+        },
+    ).json()["data"]
+    assert detail["analyse"]["decision"] == "Ne pas jouer"
+    assert detail["analyse"]["budget"] == 0
+
+    reponse = client.get("/api/v1/historique/paris-en-cours")
+
+    assert reponse.status_code == 200
+    assert all(l["course_id"] != course["id"] for l in reponse.json()["data"])
+
+
+def test_paris_en_cours_ne_montre_que_la_derniere_version(client):
+    reunion, course, detail_v1 = _creer_course_avec_analyse_et_pari(client, version=1)
+    partant_id = int(detail_v1["paris"][0]["combinaison"])
+    reponse_v2 = client.post(
+        f"/api/v1/courses/{course['id']}/analyses",
+        json={
+            "version": 2,
+            "partants": [{"partant_id": partant_id, "sous_scores": {"marche": 90}, "cote": 3.0}],
+            "sous_risques_course": {"marche": 20},
+            "mise_reference": 10,
+        },
+    )
+    detail_v2 = reponse_v2.json()["data"]
+
+    reponse = client.get("/api/v1/historique/paris-en-cours")
+
+    assert reponse.status_code == 200
+    lignes = [l for l in reponse.json()["data"] if l["course_id"] == course["id"]]
+    assert len(lignes) == 1
+    assert lignes[0]["analyse_id"] == detail_v2["analyse"]["id"]
+
+
 def test_historique_filtre_decisions_ou_logique(client):
     """cf. accueil.js : un filtre à choix multiples est une condition "ou"."""
     _, course_normal, detail = _creer_course_avec_analyse_et_pari(client)

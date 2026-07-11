@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Query
 from api.dependencies.auth import LECTURE, exiger_roles
 from api.dependencies.db import get_historique_repository
 from api.schemas.common import Enveloppe
-from api.schemas.historique import HistoriqueLigneOut
+from api.schemas.historique import HistoriqueLigneOut, ParisEnCoursLigneOut
 from src.models.historique import HistoriqueFiltres
 from src.models.utilisateur import Utilisateur
 from src.repositories.historique_repository import HistoriqueRepository
@@ -41,3 +41,13 @@ def rechercher_historique(
         limite=limite,
     )
     return Enveloppe(data=[HistoriqueLigneOut.model_validate(l) for l in repo.rechercher(filtres)])
+
+
+@router.get("/paris-en-cours", response_model=Enveloppe[list[ParisEnCoursLigneOut]])
+def paris_en_cours(
+    repo: HistoriqueRepository = Depends(get_historique_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
+) -> Enveloppe[list[ParisEnCoursLigneOut]]:
+    """Courses à budget engagé pas encore parties — cf. page Accueil, bloc
+    « ROI global » (liste des paris à surveiller avant leur course)."""
+    return Enveloppe(data=[ParisEnCoursLigneOut.model_validate(l) for l in repo.list_paris_en_cours()])
