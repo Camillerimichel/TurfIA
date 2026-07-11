@@ -28,6 +28,7 @@ class HistoriqueLigneOut(BaseModel):
     mise: float | None = None
     gain_estime: float | None = None
     roi_estime: float | None = None
+    gains_reel: float | None = None
     roi_reel: float | None = None
     profit_reel: float | None = None
     valide: bool | None = None

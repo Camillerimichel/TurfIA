@@ -1381,6 +1381,71 @@ Tests : `tests/integration/test_api_statistiques.py::test_list_globale_ne_montre
   - Tests ajoutés : `test_calculer_score_final_borne_a_100`/`_borne_a_0`
     (`tests/unit/test_algorithms_classement.py`). Suite complète : 400
     passed.
+- **Présentation des « paris en cours à surveiller » revue (2026-07-11,
+  retour utilisateur)** : chaque ligne devient un bouton pleine largeur
+  cliquable (`<a class="bouton-pari-en-cours">`, remplace le `<ul>` de liens
+  inline) — première ligne le titre (course + hippodrome), seconde ligne les
+  indicateurs (départ/jeu/budget). Départ, jeu et budget partagent désormais
+  le même formalisme visuel de pilule colorée (nouvelle classe CSS partagée
+  `.badge-pilule`, dont hérite `.jauge-depart` déjà existante) plutôt que du
+  texte brut. Nouveau `construireBadgeJeu` (`html/static/js/api.js`) :
+  dégradé de teinte continu de l'orange (score 60, borne basse de « Jeu
+  prudent ») au vert (score 100, « Forte opportunité ») — mêmes constantes
+  `hsl(teinte, 70%, 40%)` que `couleurJaugeDepart`, `score_confiance` absent
+  -> pilule grise neutre. Nouveau `construireBadgeBudget` : même pilule,
+  couleur fixe (pas de gradation demandée pour le budget). Vérifié : `pytest`
+  (400 passed, aucune régression backend — changement HTML/CSS/JS pur),
+  `node --check` sur les deux fichiers JS modifiés, et la formule de
+  dégradation testée directement en Node sur les seuils (55/60/65/75/85/92/
+  100/105 -> orange pur à 60, vert pur à 100, bornes clampées au-delà).
+  Limite honnête : pas de compte utilisateur de test disponible pour une
+  vérification visuelle dans le navigateur — vérifié par lecture du code et
+  tests Node isolés, comme pour le reste de l'interface HTML.
+- **Colonne « Gain réel € » ajoutée au tableau Historique (2026-07-11, retour
+  utilisateur)** : `controle_roi_pari.gains` (montant brut réellement gagné)
+  était calculé et persisté depuis le début (cf. `ControleRoiService`) mais
+  jamais exposé — `HistoriqueRepository._COLONNES`/`HistoriqueLigne`/
+  `HistoriqueLigneOut` n'avaient que `profit_reel` (net, gains − mise) et
+  `roi_reel`. Ajouté `gains_reel` aux trois (+ `FakeHistoriqueRepository`),
+  colonne « Gain réel € » entre « ROI réel % » et « Profit réel € » dans
+  `historique.js`. Vérifié : nouveau test d'intégration
+  (`test_historique_expose_le_gain_reel_du_controle_roi`, 401 passed au
+  total) + vérifié contre PostgreSQL réel (4 lignes réelles avec
+  `gains_reel` cohérent : mise 10 + profit 3 = gains 13, etc.).
+- **Colonnes « Score »/« ROI estimé % » sans décimales (2026-07-11, retour
+  utilisateur)** : nouvel attribut `entier: true` sur une colonne de
+  `historique.js::COLONNES` (arrondi `Math.round`, pas troncature) —
+  appliqué à ces deux colonnes seulement, les autres colonnes numériques
+  (Risque, ROI réel %) gardent le formatage par défaut. Vérifié en Node sur
+  les cas limites (72.4/72.6/négatif/zéro/`null`).
+- Ordre des colonnes Historique ajusté (retour utilisateur) : « Mise € »
+  déplacée juste avant « Gain réel € » (après ROI estimé/réel), regroupant
+  visuellement les 3 colonnes € liées (Mise, Gain réel, Profit réel).
+- **Bloc « ROI global » (Accueil) transformé en jauges (2026-07-11, retour
+  utilisateur)** : ROI en jauge linéaire divergente `[-100 %, +100 %]`
+  centrée sur 0 % (remplissage depuis le centre, rouge à gauche/négatif,
+  vert à droite/positif, `var(--couleur-erreur)`/`var(--couleur-accent)`,
+  valeur bornée à l'affichage) ; Taux de réussite en jauge linéaire `[0 %,
+  100 %]`, même formalisme visuel (piste + remplissage) mais depuis le bord
+  gauche ; Courses en jauge dont l'échelle pleine est `nb_courses` (total
+  analysé) et le remplissage `nb_jouees` (jouées parmi elles). Les 3 jauges
+  sur une seule ligne (`.blocs-jauges-ligne`, flex). Nouvelles classes CSS
+  partagées `.jauge-lineaire-piste`/`-remplissage`/`-centre` (composant
+  générique, pas spécifique à un seul indicateur). Vérifié : `pytest` (401
+  passed, aucune régression backend), `node --check`, et la logique de
+  positionnement testée directement en Node sur les cas limites (ROI
+  ±150/±100/±50/±30/0/`null` -> bornage et remplissage nul à 0 corrects ;
+  courses 0/0 -> pas de remplissage, division par zéro évitée). Limite
+  honnête : pas de compte utilisateur de test disponible pour une
+  vérification visuelle dans le navigateur.
+- **4ᵉ jauge « Gains » ajoutée (2026-07-11, retour utilisateur : « ajoute les
+  gains avec le même formalisme »)** : échelle pleine = `mises` (argent
+  misé), remplissage = `gains` (argent récupéré) — même principe
+  numérateur/dénominateur que la jauge Courses, vert si `gains >= mises`
+  sinon rouge, remplissage borné à 100 % pour l'affichage (valeur exacte en
+  euros toujours dans le libellé, même principe de bornage que la jauge
+  ROI). Vérifié : `pytest` (401 passed), `node --check`, cas limites testés
+  en Node (profit/pile/perte/mises nulles/valeurs `null`).
 
 ## Prochaine étape
 

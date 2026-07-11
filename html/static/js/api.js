@@ -76,9 +76,44 @@ function _rafraichirBadgeDepart(badge) {
 // Construit le badge ; `heureDepartIso` est l'heure de départ (ISO, avec heure).
 function construireBadgeDepart(heureDepartIso) {
   const badge = document.createElement("span");
-  badge.className = "jauge-depart";
+  badge.className = "badge-pilule jauge-depart";
   badge.dataset.heureDepart = heureDepartIso;
   _rafraichirBadgeDepart(badge);
+  return badge;
+}
+
+// Gradation "indication de jeu" (Accueil, bloc ROI global — paris en cours à
+// surveiller) : orange à la borne basse de "Jeu prudent" (score 60, cf.
+// SEUILS_DECISION_PAR_DEFAUT côté Python), vert à "Forte opportunité" (score
+// 100) — même formalisme que la jauge de départ (interpolation de teinte
+// continue à partir du score, pas une couleur figée par décision).
+const JAUGE_JEU_SEUIL_BAS = 60;
+const JAUGE_JEU_SEUIL_HAUT = 100;
+const JAUGE_JEU_TEINTE_BASSE = 30; // orange
+const JAUGE_JEU_TEINTE_HAUTE = 120; // vert
+
+function couleurJaugeJeu(scoreConfiance) {
+  const ratio = Math.min(
+    1,
+    Math.max(0, (scoreConfiance - JAUGE_JEU_SEUIL_BAS) / (JAUGE_JEU_SEUIL_HAUT - JAUGE_JEU_SEUIL_BAS))
+  );
+  const teinte = JAUGE_JEU_TEINTE_BASSE + ratio * (JAUGE_JEU_TEINTE_HAUTE - JAUGE_JEU_TEINTE_BASSE);
+  return `hsl(${teinte}, 70%, 40%)`;
+}
+
+function construireBadgeJeu(decision, scoreConfiance) {
+  const badge = document.createElement("span");
+  badge.className = "badge-pilule badge-jeu";
+  badge.textContent = decision ?? "n/a";
+  badge.style.backgroundColor = typeof scoreConfiance === "number" ? couleurJaugeJeu(scoreConfiance) : "#8a8f98";
+  return badge;
+}
+
+function construireBadgeBudget(montant) {
+  const badge = document.createElement("span");
+  badge.className = "badge-pilule badge-budget";
+  badge.textContent = `${formaterMontant(montant)} €`;
+  badge.style.backgroundColor = "#3a5a7a";
   return badge;
 }
 

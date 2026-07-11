@@ -42,6 +42,9 @@ function construireTableau(lignes, colonnes) {
       } else if (colonne.montant) {
         const brut = ligne[colonne.cle];
         cellule.textContent = brut === null || brut === undefined ? "—" : formaterMontant(brut);
+      } else if (colonne.entier) {
+        const brut = ligne[colonne.cle];
+        cellule.textContent = brut === null || brut === undefined ? "—" : String(Math.round(brut));
       } else {
         cellule.textContent = formaterValeur(ligne[colonne.cle]);
       }
@@ -68,12 +71,13 @@ const COLONNES = [
   { libelle: "Course", cle: "course_nom" },
   { libelle: "Analysée le", cle: "date_calcul" },
   { libelle: "Décision", cle: "decision" },
-  { libelle: "Score", cle: "score_confiance" },
+  { libelle: "Score", cle: "score_confiance", entier: true },
   { libelle: "Risque", cle: "risque" },
   { libelle: "Type de pari", cle: "type_pari" },
-  { libelle: "Mise €", cle: "mise", montant: true },
-  { libelle: "ROI estimé %", cle: "roi_estime" },
+  { libelle: "ROI estimé %", cle: "roi_estime", entier: true },
   { libelle: "ROI réel %", cle: "roi_reel" },
+  { libelle: "Mise €", cle: "mise", montant: true },
+  { libelle: "Gain réel €", cle: "gains_reel", montant: true },
   { libelle: "Profit réel €", cle: "profit_reel", montant: true },
   { libelle: "Validé", cle: "valide" },
 ];

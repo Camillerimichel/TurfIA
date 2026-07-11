@@ -765,6 +765,7 @@ class FakeHistoriqueRepository:
                     lignes.append(HistoriqueLigne(
                         **base, pari_id=pari.id, type_pari=pari.type_pari, mise=pari.mise,
                         gain_estime=pari.gain_estime, roi_estime=pari.roi_estime,
+                        gains_reel=controle.gains if controle else None,
                         roi_reel=controle.roi if controle else None,
                         profit_reel=controle.profit if controle else None,
                         valide=controle.valide if controle else None,
