@@ -53,8 +53,11 @@ def agreger_par_tranche_score(
     calculer_scores` (`SEUILS_DECISION_PAR_DEFAUT`, une seule source de
     vérité, même borne haute incluse sur la dernière tranche). Une tranche sans
     course rejouée est omise du résultat — de même qu'une course dont le score
-    dépasserait 100 (`calculer_score_final` n'écrête pas le bonus value bet,
-    limite déjà présente dans `calculer_scores`, héritée telle quelle ici).
+    dépasserait 100 : ne devrait plus arriver depuis que `calculer_score_final`
+    borne son résultat à [0, 100] (corrigé le 2026-07-11, cf. PROJECT_STATE.md),
+    mais ce garde-fou reste utile en défense (ex. données historiques
+    persistées avant ce correctif) plutôt que de supposer l'entrée toujours
+    dans les bornes.
     """
     seuil_prudent, seuil_normal, seuil_opportunite = SEUILS_DECISION_PAR_DEFAUT
     tranches = [(0.0, seuil_prudent), (seuil_prudent, seuil_normal), (seuil_normal, seuil_opportunite), (seuil_opportunite, 100.0)]

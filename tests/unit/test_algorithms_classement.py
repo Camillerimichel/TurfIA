@@ -31,6 +31,17 @@ def test_calculer_score_final_sans_value_bet():
     assert calculer_score_final(70, value_bet=False, risque=20, malus_risque=0.2) == 66.0
 
 
+def test_calculer_score_final_borne_a_100():
+    """Non-régression (bug réel du 2026-07-11, cf. PROJECT_STATE.md) : un Score
+    TurfIA déjà élevé + Bonus Value Bet peut dépasser 100, violant la
+    contrainte SQL `ck_analyse_score` et faisant planter toute l'analyse."""
+    assert calculer_score_final(100, value_bet=True, risque=18.75, bonus_value_bet=5, malus_risque=0.2) == 100.0
+
+
+def test_calculer_score_final_borne_a_0():
+    assert calculer_score_final(5, value_bet=False, risque=100, malus_risque=0.2) == 0.0
+
+
 def test_trier_partants_assigne_le_rang_par_score_final_decroissant():
     partants = [
         PartantClasse(1, score_turfia=60, score_final=60, risque=20, roi_theorique=5, consensus=40, evolution_cote=0, value_bet=False),
