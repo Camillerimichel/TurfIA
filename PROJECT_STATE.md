@@ -1446,7 +1446,14 @@ Tests : `tests/integration/test_api_statistiques.py::test_list_globale_ne_montre
   euros toujours dans le libellé, même principe de bornage que la jauge
   ROI). Vérifié : `pytest` (401 passed), `node --check`, cas limites testés
   en Node (profit/pile/perte/mises nulles/valeurs `null`).
-
+- **Bouton « Voir les courses jouées » ajouté au bloc « Globale »
+  (Statistiques, 2026-07-11, retour utilisateur)** : lien statique (nouvelle
+  classe CSS `.bouton-lien`, un `<a>` stylé comme un bouton pour une vraie
+  navigation) vers `/historique.html` — son filtre décision par défaut
+  (toutes cochées sauf « Ne pas jouer ») affiche déjà exactement les
+  courses jouées, sans paramètre d'URL nécessaire ; chaque ligne y donne
+  accès au score/décision/mise/gain réel/profit réel et un lien vers la
+  fiche course. Pas de changement JS/backend, uniquement HTML/CSS.
 ## Prochaine étape
 
 L'essentiel de la surface API, l'authentification/RBAC réelle, une deuxième
