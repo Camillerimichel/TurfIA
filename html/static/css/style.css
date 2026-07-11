@@ -409,6 +409,24 @@ button:hover {
   opacity: 0.9;
 }
 
+/* Lien stylé comme un bouton (`<a>`, pas `<button>`) — pour une vraie
+   navigation entre pages (ex. Statistiques -> Historique) plutôt qu'une
+   action JS sur place. Mêmes valeurs visuelles que `button`. */
+.bouton-lien {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  background: var(--couleur-accent);
+  color: white;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  text-decoration: none;
+}
+
+.bouton-lien:hover {
+  opacity: 0.9;
+}
+
 /* Bouton "Courses à jouer dans l'heure" (Accueil) à l'état actif — même
    principe que .entete nav a.actif, un accent visuel de bascule. */
 #bouton-courses-imminentes.actif {
