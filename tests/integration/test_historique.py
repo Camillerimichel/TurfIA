@@ -1,6 +1,8 @@
 """Tests d'intégration du module Historique (L018 §8) — recherche transversale
 en lecture seule, sans base réelle (cf. tests/integration/fakes.py)."""
 
+from src.models.analyse import ControleRoiPari
+
 
 def _creer_course_avec_analyse_et_pari(client, decision="Jeu normal", version=1):
     reunion = client.post(
@@ -38,6 +40,24 @@ def test_historique_sans_filtre_retourne_les_lignes(client):
     assert ligne["course_id"] == course["id"]
     assert ligne["hippodrome_id"] == reunion["hippodrome_id"]
     assert ligne["date_calcul"] == detail["analyse"]["date_calcul"]
+
+
+def test_historique_expose_le_gain_reel_du_controle_roi(client, repos):
+    """retour utilisateur : « dans historique, dans le tableau de résultat,
+    ajoute le gain en euros » — `gains_reel` (montant brut réellement gagné,
+    distinct du profit net) doit venir de `controle_roi_pari.gains`."""
+    _, _, detail = _creer_course_avec_analyse_et_pari(client)
+    pari_id = repos["analyse"].list_paris_by_analyse(detail["analyse"]["id"])[0].id
+    repos["analyse"].create_controle_roi_pari(
+        ControleRoiPari(pari_id=pari_id, mise=10.0, gains=15.0, profit=5.0, roi=50.0, valide=True)
+    )
+
+    reponse = client.get("/api/v1/historique")
+
+    assert reponse.status_code == 200
+    ligne = next(l for l in reponse.json()["data"] if l["analyse_id"] == detail["analyse"]["id"])
+    assert ligne["gains_reel"] == 15.0
+    assert ligne["profit_reel"] == 5.0
 
 
 def test_historique_filtre_par_hippodrome_inconnu_est_vide(client):

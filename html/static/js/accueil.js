@@ -10,6 +10,103 @@ function formaterDate(date) {
   return date.toISOString().slice(0, 10);
 }
 
+// -- Jauges du bloc ROI global -----------------------------------------------
+// Retour utilisateur : ROI en jauge divergente [-100 %, +100 %] centrée sur
+// 0 %, taux de réussite en jauge linéaire [0 %, 100 %] (même formalisme),
+// nombre de courses en jauge sur le total analysé avec le nombre jouées en
+// remplissage — le tout sur une seule ligne.
+
+function construireBlocJauge(titre, piste) {
+  const bloc = document.createElement("div");
+  bloc.className = "bloc-jauge";
+  const titreDiv = document.createElement("div");
+  titreDiv.className = "bloc-jauge-titre";
+  titreDiv.textContent = titre;
+  bloc.appendChild(titreDiv);
+  bloc.appendChild(piste);
+  return bloc;
+}
+
+function construireRemplissageJauge(gauche, largeur, couleur) {
+  const remplissage = document.createElement("div");
+  remplissage.className = "jauge-lineaire-remplissage";
+  remplissage.style.left = `${gauche}%`;
+  remplissage.style.width = `${largeur}%`;
+  remplissage.style.backgroundColor = couleur;
+  return remplissage;
+}
+
+// ROI : remplissage depuis le centre (0 %) vers la valeur, pas depuis le bord
+// gauche (contrairement au taux de réussite) — rouge pour un ROI négatif,
+// vert pour un ROI positif.
+function construireJaugeRoi(roi) {
+  const piste = document.createElement("div");
+  piste.className = "jauge-lineaire-piste";
+
+  const centre = document.createElement("div");
+  centre.className = "jauge-lineaire-centre";
+  piste.appendChild(centre);
+
+  if (typeof roi === "number") {
+    const borne = Math.max(-100, Math.min(100, roi));
+    const position = ((borne + 100) / 200) * 100; // 0-100 % depuis la gauche, 50 % = 0
+    if (borne >= 0) {
+      piste.appendChild(construireRemplissageJauge(50, position - 50, "var(--couleur-accent)"));
+    } else {
+      piste.appendChild(construireRemplissageJauge(position, 50 - position, "var(--couleur-erreur)"));
+    }
+  }
+
+  return construireBlocJauge(`ROI : ${typeof roi === "number" ? roi.toFixed(2) + " %" : "n/a"}`, piste);
+}
+
+function construireJaugeTauxReussite(taux) {
+  const piste = document.createElement("div");
+  piste.className = "jauge-lineaire-piste";
+
+  if (typeof taux === "number") {
+    const borne = Math.max(0, Math.min(100, taux));
+    piste.appendChild(construireRemplissageJauge(0, borne, "var(--couleur-accent)"));
+  }
+
+  return construireBlocJauge(
+    `Taux de réussite : ${typeof taux === "number" ? taux.toFixed(2) + " %" : "n/a"}`,
+    piste
+  );
+}
+
+// Échelle pleine = nombre total de courses analysées ; remplissage = nombre
+// de courses jouées parmi elles.
+function construireJaugeCourses(nbCourses, nbJouees) {
+  const piste = document.createElement("div");
+  piste.className = "jauge-lineaire-piste";
+
+  if (nbCourses > 0) {
+    const ratio = Math.max(0, Math.min(100, (nbJouees / nbCourses) * 100));
+    piste.appendChild(construireRemplissageJauge(0, ratio, "#3a5a7a"));
+  }
+
+  return construireBlocJauge(`${nbJouees} jouée(s) / ${nbCourses} analysée(s)`, piste);
+}
+
+// Échelle pleine = mises (argent misé), remplissage = gains (argent
+// récupéré) — même principe numérateur/dénominateur que la jauge Courses.
+// Vert si gains >= mises (au moins couvertes), rouge sinon ; remplissage
+// borné à 100 % pour l'affichage (la valeur exacte reste dans le libellé,
+// même principe que le bornage de la jauge ROI).
+function construireJaugeGains(mises, gains) {
+  const piste = document.createElement("div");
+  piste.className = "jauge-lineaire-piste";
+
+  if (typeof mises === "number" && mises > 0 && typeof gains === "number") {
+    const ratio = Math.max(0, Math.min(100, (gains / mises) * 100));
+    const couleur = gains >= mises ? "var(--couleur-accent)" : "var(--couleur-erreur)";
+    piste.appendChild(construireRemplissageJauge(0, ratio, couleur));
+  }
+
+  return construireBlocJauge(`Gains : ${formaterMontant(gains)} € (mises ${formaterMontant(mises)} €)`, piste);
+}
+
 async function chargerRoiGlobal() {
   const conteneur = document.getElementById("widget-roi-global");
   try {
@@ -21,16 +118,18 @@ async function chargerRoiGlobal() {
       conteneur.appendChild(vide);
     } else {
       const derniere = [...lignes].sort((a, b) => new Date(b.date_calcul) - new Date(a.date_calcul))[0];
-      const roi = document.createElement("p");
-      roi.textContent = `ROI : ${derniere.roi !== null ? derniere.roi.toFixed(2) + " %" : "n/a"}`;
-      const taux = document.createElement("p");
-      taux.textContent = `Taux de réussite : ${derniere.taux_reussite !== null ? derniere.taux_reussite.toFixed(2) + " %" : "n/a"}`;
-      const courses = document.createElement("p");
-      courses.textContent = `${derniere.nb_courses} course(s) analysée(s), ${derniere.nb_jouees} jouée(s)`;
+      const ligneJauges = document.createElement("div");
+      ligneJauges.className = "blocs-jauges-ligne";
+      ligneJauges.appendChild(construireJaugeRoi(derniere.roi));
+      ligneJauges.appendChild(construireJaugeTauxReussite(derniere.taux_reussite));
+      ligneJauges.appendChild(construireJaugeCourses(derniere.nb_courses, derniere.nb_jouees));
+      ligneJauges.appendChild(construireJaugeGains(derniere.mises, derniere.gains));
+      conteneur.appendChild(ligneJauges);
+
       const miseAJour = document.createElement("p");
       miseAJour.className = "note";
       miseAJour.textContent = `Dernière mise à jour : ${derniere.date_calcul ? formaterDateHeure(derniere.date_calcul) : "n/a"}`;
-      conteneur.append(roi, taux, courses, miseAJour);
+      conteneur.appendChild(miseAJour);
     }
   } catch (erreur) {
     conteneur.textContent = `Erreur : ${erreur.message}`;
@@ -67,25 +166,27 @@ async function chargerParisEnCours(conteneur) {
     return;
   }
 
-  const liste = document.createElement("ul");
-  liste.className = "liste-paris";
   for (const ligne of lignes) {
-    const item = document.createElement("li");
-    const lien = document.createElement("a");
-    lien.href = `/course.html?id=${ligne.course_id}`;
-    lien.textContent = `C${ligne.course_numero} — ${ligne.course_nom} (${ligne.hippodrome_nom})`;
-    item.appendChild(lien);
-    item.appendChild(document.createTextNode(" — "));
+    const bouton = document.createElement("a");
+    bouton.className = "bouton-pari-en-cours";
+    bouton.href = `/course.html?id=${ligne.course_id}`;
+
+    const titreLigne = document.createElement("div");
+    titreLigne.className = "bouton-pari-en-cours-titre";
+    titreLigne.textContent = `C${ligne.course_numero} — ${ligne.course_nom} (${ligne.hippodrome_nom})`;
+    bouton.appendChild(titreLigne);
+
+    const infos = document.createElement("div");
+    infos.className = "bouton-pari-en-cours-infos";
     if (ligne.heure_depart) {
-      item.appendChild(construireBadgeDepart(ligne.heure_depart));
-      item.appendChild(document.createTextNode(" — "));
+      infos.appendChild(construireBadgeDepart(ligne.heure_depart));
     }
-    item.appendChild(
-      document.createTextNode(`${ligne.decision ?? "n/a"} — budget ${formaterMontant(ligne.budget)} €`)
-    );
-    liste.appendChild(item);
+    infos.appendChild(construireBadgeJeu(ligne.decision, ligne.score_confiance));
+    infos.appendChild(construireBadgeBudget(ligne.budget));
+    bouton.appendChild(infos);
+
+    conteneur.appendChild(bouton);
   }
-  conteneur.appendChild(liste);
 }
 
 // -- Filtres --------------------------------------------------------------------

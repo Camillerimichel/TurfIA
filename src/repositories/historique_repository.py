@@ -18,7 +18,7 @@ _COLONNES = """
     a.score_confiance AS score_confiance, a.risque AS risque, a.budget AS budget,
     p.id AS pari_id, p.type_pari AS type_pari, p.mise AS mise,
     p.gain_estime AS gain_estime, p.roi_estime AS roi_estime,
-    crp.roi AS roi_reel, crp.profit AS profit_reel, crp.valide AS valide
+    crp.gains AS gains_reel, crp.roi AS roi_reel, crp.profit AS profit_reel, crp.valide AS valide
 """
 
 

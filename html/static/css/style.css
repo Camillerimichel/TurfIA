@@ -202,9 +202,13 @@ th {
   }
 }
 
-/* Jauge "temps avant le départ" (cf. L018 §5-6) — couleur posée en inline JS
-   (dégradé continu vert -> rouge), ce bloc ne fixe que la forme. */
-.jauge-depart {
+/* Pilule colorée générique (cf. L018 §5-6) — couleur posée en inline JS
+   (dégradé continu), ce bloc ne fixe que la forme. `.jauge-depart` (temps
+   avant le départ), `.badge-jeu` (indication de décision) et `.badge-budget`
+   partagent ce même formalisme visuel — retour utilisateur : « mets les
+   indications de jeu et de budget avec le même formalisme que la date et
+   l'heure de départ ». */
+.badge-pilule {
   display: inline-block;
   color: white;
   padding: 0.15rem 0.55rem;
@@ -212,6 +216,90 @@ th {
   font-size: 0.8rem;
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* Présentation "bouton pleine largeur" des paris en cours à surveiller
+   (Accueil, bloc ROI global) — retour utilisateur : titre sur la première
+   ligne, informations (départ/jeu/budget) sur la seconde. */
+.bouton-pari-en-cours {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 0.9rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--couleur-bordure);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--couleur-texte);
+  background: var(--couleur-fond);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.bouton-pari-en-cours:last-child {
+  margin-bottom: 0;
+}
+
+.bouton-pari-en-cours:hover {
+  background: var(--couleur-accent-clair);
+  border-color: var(--couleur-accent);
+}
+
+.bouton-pari-en-cours-titre {
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.bouton-pari-en-cours-infos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+/* Jauges du bloc "ROI global" (Accueil) — retour utilisateur : ROI/taux de
+   réussite/courses sur une seule ligne, chaque indicateur sous forme de
+   jauge linéaire plutôt que de texte brut. */
+.blocs-jauges-ligne {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin: 0.5rem 0 0.75rem 0;
+}
+
+.bloc-jauge {
+  flex: 1 1 200px;
+  min-width: 180px;
+}
+
+.bloc-jauge-titre {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.jauge-lineaire-piste {
+  position: relative;
+  height: 10px;
+  background: var(--couleur-bordure);
+  border-radius: 5px;
+}
+
+.jauge-lineaire-remplissage {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 5px;
+}
+
+/* Marque du centre (0 %) de la jauge ROI divergente — dépasse légèrement de
+   la piste pour rester visible même quand le remplissage l'atteint. */
+.jauge-lineaire-centre {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  left: 50%;
+  width: 2px;
+  background: var(--couleur-texte);
+  transform: translateX(-1px);
 }
 
 .bloc-reunion, .bloc-modele {
