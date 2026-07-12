@@ -18,6 +18,7 @@ class Analyse:
     decision: str | None = None
     budget: float = 0.0
     commentaire: str | None = None
+    source: str = "manuel"
 
 
 @dataclass(frozen=True)

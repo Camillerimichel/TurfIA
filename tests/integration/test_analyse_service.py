@@ -49,6 +49,30 @@ def test_persister_true_persiste_les_memes_paris():
         assert pari.id is not None
 
 
+def test_commentaire_et_source_sont_persistes():
+    """Cf. IaAnalyseService (retour utilisateur 2026-07-12) : la synthèse IA et
+    l'origine ('manuel'/'ia') doivent être persistées telles quelles."""
+    repo = FakeAnalyseRepository()
+    resultat = AnalyseService(repo).analyser_course(
+        course_id=1, version=1, partants=PARTANTS, sous_risques_course=SOUS_RISQUES,
+        commentaire="Synthèse IA de test.", source="ia",
+    )
+    assert resultat.analyse.commentaire == "Synthèse IA de test."
+    assert resultat.analyse.source == "ia"
+    persiste = repo.get_analyse(resultat.analyse.id)
+    assert persiste.commentaire == "Synthèse IA de test."
+    assert persiste.source == "ia"
+
+
+def test_commentaire_et_source_ont_des_defauts_retrocompatibles():
+    repo = FakeAnalyseRepository()
+    resultat = AnalyseService(repo).analyser_course(
+        course_id=1, version=1, partants=PARTANTS, sous_risques_course=SOUS_RISQUES
+    )
+    assert resultat.analyse.commentaire is None
+    assert resultat.analyse.source == "manuel"
+
+
 def test_roi_theorique_independant_de_la_mise_reference():
     """Non-régression : le ROI théorique (un pourcentage) ne doit pas dépendre
     de la mise de référence utilisée pour le calcul — bug réel corrigé (cf.

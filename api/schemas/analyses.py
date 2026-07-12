@@ -56,6 +56,11 @@ class AnalyseOut(BaseModel):
     decision: str | None = None
     budget: float
     commentaire: str | None = None
+    source: str = "manuel"
+    # Calculé côté requête (analyse_repository.get_analyse_selectionnee_id),
+    # jamais une colonne de `analyses` — assigné après `model_validate()`
+    # dans les routes qui en ont besoin (liste + sélection, cf. L018 §6-7).
+    selectionnee: bool = False
 
 
 class AnalysePartantOut(BaseModel):

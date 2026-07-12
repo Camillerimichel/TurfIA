@@ -42,6 +42,26 @@
     </section>
 
     <section class="carte">
+      <h2>Déclencher une analyse</h2>
+      <form id="formulaire-analyse">
+        <label for="mise-reference">Mise de référence (€)</label>
+        <input type="number" id="mise-reference" value="10" min="0" step="0.5" />
+
+        <label for="budget-precedent">Budget précédent (€)</label>
+        <input type="number" id="budget-precedent" value="0" min="0" step="0.5" />
+
+        <label>
+          <input type="checkbox" id="perte-precedente" />
+          Perte lors de la précédente analyse (garde-fou anti-martingale)
+        </label>
+
+        <button type="submit" id="bouton-analyse-auto">Lancer l'analyse automatique</button>
+        <button type="submit" id="bouton-analyse-ia">Lancer l'analyse avec IA (Claude)</button>
+        <p id="message-analyse" hidden></p>
+      </form>
+    </section>
+
+    <section class="carte">
       <h2>Pari</h2>
       <div id="section-pari">Chargement…</div>
     </section>
@@ -56,25 +76,6 @@
           <tbody></tbody>
         </table>
       </div>
-    </section>
-
-    <section class="carte">
-      <h2>Déclencher une analyse</h2>
-      <form id="formulaire-analyse">
-        <label for="mise-reference">Mise de référence (€)</label>
-        <input type="number" id="mise-reference" value="10" min="0" step="0.5" />
-
-        <label for="budget-precedent">Budget précédent (€)</label>
-        <input type="number" id="budget-precedent" value="0" min="0" step="0.5" />
-
-        <label>
-          <input type="checkbox" id="perte-precedente" />
-          Perte lors de la précédente analyse (garde-fou anti-martingale)
-        </label>
-
-        <button type="submit">Lancer l'analyse automatique</button>
-        <p id="message-analyse" hidden></p>
-      </form>
     </section>
 
     <section class="carte">

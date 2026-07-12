@@ -1750,6 +1750,59 @@ Tests : `tests/integration/test_api_statistiques.py::test_list_globale_ne_montre
   lignes réelles (True ⟺ profit positif, False ⟺ profit négatif, `None` ⟺
   pas encore contrôlé). `pytest` (401 passed, changement HTML/CSS/JS pur),
   `node --check`.
+
+- **Sélection manuelle de l'analyse retenue par course + analyse IA à la
+  demande (2026-07-12, retour utilisateur)** : jusqu'ici, « quelle analyse
+  compte pour l'historique/ROI d'une course » était systématiquement
+  `MAX(version)` (3 sites SQL dans `historique_repository.py` +
+  `AnalyseRepository.list_analyses_sans_controle_roi`), sans aucun moyen de
+  figer un choix différent. Ajout d'un pointeur mutable séparé
+  `analyse_selection(course_id PK, analyse_id, defini_le)` — `analyses`
+  reste immuable (ADR-002) — avec `AnalyseRepository.definir_selection`/
+  `get_analyse_selectionnee_id` (COALESCE : sélection manuelle sinon
+  MAX(version), rétrocompatible à 100 % pour toute course jamais
+  sélectionnée) et nouvelle route `POST .../analyses/{id}/selectionner`
+  (bouton « Sélectionner » sur chaque analyse passée dans `course.html`,
+  badge « ★ Sélectionnée »). Si la version choisie n'a pas encore de
+  contrôle ROI et que la course est arrivée, il est calculé aussitôt
+  (nouvelle méthode ciblée `ControleRoiService.calculer_controle_pour_analyse`,
+  réutilisant `_calculer_un_controle` sans rescanner tout l'organisme).
+
+  En parallèle, nouvelle fonctionnalité d'analyse IA à la demande (une
+  course sélectionnée à la fois, pas d'automatisation) via l'API Claude
+  (`claude-sonnet-5`, décidé explicitement par l'utilisateur après
+  estimation de coût ≈ 0,02-0,04 $/course) : `IaAnalyseService` alimente
+  enfin les familles de score « value »/« contexte », définies depuis
+  toujours dans `PONDERATIONS_PAR_DEFAUT` (poids 1.0, déjà éditables dans
+  la grille de poids du rejeu) mais jamais calculées par aucun code
+  existant — un score par partant + une synthèse en français, persistée
+  dans la colonne `analyses.commentaire` (déjà présente, jamais utilisée
+  jusqu'ici). Nouvelle colonne `analyses.source` (`'manuel'`/`'ia'`, même
+  précédent que `statistique_modele.source` du 2026-07-12 matin) pour
+  distinguer les deux voies dans l'UI (badge `[IA]`). Aucune persistance en
+  cas d'échec IA (réseau, refus, réponse malformée) — même principe « pas
+  de score fabriqué » que `PreparationDonneesService`. Section « Déclencher
+  une analyse » remontée au-dessus de « Pari » sur `course.html` (même
+  retour utilisateur), avec un second bouton « Lancer l'analyse avec IA ».
+
+  Gap réel trouvé et corrigé au passage : `AnalysisError` était absente de
+  `_CODE_MAP` (`api/middlewares/error_handler.py`) et tombait donc
+  silencieusement en 500 générique (message supprimé) au lieu d'un 422
+  clair — ajoutée.
+
+  Vérifié : `pytest` (415 passed). Contre PostgreSQL réel : migrations
+  appliquées puis idempotentes (`[SKIP]` au second passage) ; colonne
+  `source` par défaut `'manuel'` sur les 514 analyses déjà en base ;
+  sélection manuelle d'une ancienne version testée sur une course réelle à
+  13 versions (course 1560) — comportement par défaut inchangé avant toute
+  sélection, bascule correcte après, historique reflète bien la version
+  choisie, rollback (aucune donnée réelle modifiée) ; calcul de contrôle
+  ROI ciblé testé sur une analyse réelle sans contrôle (course 1580,
+  version 1, appel PMU réel) — calcule un ROI correct, idempotent au second
+  appel, rollback. L'appel réseau réel à l'API Claude (avec une vraie
+  `ANTHROPIC_API_KEY`) reste à vérifier par l'utilisateur, qui n'a pas
+  encore configuré cette clé.
+
 ## Prochaine étape
 
 L'essentiel de la surface API, l'authentification/RBAC réelle, une deuxième

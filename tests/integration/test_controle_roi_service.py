@@ -352,3 +352,72 @@ def test_course_partie_depuis_assez_longtemps_est_bien_tentee():
     controles = service.calculer_controles_manquants(maintenant=maintenant)
 
     assert len(controles) == 1
+
+
+def test_calculer_controle_pour_analyse_calcule_si_eligible():
+    """Cf. retour utilisateur 2026-07-12 : sélectionner manuellement une
+    ancienne version d'analyse doit calculer aussitôt son ROI si la course
+    est déjà arrivée et que ce ROI n'existe pas encore (jusqu'ici, seule la
+    dernière version en recevait un via `calculer_controles_manquants`)."""
+    course_repo = FakeCourseRepository()
+    analyse_repo = FakeAnalyseRepository()
+    maintenant = datetime(2026, 7, 10, 18, 37)
+    reunion = course_repo.create_reunion(Reunion(date=date(2026, 7, 10), hippodrome_id=1, numero=1))
+    course = course_repo.create_course(
+        Course(reunion_id=reunion.id, numero=1, nom="Prix Test", heure_depart=maintenant - timedelta(minutes=30))
+    )
+    cheval = course_repo.create_cheval(Cheval(nom="Cheval Choisi"))
+    partant = course_repo.create_partant(Partant(course_id=course.id, cheval_id=cheval.id, numero=4))
+    analyse = analyse_repo.create_analyse(Analyse(course_id=course.id, version=1, budget=10.0))
+    analyse_repo.create_pari(
+        Pari(analyse_id=analyse.id, type_pari="Simple Gagnant", combinaison=str(partant.id), mise=10.0)
+    )
+    pmu_client = FakePMUClient(rapports_par_course={(1, 1): RAPPORT_GAGNANT})
+    service = ControleRoiService(pmu_client, analyse_repo, course_repo)
+
+    controle = service.calculer_controle_pour_analyse(analyse.id, maintenant=maintenant)
+
+    assert controle is not None
+    assert controle.gains == 14.0
+    assert analyse_repo.get_controle_roi_by_analyse(analyse.id) is not None
+
+
+def test_calculer_controle_pour_analyse_idempotent_si_deja_calcule():
+    course_repo = FakeCourseRepository()
+    analyse_repo = FakeAnalyseRepository()
+    maintenant = datetime(2026, 7, 10, 18, 37)
+    reunion = course_repo.create_reunion(Reunion(date=date(2026, 7, 10), hippodrome_id=1, numero=1))
+    course = course_repo.create_course(
+        Course(reunion_id=reunion.id, numero=1, nom="Prix Test", heure_depart=maintenant - timedelta(minutes=30))
+    )
+    cheval = course_repo.create_cheval(Cheval(nom="Cheval Choisi"))
+    partant = course_repo.create_partant(Partant(course_id=course.id, cheval_id=cheval.id, numero=4))
+    analyse = analyse_repo.create_analyse(Analyse(course_id=course.id, version=1, budget=10.0))
+    analyse_repo.create_pari(
+        Pari(analyse_id=analyse.id, type_pari="Simple Gagnant", combinaison=str(partant.id), mise=10.0)
+    )
+    pmu_client = FakePMUClient(rapports_par_course={(1, 1): RAPPORT_GAGNANT})
+    service = ControleRoiService(pmu_client, analyse_repo, course_repo)
+    service.calculer_controle_pour_analyse(analyse.id, maintenant=maintenant)
+
+    assert service.calculer_controle_pour_analyse(analyse.id, maintenant=maintenant) is None
+
+
+def test_calculer_controle_pour_analyse_ignore_si_course_pas_arrivee():
+    course_repo = FakeCourseRepository()
+    analyse_repo = FakeAnalyseRepository()
+    maintenant = datetime(2026, 7, 10, 18, 37)
+    reunion = course_repo.create_reunion(Reunion(date=date(2026, 7, 10), hippodrome_id=1, numero=1))
+    course = course_repo.create_course(
+        Course(reunion_id=reunion.id, numero=1, nom="Prix Test", heure_depart=maintenant + timedelta(minutes=5))
+    )
+    cheval = course_repo.create_cheval(Cheval(nom="Cheval Choisi"))
+    partant = course_repo.create_partant(Partant(course_id=course.id, cheval_id=cheval.id, numero=4))
+    analyse = analyse_repo.create_analyse(Analyse(course_id=course.id, version=1, budget=10.0))
+    analyse_repo.create_pari(
+        Pari(analyse_id=analyse.id, type_pari="Simple Gagnant", combinaison=str(partant.id), mise=10.0)
+    )
+    pmu_client = FakePMUClient()  # aucun rapport configuré : lèverait une erreur si appelé
+
+    service = ControleRoiService(pmu_client, analyse_repo, course_repo)
+    assert service.calculer_controle_pour_analyse(analyse.id, maintenant=maintenant) is None
