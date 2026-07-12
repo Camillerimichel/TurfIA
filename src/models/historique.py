@@ -32,6 +32,7 @@ class HistoriqueLigne:
     course_id: int
     course_numero: int
     course_nom: str
+    heure_depart: datetime | None
     analyse_id: int
     version: int
     date_calcul: datetime | None
@@ -66,3 +67,26 @@ class ParisEnCoursLigne:
     decision: str | None
     score_confiance: float | None
     budget: float
+
+
+@dataclass(frozen=True)
+class GainRecentLigne:
+    """Une ligne = une course arrivée récemment dont le gain réel est déjà
+    connu (`controle_roi`, un agrégat par analyse — mise/gains/profit/roi
+    sommés sur tous les paris de la course) — cf. page Accueil, bloc « Gains
+    récents » (retour utilisateur : « implémenter la récupération des gains
+    dans Accueil »). Restreint à la dernière version de chaque course, même
+    raison que `ParisEnCoursLigne`/`HistoriqueLigne` (cf. L033)."""
+
+    course_id: int
+    course_numero: int
+    course_nom: str
+    heure_depart: datetime | None
+    hippodrome_nom: str
+    analyse_id: int
+    decision: str | None
+    mise: float
+    gains: float
+    profit: float | None
+    roi: float | None
+    valide: bool

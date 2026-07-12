@@ -137,7 +137,7 @@ async function chargerModeles() {
           { libelle: "Courses", cle: "nb_courses" },
           { libelle: "Gagnantes", cle: "nb_gagnantes" },
           { libelle: "ROI %", cle: "roi" },
-          { libelle: "Taux réussite %", cle: "taux_reussite" },
+          { libelle: "Taux réussite (courses) %", cle: "taux_reussite" },
         ])
       );
 
@@ -164,7 +164,7 @@ async function chargerModeles() {
           { libelle: "Mises €", cle: "mises", montant: true },
           { libelle: "Gains €", cle: "gains", montant: true },
           { libelle: "ROI %", cle: "roi" },
-          { libelle: "Taux réussite %", cle: "taux_reussite" },
+          { libelle: "Taux réussite (paris) %", cle: "taux_reussite" },
         ])
       );
 
@@ -185,7 +185,7 @@ chargerSectionSimple("/statistiques/globale", "section-globale", [
   { libelle: "Gains €", cle: "gains", montant: true },
   { libelle: "Profit €", cle: "profit", montant: true },
   { libelle: "ROI %", cle: "roi" },
-  { libelle: "Taux réussite %", cle: "taux_reussite" },
+  { libelle: "Taux réussite (courses) %", cle: "taux_reussite" },
 ]);
 
 chargerSectionSimple("/statistiques/scores", "section-scores", [
@@ -194,7 +194,7 @@ chargerSectionSimple("/statistiques/scores", "section-scores", [
   { libelle: "Courses", cle: "nb_courses" },
   { libelle: "Gagnantes", cle: "nb_gagnantes" },
   { libelle: "ROI %", cle: "roi" },
-  { libelle: "Taux réussite %", cle: "taux_reussite" },
+  { libelle: "Taux réussite (courses) %", cle: "taux_reussite" },
 ]);
 
 // `hippodrome_id`/`discipline_id` seuls ne permettent pas de savoir de quel
@@ -241,7 +241,7 @@ chargerSectionSimple("/statistiques/paris", "section-paris", [
   { libelle: "Gains €", cle: "gains", montant: true },
   { libelle: "Profit €", cle: "profit", montant: true },
   { libelle: "ROI %", cle: "roi" },
-  { libelle: "Taux réussite %", cle: "taux_reussite" },
+  { libelle: "Taux réussite (paris) %", cle: "taux_reussite" },
 ]);
 
 chargerModeles();

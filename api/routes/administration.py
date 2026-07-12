@@ -208,6 +208,34 @@ def declencher_analyse_jour(
     ))
 
 
+@router.post("/automatisations/gains", response_model=Enveloppe[dict])
+def declencher_recuperation_gains(
+    controle_roi_service: ControleRoiService = Depends(get_controle_roi_service),
+    tache_repo: TacheRepository = Depends(get_tache_repository),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ADMINISTRATION)),
+) -> Enveloppe[dict]:
+    """Calcule les gains réels des analyses éligibles (courses parties depuis
+    plus de `MARGE_HOMOLOGATION_MINUTES`) sans recalculer les 6 tables
+    statistiques — retour utilisateur (2026-07-12) : « il faut implémenter la
+    récupération des gains dans Accueil », plus léger que « Calculer les
+    statistiques » qui fait les deux. Jamais de doublon : `calculer_controles_
+    manquants` ne retient que les analyses sans `controle_roi` existant
+    (`list_analyses_sans_controle_roi`, cf. `AnalyseRepository`) et la
+    contrainte SQL `uk_controle_roi_analyse` (UNIQUE sur `analyse_id`)
+    empêche structurellement toute ligne en double même en cas d'appel
+    concurrent."""
+    tache = tache_repo.demarrer("recuperation_gains", categorie="automatisation")
+    try:
+        controles = controle_roi_service.calculer_controles_manquants()
+    except Exception as exc:
+        tache_repo.terminer(tache.id, "echec", commentaire=str(exc)[:2000])
+        raise
+    tache_repo.terminer(tache.id, "succes", commentaire=f"{len(controles)} contrôle(s) ROI calculé(s)")
+    audit_repo.enregistrer(utilisateur.id, "automatisation_gains", objet=str(tache.id))
+    return Enveloppe(data={"nb_controles_roi": len(controles)})
+
+
 @router.post("/automatisations/statistiques", response_model=Enveloppe[dict])
 def declencher_statistiques(
     controle_roi_service: ControleRoiService = Depends(get_controle_roi_service),

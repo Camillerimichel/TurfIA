@@ -8,6 +8,7 @@ from pathlib import Path
 
 from api.dependencies.auth import get_utilisateur_courant
 from api.main import app
+from src.models.analyse import ControleRoi
 from src.models.course import Cheval, Cote, Course, Partant, Resultat, Reunion
 from src.models.statistique import StatistiqueGlobale
 from src.models.technique import Parametre, Version
@@ -24,6 +25,7 @@ def test_toutes_les_routes_administration_refusent_role_non_administrateur(clien
     assert client.get("/api/v1/administration/parametres").status_code == 403
     assert client.get("/api/v1/administration/supervision").status_code == 403
     assert client.post("/api/v1/administration/automatisations/collecte").status_code == 403
+    assert client.post("/api/v1/administration/automatisations/gains").status_code == 403
     assert client.get("/api/v1/administration/cron").status_code == 403
     assert client.get("/api/v1/administration/cron/journal").status_code == 403
     assert (
@@ -179,6 +181,17 @@ def test_declencher_analyse_jour_ignore_les_courses_deja_parties(client, repos):
     assert corps["nb_courses"] == 0
     assert corps["nb_deja_parties"] == 1
     assert corps["nb_erreurs"] == 0
+
+
+def test_declencher_recuperation_gains_calcule_et_journalise(client, repos):
+    repos["controle_roi"].controles = [ControleRoi(analyse_id=1, mise=10.0, gains=15.0, profit=5.0, roi=50.0, valide=True)]
+
+    reponse = client.post("/api/v1/administration/automatisations/gains")
+
+    assert reponse.status_code == 200
+    assert reponse.json()["data"] == {"nb_controles_roi": 1}
+    taches = repos["tache"].lister(categorie="automatisation")
+    assert any(t.nom == "recuperation_gains" and t.statut == "succes" for t in taches)
 
 
 def test_declencher_statistiques_recalcule_et_journalise(client, repos):

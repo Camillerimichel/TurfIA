@@ -40,6 +40,14 @@ class StatistiqueRepository:
         self._conn = conn
 
     def calculer_globale(self) -> StatistiqueGlobale:
+        """`taux_reussite` = % de courses (pas de paris individuels) dont le
+        profit combiné de tous les paris est positif (`controle_roi.valide`,
+        un agrégat par analyse) — même granularité que `calculer_scores`, mais
+        différente de `calculer_paris` (`controle_roi_pari`, une ligne par
+        pari) qui mesure le % de paris individuels gagnants. Même libellé
+        « Taux de réussite » aux deux granularités, distingué côté affichage
+        depuis le 2026-07-12 (« Taux de réussite (courses) » vs « (paris) »,
+        retour utilisateur) — pas un bug, une ambiguïté de nommage clarifiée."""
         with self._conn.cursor() as cur:
             cur.execute("SELECT COUNT(DISTINCT course_id) FROM analyses")
             (nb_courses,) = cur.fetchone()

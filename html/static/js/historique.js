@@ -9,6 +9,18 @@ function formaterValeur(valeur) {
   return valeur;
 }
 
+// Retour utilisateur : « classer par ordre chronologique inversé avec
+// l'heure au format HH:MM » — le tri (c.heure_depart, cf. HistoriqueRepository)
+// était déjà correct, mais l'heure elle-même n'était jamais affichée (seule
+// la date, sans heure) : impossible de voir sur quoi le tri se basait.
+function formaterHeure(valeurIso) {
+  if (!valeurIso) return "—";
+  const date = new Date(valeurIso);
+  if (Number.isNaN(date.getTime())) return "—";
+  const deuxChiffres = (n) => String(n).padStart(2, "0");
+  return `${deuxChiffres(date.getHours())}:${deuxChiffres(date.getMinutes())}`;
+}
+
 function construireTableau(lignes, colonnes) {
   const table = document.createElement("table");
   const entete = document.createElement("thead");
@@ -32,6 +44,11 @@ function construireTableau(lignes, colonnes) {
   }
   for (const ligne of lignes) {
     const tr = document.createElement("tr");
+    // Retour utilisateur : fond coloré selon le contrôle ROI réel — vert
+    // clair pour un gain net, rouge clair pour une perte nette, rien tant
+    // que `valide` n'est pas encore connu (pari sans contrôle calculé).
+    if (ligne.valide === true) tr.classList.add("ligne-gain");
+    else if (ligne.valide === false) tr.classList.add("ligne-perte");
     for (const colonne of colonnes) {
       const cellule = document.createElement("td");
       if (colonne.cle === "course_nom") {
@@ -45,6 +62,8 @@ function construireTableau(lignes, colonnes) {
       } else if (colonne.entier) {
         const brut = ligne[colonne.cle];
         cellule.textContent = brut === null || brut === undefined ? "—" : String(Math.round(brut));
+      } else if (colonne.heure) {
+        cellule.textContent = formaterHeure(ligne[colonne.cle]);
       } else {
         cellule.textContent = formaterValeur(ligne[colonne.cle]);
       }
@@ -67,6 +86,7 @@ function decisionsSelectionnees() {
 
 const COLONNES = [
   { libelle: "Date", cle: "date" },
+  { libelle: "Heure", cle: "heure_depart", heure: true },
   { libelle: "Hippodrome", cle: "hippodrome_nom" },
   { libelle: "Course", cle: "course_nom" },
   { libelle: "Analysée le", cle: "date_calcul" },

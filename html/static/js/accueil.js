@@ -70,7 +70,12 @@ function construireJaugeTauxReussite(taux) {
   }
 
   return construireBlocJauge(
-    `Taux de réussite : ${typeof taux === "number" ? taux.toFixed(2) + " %" : "n/a"}`,
+    // "(courses)" : ce taux mesure le % de courses entières profitables (tous
+    // les paris combinés), pas le % de paris individuels gagnants — retour
+    // utilisateur (2026-07-12), pour éviter la confusion avec le "Taux
+    // réussite (paris) %" du bloc "Par type de pari" (Statistiques), qui
+    // mesure autre chose sous le même nom.
+    `% de réussite (courses) : ${typeof taux === "number" ? taux.toFixed(2) + " %" : "n/a"}`,
     piste
   );
 }
@@ -194,6 +199,55 @@ async function chargerParisEnCours() {
       erreurParis.textContent = `Paris indisponibles : ${erreur.message}`;
       bouton.appendChild(erreurParis);
     }
+
+    conteneur.appendChild(bouton);
+  }
+}
+
+// Gains réels des courses arrivées récemment (24 h) — retour utilisateur :
+// « il faut implémenter la récupération des gains dans Accueil ». Une seule
+// ligne par course (`GainRecentLigne` vient d'un JOIN sur `controle_roi`, un
+// agrégat par analyse déjà unique par construction, cf. contrainte SQL
+// `uk_controle_roi_analyse`) — jamais de doublon possible.
+async function chargerGainsRecents() {
+  const conteneur = document.getElementById("widget-gains-recents");
+  let lignes;
+  try {
+    lignes = await apiFetch("/historique/gains-recents");
+  } catch (erreur) {
+    conteneur.textContent = `Erreur (gains récents) : ${erreur.message}`;
+    return;
+  }
+
+  conteneur.innerHTML = "";
+
+  if (lignes.length === 0) {
+    const vide = document.createElement("p");
+    vide.className = "note";
+    vide.textContent = "Aucun gain récent (courses arrivées dans les dernières 24 h avec un contrôle ROI déjà calculé).";
+    conteneur.appendChild(vide);
+    return;
+  }
+
+  for (const ligne of lignes) {
+    const bouton = document.createElement("a");
+    bouton.className = "bouton-pari-en-cours";
+    bouton.href = `/course.html?id=${ligne.course_id}`;
+
+    const titreLigne = document.createElement("div");
+    titreLigne.className = "bouton-pari-en-cours-titre";
+    titreLigne.textContent = `C${ligne.course_numero} — ${ligne.course_nom} (${ligne.hippodrome_nom})`;
+    bouton.appendChild(titreLigne);
+
+    const infos = document.createElement("div");
+    infos.className = "bouton-pari-en-cours-infos";
+    if (ligne.heure_depart) {
+      infos.appendChild(construireBadgeDepart(ligne.heure_depart));
+    }
+    infos.appendChild(construireBadgeBudget(ligne.mise));
+    infos.appendChild(construireBadgeGain(ligne.gains, ligne.profit));
+    infos.appendChild(construireBadgeJeu(ligne.decision, null));
+    bouton.appendChild(infos);
 
     conteneur.appendChild(bouton);
   }
@@ -440,10 +494,11 @@ boutonCoursesImminentes.addEventListener("click", () => {
 
 // -- Actions d'automatisation (copie des boutons Administration) ------------
 // Retour utilisateur : « mets une copie des boutons Collecte/Analyser/
-// Calculer les statistiques dans le bloc ROI » — accès rapide depuis
-// l'Accueil, sans naviguer vers Administration. Même 3 routes que
-// administration.js, mais recharge le ROI global et les paris en cours
-// après coup (impactés par les 3 actions) plutôt que le tableau des tâches.
+// Calculer les statistiques dans le bloc ROI » puis « il faut implémenter la
+// récupération des gains » — accès rapide depuis l'Accueil, sans naviguer
+// vers Administration. Mêmes routes que administration.js, mais recharge le
+// ROI global, les paris en cours et les gains récents après coup (impactés
+// par ces actions) plutôt que le tableau des tâches.
 async function declencherAutomatisationAccueil(chemin, libelleConfirmation) {
   const message = document.getElementById("message-automatisation-accueil");
   message.hidden = true;
@@ -464,6 +519,7 @@ async function declencherAutomatisationAccueil(chemin, libelleConfirmation) {
   message.hidden = false;
   await chargerRoiGlobal();
   await chargerParisEnCours();
+  await chargerGainsRecents();
 }
 
 document.getElementById("bouton-collecte-accueil").addEventListener("click", () =>
@@ -475,11 +531,15 @@ document.getElementById("bouton-analyse-jour-accueil").addEventListener("click",
     "Analyser toutes les courses du jour ?"
   )
 );
+document.getElementById("bouton-gains-accueil").addEventListener("click", () =>
+  declencherAutomatisationAccueil("/administration/automatisations/gains", "Récupérer les gains réels des courses arrivées ?")
+);
 document.getElementById("bouton-statistiques-accueil").addEventListener("click", () =>
   declencherAutomatisationAccueil("/administration/automatisations/statistiques", "Recalculer les statistiques ?")
 );
 
 chargerRoiGlobal();
 chargerParisEnCours();
+chargerGainsRecents();
 chargerHippodromes();
 chargerReunions(selecteurDate.value);

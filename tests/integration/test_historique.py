@@ -1,7 +1,9 @@
 """Tests d'intégration du module Historique (L018 §8) — recherche transversale
 en lecture seule, sans base réelle (cf. tests/integration/fakes.py)."""
 
-from src.models.analyse import ControleRoiPari
+from datetime import datetime, timedelta
+
+from src.models.analyse import ControleRoi, ControleRoiPari
 
 
 def _creer_course_avec_analyse_et_pari(client, decision="Jeu normal", version=1):
@@ -28,46 +30,61 @@ def _creer_course_avec_analyse_et_pari(client, decision="Jeu normal", version=1)
     return reunion, course, detail
 
 
-def test_historique_trie_par_heure_depart_descendant(client):
-    """Retour utilisateur : « il faut classer les courses par ordre
-    chronologique descendant en tenant compte des heures des courses » —
-    `re.date` seul ne distingue pas deux courses du même jour."""
-    reunion = client.post(
-        "/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": 1, "numero": 1}
+def _creer_course_avec_heure(client, reunion_id, numero, nom, heure_depart):
+    course = client.post(
+        f"/api/v1/reunions/{reunion_id}/courses",
+        json={"numero": numero, "nom": nom, "heure_depart": heure_depart},
     ).json()["data"]
-    course_tot = client.post(
-        f"/api/v1/reunions/{reunion['id']}/courses",
-        json={"numero": 1, "nom": "Course Tot", "heure_depart": "2026-07-07T12:00:00"},
+    cheval = client.post("/api/v1/chevaux", json={"nom": f"Cheval {nom}"}).json()["data"]
+    partant = client.post(
+        f"/api/v1/courses/{course['id']}/partants", json={"cheval_id": cheval["id"], "numero": 1}
     ).json()["data"]
-    course_tard = client.post(
-        f"/api/v1/reunions/{reunion['id']}/courses",
-        json={"numero": 2, "nom": "Course Tard", "heure_depart": "2026-07-07T18:00:00"},
+    client.post(
+        f"/api/v1/courses/{course['id']}/analyses",
+        json={
+            "version": 1,
+            "partants": [{"partant_id": partant["id"], "sous_scores": {"marche": 90}, "cote": 3.0}],
+            "sous_risques_course": {"marche": 20},
+            "mise_reference": 10,
+        },
+    )
+    return course
+
+
+def test_historique_trie_date_recente_dabord_puis_heures_croissantes(client):
+    """Retour utilisateur (2026-07-12, correction du tri initial) : « il faut
+    mettre la dernière date en premier et mettre les courses par ordre
+    chronologique sur les heures/minutes » — la date la plus récente
+    d'abord, puis à l'intérieur d'une même date les courses du matin avant
+    celles du soir (pas l'inverse)."""
+    reunion_recente = client.post(
+        "/api/v1/reunions", json={"date": "2026-07-08", "hippodrome_id": 1, "numero": 1}
+    ).json()["data"]
+    reunion_ancienne = client.post(
+        "/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": 1, "numero": 2}
     ).json()["data"]
 
-    for course in (course_tot, course_tard):
-        cheval = client.post("/api/v1/chevaux", json={"nom": f"Cheval {course['numero']}"}).json()["data"]
-        partant = client.post(
-            f"/api/v1/courses/{course['id']}/partants", json={"cheval_id": cheval["id"], "numero": 1}
-        ).json()["data"]
-        client.post(
-            f"/api/v1/courses/{course['id']}/analyses",
-            json={
-                "version": 1,
-                "partants": [{"partant_id": partant["id"], "sous_scores": {"marche": 90}, "cote": 3.0}],
-                "sous_risques_course": {"marche": 20},
-                "mise_reference": 10,
-            },
-        )
+    course_recente_tard = _creer_course_avec_heure(
+        client, reunion_recente["id"], 2, "Récente Tard", "2026-07-08T18:00:00"
+    )
+    course_recente_tot = _creer_course_avec_heure(
+        client, reunion_recente["id"], 1, "Récente Tôt", "2026-07-08T09:00:00"
+    )
+    course_ancienne = _creer_course_avec_heure(client, reunion_ancienne["id"], 1, "Ancienne", "2026-07-07T12:00:00")
 
     reponse = client.get("/api/v1/historique")
 
     assert reponse.status_code == 200
     ids_dans_lordre = [l["course_id"] for l in reponse.json()["data"]]
-    ordre_filtre = [cid for cid in ids_dans_lordre if cid in (course_tot["id"], course_tard["id"])]
+    ids_suivis = (course_recente_tard["id"], course_recente_tot["id"], course_ancienne["id"])
+    ordre_filtre = [cid for cid in ids_dans_lordre if cid in ids_suivis]
     # Une course peut produire plusieurs lignes (un pari chacune) : on ne
     # vérifie que l'ordre relatif des courses, pas le nombre de lignes.
     ordre_courses = [cid for i, cid in enumerate(ordre_filtre) if i == 0 or cid != ordre_filtre[i - 1]]
-    assert ordre_courses == [course_tard["id"], course_tot["id"]]
+    # Date la plus récente (2026-07-08) d'abord, et à l'intérieur de cette
+    # date la course du matin (9h) avant celle du soir (18h) — puis la date
+    # la plus ancienne (2026-07-07).
+    assert ordre_courses == [course_recente_tot["id"], course_recente_tard["id"], course_ancienne["id"]]
 
 
 def test_historique_sans_filtre_retourne_les_lignes(client):
@@ -285,3 +302,84 @@ def test_historique_filtre_decisions_ou_logique(client):
 
     reponse_vide = client.get("/api/v1/historique", params={"decisions": ["Décision inexistante"]})
     assert reponse_vide.json()["data"] == []
+
+
+# -- Gains récents (Accueil) --------------------------------------------------
+# Retour utilisateur : « il faut implémenter la récupération des gains,
+# attention à ne pas générer de doublons » — vérifie que la liste ne montre
+# qu'une course arrivée avec un gain déjà connu, jamais un doublon.
+
+
+def _creer_course_arrivee_avec_analyse(client, repos, heure_depart, mise=10.0, gains=15.0):
+    reunion, course = _creer_reunion_et_course(client, heure_depart=heure_depart.isoformat())
+    cheval = client.post("/api/v1/chevaux", json={"nom": "Cheval Test"}).json()["data"]
+    partant = client.post(
+        f"/api/v1/courses/{course['id']}/partants", json={"cheval_id": cheval["id"], "numero": 1}
+    ).json()["data"]
+    detail = client.post(
+        f"/api/v1/courses/{course['id']}/analyses",
+        json={
+            "version": 1,
+            "partants": [{"partant_id": partant["id"], "sous_scores": {"marche": 90}, "cote": 3.0}],
+            "sous_risques_course": {"marche": 20},
+            "mise_reference": 10,
+        },
+    ).json()["data"]
+    analyse_id = detail["analyse"]["id"]
+    repos["analyse"].create_controle_roi(
+        ControleRoi(analyse_id=analyse_id, mise=mise, gains=gains, profit=gains - mise, roi=50.0, valide=True)
+    )
+    return course, detail
+
+
+def test_gains_recents_liste_une_course_arrivee_avec_controle_roi(client, repos):
+    heure_depart = datetime.now() - timedelta(hours=2)
+    course, detail = _creer_course_arrivee_avec_analyse(client, repos, heure_depart)
+
+    reponse = client.get("/api/v1/historique/gains-recents")
+
+    assert reponse.status_code == 200
+    lignes = reponse.json()["data"]
+    ligne = next(l for l in lignes if l["course_id"] == course["id"])
+    assert ligne["analyse_id"] == detail["analyse"]["id"]
+    assert ligne["mise"] == 10.0
+    assert ligne["gains"] == 15.0
+    assert ligne["valide"] is True
+    # Une seule ligne par course, jamais de doublon.
+    assert len([l for l in lignes if l["course_id"] == course["id"]]) == 1
+
+
+def test_gains_recents_exclut_les_courses_sans_controle_roi(client):
+    heure_depart = datetime.now() - timedelta(hours=2)
+    reunion, course = _creer_reunion_et_course(client, heure_depart=heure_depart.isoformat())
+    cheval = client.post("/api/v1/chevaux", json={"nom": "Cheval Test"}).json()["data"]
+    partant = client.post(
+        f"/api/v1/courses/{course['id']}/partants", json={"cheval_id": cheval["id"], "numero": 1}
+    ).json()["data"]
+    client.post(
+        f"/api/v1/courses/{course['id']}/analyses",
+        json={
+            "version": 1,
+            "partants": [{"partant_id": partant["id"], "sous_scores": {"marche": 90}, "cote": 3.0}],
+            "sous_risques_course": {"marche": 20},
+            "mise_reference": 10,
+        },
+    )
+
+    reponse = client.get("/api/v1/historique/gains-recents")
+
+    assert reponse.status_code == 200
+    assert all(l["course_id"] != course["id"] for l in reponse.json()["data"])
+
+
+def test_gains_recents_exclut_hors_fenetre(client, repos):
+    heure_depart = datetime.now() - timedelta(hours=48)
+    course, _ = _creer_course_arrivee_avec_analyse(client, repos, heure_depart)
+
+    reponse = client.get("/api/v1/historique/gains-recents")
+
+    assert reponse.status_code == 200
+    assert all(l["course_id"] != course["id"] for l in reponse.json()["data"])
+
+    reponse_large = client.get("/api/v1/historique/gains-recents", params={"heures": 72})
+    assert any(l["course_id"] == course["id"] for l in reponse_large.json()["data"])

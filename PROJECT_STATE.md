@@ -1645,6 +1645,111 @@ Tests : `tests/integration/test_api_statistiques.py::test_list_globale_ne_montre
     triees_desc`, `test_historique_trie_par_heure_depart_descendant`),
     `node --check`, vérifié contre PostgreSQL réel (dates réelles listées :
     12/07, 11/07, 10/07/2026, tri décroissant confirmé).
+
+- **Récupération des gains dans Accueil (2026-07-12, retour utilisateur :
+  « il faut implémenter la récupération des gains, attention à ne pas
+  générer de doublons »)** — deux volets, tous deux confirmés par
+  l'utilisateur :
+  1. **Nouveau bouton « Récupérer les gains »** dans le bloc ROI global
+     (Accueil), 4ᵉ bouton à côté de Collecte/Analyser/Statistiques.
+     Nouvelle route `POST /administration/automatisations/gains`
+     (`ADMINISTRATION`, suivi `tache` nom `recuperation_gains`) qui appelle
+     **seulement** `ControleRoiService.calculer_controles_manquants()`
+     (contrairement à « Calculer les statistiques » qui fait aussi les 6
+     tables) — action plus légère pour rafraîchir les gains sans attendre le
+     recalcul complet. **Garantie anti-doublon, déjà assurée par la
+     conception existante, pas une nouveauté** : `calculer_controles_
+     manquants` ne retraite que les analyses sans `controle_roi` (`LEFT JOIN
+     ... WHERE cr.id IS NULL`) et la contrainte SQL `uk_controle_roi_analyse`
+     (UNIQUE sur `analyse_id`) empêche structurellement toute ligne double
+     même en cas d'appel concurrent — documenté explicitement dans la
+     docstring de la route plutôt que simplement supposé.
+  2. **Nouveau bloc « Gains récents »** (Accueil, accordéon ouvert par
+     défaut) : une ligne par course arrivée dans les dernières 24 h dont le
+     gain réel est déjà connu. Nouveau modèle `GainRecentLigne`
+     (`src/models/historique.py`), méthode `HistoriqueRepository.
+     list_gains_recents(heures=24)` — `JOIN controle_roi` (pas `LEFT JOIN`) :
+     une course sans contrôle calculé n'apparaît simplement pas, jamais un
+     état intermédiaire ambigu. Nouvelle route `GET /historique/gains-
+     recents`. Unicité par construction : `controle_roi` est déjà un agrégat
+     UNIQUE par analyse (`uk_controle_roi_analyse`), restreint à la dernière
+     version de chaque course (même filtre que `list_paris_en_cours`) — une
+     course ne peut donc apparaître qu'une seule fois, vérifié explicitement
+     par un test dédié et par une assertion `len(ids) == len(set(ids))`
+     contre les 24 lignes réelles retournées en base (fenêtre 48 h, aucun
+     doublon). Affichage : même format « bouton pleine largeur » que « Paris
+     en cours », nouveau badge `construireBadgeGain` (vert si profit ≥ 0,
+     rouge sinon, même logique de couleur que la jauge Gains du ROI global).
+  - Vérifié : `pytest` (401 passed, 6 nouveaux tests : RBAC + `recuperation_
+    gains` + 3× `gains_recents` incluant l'exclusion hors-fenêtre et
+    sans-contrôle), `node --check`, vérifié contre PostgreSQL réel (24
+    courses réelles sur 48 h, aucun doublon confirmé), routes confirmées
+    câblées (401 sans jeton), réponse HTTP réelle confirmant que le 4ᵉ
+    bouton et le nouveau bloc sont bien servis.
+
+- **Deux clarifications demandées (2026-07-12, mêmes échanges)** :
+  1. Libellés « Taux de réussite » désambiguïsés partout où ils apparaissent
+     — vérification contre PostgreSQL réel (calcul manuel indépendant :
+     12 courses profitables / 25 contrôlées = 48,00 %, identique au recalcul
+     en direct, formule confirmée correcte) a aussi montré que le bloc
+     « Globale »/« Par tranche de score » mesure le **% de courses entières
+     profitables** (`controle_roi.valide`, agrégat par analyse) alors que
+     « Par type de pari » mesure le **% de paris individuels gagnants**
+     (`controle_roi_pari.valide`) — même nom, deux granularités
+     différentes. Renommé en « Taux de réussite (courses) » / « (paris) »
+     dans `accueil.js` (jauge ROI global) et les 5 occurrences de
+     `statistiques.js` (Globale, Par tranche de score ×2 dont le détail
+     rejeu, Par type de pari ×2 dont le détail rejeu) ; docstring ajoutée à
+     `StatistiqueRepository.calculer_globale` (n'en avait aucune) précisant
+     cette distinction. Pas un bug — une ambiguïté de nommage.
+  2. **« Le clic sur Calculer les statistiques n'a pas changé le chiffre »**
+     — vérifié via le journal des tâches : le clic signalé a bien trouvé
+     `0 contrôle(s) ROI` à calculer (le run précédent, 26 secondes plus tôt,
+     avait déjà tout traité) ; les deux calculs consécutifs ont donc produit
+     des chiffres rigoureusement identiques faute de toute nouvelle donnée
+     entre les deux — pas un bug de rafraîchissement.
+  3. **Colonne « Heure » ajoutée au tableau Historique (même échange)** : le
+     tri par `c.heure_depart` (corrigé plus haut) n'était jusqu'ici visible
+     nulle part — `heure_depart` absent de `HistoriqueLigne`/
+     `HistoriqueLigneOut`/`_COLONNES`, seule la date (sans heure) était
+     affichée, rendant le tri invisible/incompréhensible pour l'utilisateur.
+     Ajouté aux deux + nouvelle colonne « Heure » (format `HH:MM`,
+     `formaterHeure` dans `historique.js`, nouvel attribut de colonne
+     `heure: true`). Vérifié : `pytest` (401 passed), `node --check` (cas
+     limites : heure normale, `null`, date sans heure), vérifié contre
+     PostgreSQL réel (heures réelles cohérentes avec l'ordre de tri :
+     20:22, 20:06, 19:50, 19:50, 19:34...).
+
+- **Correction du tri Historique (2026-07-12, retour utilisateur : « oups,
+  il faut mettre la dernière date en premier et les courses par ordre
+  chronologique sur les heures/minutes »)** : le tri précédent
+  (`ORDER BY c.heure_depart DESC`) triait sur l'horodatage complet en un
+  seul bloc, mélangeant les jours entre eux selon l'heure de la journée
+  (ex. une course de 20h hier pouvait passer avant une course de 9h
+  aujourd'hui). Corrigé en tri à deux niveaux : `ORDER BY re.date DESC,
+  c.heure_depart ASC NULLS LAST, c.numero, p.id` — la date la plus récente
+  d'abord (regroupement par jour), puis à l'intérieur d'une même date les
+  courses dans l'ordre chronologique naturel (la première du matin avant
+  la dernière du soir, pas l'inverse). `FakeHistoriqueRepository` reproduit
+  la même clé de tri. Test existant réécrit (3 courses sur 2 dates :
+  vérifie explicitement date récente d'abord ET heures croissantes à
+  l'intérieur de la date). Au passage, libellé de la jauge ROI global
+  changé de « Taux de réussite (courses) » à « % de réussite (courses) »
+  (même demande). Vérifié : `pytest` (401 passed), vérifié contre
+  PostgreSQL réel (12/07 en tête, heures croissantes confirmées : 10:15,
+  10:45, 11:15, 11:45, 12:00...).
+
+- **Lignes du tableau Historique colorées selon le contrôle ROI réel
+  (2026-07-12, retour utilisateur)** : fond vert clair (`.ligne-gain`,
+  `var(--couleur-accent-clair)`) pour une ligne dont le contrôle réel est
+  positif (`valide === true`), fond rouge clair (`.ligne-perte`, nouvelle
+  variable `--couleur-erreur-clair: #fbe4e2`) pour une perte
+  (`valide === false`) — rien tant que le contrôle n'est pas encore calculé
+  (`valide` `null`, cf. « Récupérer les gains »). Vérifié contre PostgreSQL
+  réel : `valide` correspond exactement au signe de `profit_reel` sur 15
+  lignes réelles (True ⟺ profit positif, False ⟺ profit négatif, `None` ⟺
+  pas encore contrôlé). `pytest` (401 passed, changement HTML/CSS/JS pur),
+  `node --check`.
 ## Prochaine étape
 
 L'essentiel de la surface API, l'authentification/RBAC réelle, une deuxième
