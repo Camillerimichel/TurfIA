@@ -28,6 +28,7 @@ from api.dependencies.services import (
     get_automatisation_service,
     get_collecte_service,
     get_controle_roi_service,
+    get_rejeu_service,
     get_statistique_service,
     get_supervision_service,
 )
@@ -39,11 +40,13 @@ from api.schemas.administration import (
     ParametreOut,
     ParametrePatchIn,
     RapportAnalyseJourOut,
+    RejeuIn,
     TacheCronOut,
     TacheOut,
     VersionOut,
 )
 from api.schemas.common import Enveloppe
+from api.schemas.statistiques import StatistiqueModeleOut
 from src.core.audit import serialiser_etat
 from src.core.config import Settings, get_settings
 from src.models.utilisateur import Utilisateur
@@ -55,6 +58,7 @@ from src.repositories.version_repository import VersionRepository
 from src.services.automatisation_service import AutomatisationService
 from src.services.collecte_service import CollecteService
 from src.services.controle_roi_service import ControleRoiService
+from src.services.rejeu_service import RejeuService
 from src.services.statistique_service import StatistiqueService
 from src.services.supervision_service import SupervisionService
 
@@ -222,6 +226,39 @@ def declencher_statistiques(
     tache_repo.terminer(tache.id, "succes", commentaire=f"{len(controles)} contrôle(s) ROI, tables : {resume}")
     audit_repo.enregistrer(utilisateur.id, "automatisation_statistiques", objet=str(tache.id))
     return Enveloppe(data={"nb_controles_roi": len(controles), "tables": resume})
+
+
+@router.post("/rejeu", response_model=Enveloppe[StatistiqueModeleOut])
+def declencher_rejeu(
+    payload: RejeuIn,
+    service: RejeuService = Depends(get_rejeu_service),
+    tache_repo: TacheRepository = Depends(get_tache_repository),
+    audit_repo: AuditRepository = Depends(get_audit_repository),
+    utilisateur: Utilisateur = Depends(exiger_roles(*ADMINISTRATION)),
+) -> Enveloppe[StatistiqueModeleOut]:
+    """Déclenche le moteur de rejeu (cf. L031.7 §4, `RejeuService`) depuis
+    l'interface HTML — retour utilisateur (2026-07-12) : jusqu'ici seul le CLI
+    `scripts/rejouer_versions.py` le permettait, pas de formulaire ni pour les
+    jours précédents. Même service que le script, `source="rejeu"` toujours."""
+    tache = tache_repo.demarrer("rejeu_versions", categorie="rejeu")
+    try:
+        stat = service.rejouer(
+            version_modele=payload.version_modele,
+            date_debut=payload.date_debut,
+            date_fin=payload.date_fin,
+            poids_score=payload.poids_score,
+            poids_risque=payload.poids_risque,
+            commentaire=payload.commentaire,
+        )
+    except Exception as exc:
+        tache_repo.terminer(tache.id, "echec", commentaire=str(exc)[:2000])
+        raise
+    tache_repo.terminer(
+        tache.id, "succes",
+        commentaire=f"{stat.nb_courses} course(s) rejouée(s), ROI {stat.roi if stat.roi is not None else 'n/a'}",
+    )
+    audit_repo.enregistrer(utilisateur.id, "rejeu_versions", objet=str(tache.id))
+    return Enveloppe(data=StatistiqueModeleOut.model_validate(stat))
 
 
 # -- 2.3 Vérifier les sauvegardes ------------------------------------------------

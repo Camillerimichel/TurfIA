@@ -64,7 +64,14 @@ class HistoriqueRepository:
                 LEFT JOIN pari p ON p.analyse_id = a.id
                 LEFT JOIN controle_roi_pari crp ON crp.pari_id = p.id
                 {clause_where}
-                ORDER BY re.date DESC, c.numero, p.id
+                -- Ordre chronologique descendant réel (retour utilisateur :
+                -- « il faut classer les courses par ordre chronologique
+                -- descendant en tenant compte des heures des courses ») :
+                -- `re.date` seul ne distingue pas deux courses du même jour,
+                -- c.heure_depart le fait. NULLS LAST : une course sans heure
+                -- connue (donnée pas encore collectée) passe après celles
+                -- qui en ont une, jamais avant par un artefact de tri.
+                ORDER BY c.heure_depart DESC NULLS LAST, c.numero, p.id
                 LIMIT %s
                 """,
                 valeurs,

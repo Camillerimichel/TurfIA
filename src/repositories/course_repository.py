@@ -274,6 +274,16 @@ class CourseRepository:
             )
             return cur.fetchone()[0]
 
+    def list_dates_reunions(self) -> list[date]:
+        """Dates distinctes ayant au moins une réunion, la plus récente
+        d'abord — alimente le filtre déroulant de la page Historique (retour
+        utilisateur : « proposer dans une liste déroulante le choix de la
+        date en fonction des dates présentes », plutôt qu'un calendrier libre
+        pouvant pointer sur une date sans aucune donnée)."""
+        with self._conn.cursor() as cur:
+            cur.execute("SELECT DISTINCT date FROM reunion ORDER BY date DESC")
+            return [row[0] for row in cur.fetchall()]
+
     def list_courses_avec_resultat(self, date_debut: date, date_fin: date) -> list[Course]:
         """Courses déjà arrivées (résultat officiel connu) dans une fenêtre de
         dates — périmètre du moteur de rejeu (cf. `scripts/rejouer_versions.py`,

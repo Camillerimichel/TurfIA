@@ -28,6 +28,48 @@ def _creer_course_avec_analyse_et_pari(client, decision="Jeu normal", version=1)
     return reunion, course, detail
 
 
+def test_historique_trie_par_heure_depart_descendant(client):
+    """Retour utilisateur : « il faut classer les courses par ordre
+    chronologique descendant en tenant compte des heures des courses » —
+    `re.date` seul ne distingue pas deux courses du même jour."""
+    reunion = client.post(
+        "/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": 1, "numero": 1}
+    ).json()["data"]
+    course_tot = client.post(
+        f"/api/v1/reunions/{reunion['id']}/courses",
+        json={"numero": 1, "nom": "Course Tot", "heure_depart": "2026-07-07T12:00:00"},
+    ).json()["data"]
+    course_tard = client.post(
+        f"/api/v1/reunions/{reunion['id']}/courses",
+        json={"numero": 2, "nom": "Course Tard", "heure_depart": "2026-07-07T18:00:00"},
+    ).json()["data"]
+
+    for course in (course_tot, course_tard):
+        cheval = client.post("/api/v1/chevaux", json={"nom": f"Cheval {course['numero']}"}).json()["data"]
+        partant = client.post(
+            f"/api/v1/courses/{course['id']}/partants", json={"cheval_id": cheval["id"], "numero": 1}
+        ).json()["data"]
+        client.post(
+            f"/api/v1/courses/{course['id']}/analyses",
+            json={
+                "version": 1,
+                "partants": [{"partant_id": partant["id"], "sous_scores": {"marche": 90}, "cote": 3.0}],
+                "sous_risques_course": {"marche": 20},
+                "mise_reference": 10,
+            },
+        )
+
+    reponse = client.get("/api/v1/historique")
+
+    assert reponse.status_code == 200
+    ids_dans_lordre = [l["course_id"] for l in reponse.json()["data"]]
+    ordre_filtre = [cid for cid in ids_dans_lordre if cid in (course_tot["id"], course_tard["id"])]
+    # Une course peut produire plusieurs lignes (un pari chacune) : on ne
+    # vérifie que l'ordre relatif des courses, pas le nombre de lignes.
+    ordre_courses = [cid for i, cid in enumerate(ordre_filtre) if i == 0 or cid != ordre_filtre[i - 1]]
+    assert ordre_courses == [course_tard["id"], course_tot["id"]]
+
+
 def test_historique_sans_filtre_retourne_les_lignes(client):
     reunion, course, detail = _creer_course_avec_analyse_et_pari(client)
 

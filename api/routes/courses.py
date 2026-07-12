@@ -81,6 +81,18 @@ def list_reunions(
     return Enveloppe(data=[ReunionOut.model_validate(r) for r in reunions])
 
 
+@router.get("/reunions/dates", response_model=Enveloppe[list[date]])
+def list_dates_reunions(
+    repo: CourseRepository = Depends(get_course_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
+) -> Enveloppe[list[date]]:
+    """Dates distinctes ayant au moins une réunion — alimente le filtre
+    déroulant de la page Historique (cf. L018 §8). Déclarée avant
+    `/reunions/{reunion_id}` par précaution de lisibilité (le convertisseur
+    `int` de FastAPI ferait de toute façon échouer le match sur "dates")."""
+    return Enveloppe(data=repo.list_dates_reunions())
+
+
 @router.get("/reunions/{reunion_id}", response_model=Enveloppe[ReunionOut])
 def get_reunion(
     reunion_id: int,

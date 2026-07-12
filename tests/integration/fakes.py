@@ -57,6 +57,9 @@ class FakeReferentielRepository:
     def get_discipline(self, discipline_id: int):
         return self.disciplines.get(discipline_id)
 
+    def list_disciplines(self):
+        return list(self.disciplines.values())
+
     def seed_type_course(self, type_course) -> object:
         type_course = dataclasses.replace(type_course, id=self._ids.next())
         self.types_course[type_course.id] = type_course
@@ -178,6 +181,9 @@ class FakeCourseRepository:
             if r.date == jour and (hippodrome_id is None or r.hippodrome_id == hippodrome_id)
         )
         return [self._avec_hippodrome_nom(r) for r in sorted(reunions, key=lambda r: r.numero)]
+
+    def list_dates_reunions(self):
+        return sorted({r.date for r in self.reunions.values()}, reverse=True)
 
     def update_reunion(self, reunion_id: int, champs: dict):
         return self._appliquer_patch(self.reunions, reunion_id, champs)
@@ -676,7 +682,7 @@ class FakeStatistiqueRepository:
         return self.a_calculer_modeles
 
     def create_modele(self, stat):
-        stat = dataclasses.replace(stat, id=self._ids.next())
+        stat = dataclasses.replace(stat, id=self._ids.next(), cree_le=stat.cree_le or datetime.now(timezone.utc))
         self.modeles.append(stat)
         return stat
 
@@ -770,7 +776,16 @@ class FakeHistoriqueRepository:
                         profit_reel=controle.profit if controle else None,
                         valide=controle.valide if controle else None,
                     ))
-        lignes.sort(key=lambda l: (l.date, l.course_numero, l.version), reverse=True)
+        def clef_tri(ligne: HistoriqueLigne):
+            # Même ordre que le SQL réel (`ORDER BY c.heure_depart DESC NULLS
+            # LAST, c.numero, p.id`) : heure_depart décroissante (proxy négatif
+            # pour trier tout en ascendant avec un seul `sort`, cf. course_numero
+            # ci-dessous qui reste croissant), None toujours après une vraie heure.
+            heure_depart = self._courses.get_course(ligne.course_id).heure_depart
+            a_une_heure = heure_depart is not None
+            return (not a_une_heure, -heure_depart.timestamp() if a_une_heure else 0.0, ligne.course_numero, ligne.version)
+
+        lignes.sort(key=clef_tri)
         return lignes[: filtres.limite]
 
     def list_paris_en_cours(self) -> list[ParisEnCoursLigne]:

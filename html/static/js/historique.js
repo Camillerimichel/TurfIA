@@ -97,13 +97,31 @@ async function chargerHippodromes() {
   }
 }
 
+// Liste déroulante des dates réellement présentes (retour utilisateur :
+// « proposer dans une liste déroulante le choix de la date en fonction des
+// dates présentes ») — évite de pouvoir choisir une date sans aucune donnée
+// via un calendrier libre.
+async function chargerDatesDisponibles() {
+  const select = document.getElementById("filtre-date");
+  try {
+    const dates = await apiFetch("/reunions/dates");
+    for (const jour of dates) {
+      const option = document.createElement("option");
+      option.value = jour;
+      option.textContent = jour;
+      select.appendChild(option);
+    }
+  } catch (erreur) {
+    // Filtre non bloquant : la recherche reste utilisable sans la liste des dates.
+  }
+}
+
 async function rechercherHistorique() {
   const conteneur = document.getElementById("section-historique");
   conteneur.textContent = "Chargement…";
 
   const parametres = new URLSearchParams();
-  const dateDebut = document.getElementById("filtre-date-debut").value;
-  const dateFin = document.getElementById("filtre-date-fin").value;
+  const date = document.getElementById("filtre-date").value;
   const hippodromeId = document.getElementById("filtre-hippodrome").value;
   const typePari = document.getElementById("filtre-type-pari").value;
   const decisions = decisionsSelectionnees();
@@ -113,8 +131,10 @@ async function rechercherHistorique() {
     conteneur.appendChild(construireTableau([], COLONNES));
     return;
   }
-  if (dateDebut) parametres.set("date_debut", dateDebut);
-  if (dateFin) parametres.set("date_fin", dateFin);
+  if (date) {
+    parametres.set("date_debut", date);
+    parametres.set("date_fin", date);
+  }
   if (hippodromeId) parametres.set("hippodrome_id", hippodromeId);
   if (typePari) parametres.set("type_pari", typePari);
   // Toutes les décisions cochées = pas de filtrage réel (cf. accueil.js) :
@@ -139,4 +159,5 @@ document.getElementById("formulaire-filtres").addEventListener("submit", (evenem
 });
 
 chargerHippodromes();
+chargerDatesDisponibles();
 rechercherHistorique();

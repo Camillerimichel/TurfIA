@@ -398,6 +398,14 @@ form select {
   font-size: 1rem;
 }
 
+/* Grilles de poids (rejeu, Statistiques) — un input étroit par famille dans
+   un tableau, pas la pleine largeur du formulaire (retour utilisateur : « je
+   dis bien une grille, pas de liste déroulante ou autre »). */
+form input.champ-poids {
+  max-width: 90px;
+  margin-top: 0;
+}
+
 .message-succes {
   color: var(--couleur-accent);
   margin-top: 0.75rem;

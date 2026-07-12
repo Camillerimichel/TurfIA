@@ -85,3 +85,11 @@ class StatistiqueModele:
     stabilite: float | None = None
     parametres: str | None = None
     commentaire: str | None = None
+    # "automatique" (StatistiqueRepository.calculer_modeles — agrégation par
+    # analyses.version, Pré/Finale, PAS un jeu de poids différent) ou "rejeu"
+    # (scripts/rejouer_versions.py, vrai backtest à poids différents) — cf.
+    # PROJECT_STATE.md, retour utilisateur (2026-07-12) : les deux alimentaient
+    # la même table sans distinction, rendant « Comparaison de versions de
+    # modèle » inexploitable (impossible de savoir ce qu'une ligne représente).
+    source: str = "automatique"
+    cree_le: datetime | None = None
