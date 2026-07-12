@@ -324,6 +324,64 @@ th {
   transform: translateX(-1px);
 }
 
+/* Liste "Analyses" de la fiche course (retour utilisateur : les boutons
+   "Sélectionner" étaient moches et mal placés — héritaient du `button`
+   générique, avec sa marge du haut de 1rem, en fin de <li> sans alignement).
+   Chaque ligne devient une rangée : le lien (analyse + décision + date) à
+   gauche, l'action de sélection (badge ou bouton compact) à droite. */
+.liste-analyses {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.liste-analyses li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.4rem;
+  border: 1px solid var(--couleur-bordure);
+  border-radius: 8px;
+}
+
+.liste-analyses li:last-child {
+  margin-bottom: 0;
+}
+
+.liste-analyses-item-selectionnee {
+  border-color: var(--couleur-accent);
+  background: var(--couleur-accent-clair);
+}
+
+.liste-analyses li a {
+  color: var(--couleur-texte);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liste-analyses li a:hover {
+  text-decoration: underline;
+}
+
+.bouton-selectionner {
+  margin-top: 0;
+  flex-shrink: 0;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.85rem;
+  background: transparent;
+  color: var(--couleur-accent);
+  border: 1px solid var(--couleur-accent);
+}
+
+.bouton-selectionner:hover {
+  opacity: 1;
+  background: var(--couleur-accent-clair);
+}
+
 .bloc-reunion, .bloc-modele {
   margin-bottom: 1rem;
   padding-bottom: 1rem;

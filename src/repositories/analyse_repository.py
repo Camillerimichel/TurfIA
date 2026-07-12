@@ -81,12 +81,15 @@ class AnalyseRepository:
             return cur.fetchone()
 
     def list_analyses_by_course(self, course_id: int) -> list[Analyse]:
+        """Version la plus récente en premier (retour utilisateur, 2026-07-12 :
+        « ce sera parfait quand tu placeras les plus récentes en haut ») —
+        affichée telle quelle par la liste « Analyses » de `course.html`."""
         with self._conn.cursor(row_factory=class_row(Analyse)) as cur:
             cur.execute(
                 """
                 SELECT id, course_id, version, date_calcul, score_confiance, risque,
                        roi_theorique, decision, budget, commentaire, source
-                FROM analyses WHERE course_id = %s ORDER BY version
+                FROM analyses WHERE course_id = %s ORDER BY version DESC
                 """,
                 (course_id,),
             )

@@ -150,7 +150,8 @@ function construireTableauParis(detail) {
 async function chargerAnalyseSelectionnee() {
   const analyses = await apiFetch(`/courses/${idCourse}/analyses`);
   if (analyses.length === 0) return null;
-  const selectionnee = analyses.find((a) => a.selectionnee) ?? analyses[analyses.length - 1];
+  const selectionnee =
+    analyses.find((a) => a.selectionnee) ?? analyses.reduce((a, b) => (a.version > b.version ? a : b));
   return apiFetch(`/analyses/${selectionnee.id}`);
 }
 
@@ -257,8 +258,11 @@ async function chargerAnalyses() {
   }
   conteneur.innerHTML = "";
   const liste = document.createElement("ul");
+  liste.className = "liste-analyses";
   for (const analyse of analyses) {
     const item = document.createElement("li");
+    if (analyse.selectionnee) item.classList.add("liste-analyses-item-selectionnee");
+
     const lien = document.createElement("a");
     lien.href = "#";
     const dateCalcul = analyse.date_calcul ? formaterDateHeure(analyse.date_calcul) : "n/a";
@@ -275,11 +279,13 @@ async function chargerAnalyses() {
     if (analyse.selectionnee) {
       const badge = document.createElement("span");
       badge.className = "badge-pilule";
-      badge.textContent = " ★ Sélectionnée";
+      badge.style.backgroundColor = "var(--couleur-accent)";
+      badge.textContent = "★ Sélectionnée";
       item.appendChild(badge);
     } else {
       const boutonSelectionner = document.createElement("button");
       boutonSelectionner.type = "button";
+      boutonSelectionner.className = "bouton-selectionner";
       boutonSelectionner.textContent = "Sélectionner";
       boutonSelectionner.addEventListener("click", async () => {
         await apiFetch(`/courses/${idCourse}/analyses/${analyse.id}/selectionner`, { method: "POST" });
