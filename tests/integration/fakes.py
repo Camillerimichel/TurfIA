@@ -15,6 +15,7 @@ from src.core.exceptions import BusinessRuleError, ImportationError
 from src.models.audit import Audit
 from src.models.historique import GainRecentLigne, HistoriqueLigne, ParisEnCoursLigne
 from src.models.referentiels import Discipline, Distance, EtatPiste, Hippodrome, Surface
+from src.models.statistique import StatistiqueGlobale
 from src.models.technique import Journal, Tache
 from src.services.collecte_service import RapportCollecte
 from src.services.supervision_service import EtatSupervision
@@ -668,7 +669,12 @@ class FakeStatistiqueRepository:
 
     def __init__(self) -> None:
         self._ids = _AutoId()
-        self.a_calculer_globale = None
+        # Le vrai `calculer_globale()` ne renvoie jamais `None` (agrégat
+        # SQL avec COALESCE, toujours un objet même à zéro) — défaut aligné
+        # sur ce contrat plutôt que `None`, pour ne pas planter un test qui
+        # appelle `/statistiques/globale/jours` sans le configurer.
+        self.a_calculer_globale = StatistiqueGlobale()
+        self.a_calculer_globale_par_jour: list = []
         self.a_calculer_scores: list = []
         self.a_calculer_hippodromes: list = []
         self.a_calculer_disciplines: list = []
@@ -683,6 +689,9 @@ class FakeStatistiqueRepository:
 
     def calculer_globale(self):
         return self.a_calculer_globale
+
+    def calculer_globale_par_jour(self):
+        return self.a_calculer_globale_par_jour
 
     def create_globale(self, stat):
         stat = dataclasses.replace(stat, id=self._ids.next(), date_calcul=stat.date_calcul or datetime.now(timezone.utc))

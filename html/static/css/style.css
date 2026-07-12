@@ -182,6 +182,41 @@ th {
   background: var(--couleur-erreur-clair);
 }
 
+/* Ligne de consolidation totale du tableau "Globale" segmenté par jour
+   (retour utilisateur, 2026-07-12). */
+.ligne-total td {
+  font-weight: 700;
+  border-top: 2px solid var(--couleur-bordure);
+}
+
+/* Graphique barre (profit du jour) + courbe (profit cumulé) du bloc
+   "Globale" (retour utilisateur, 2026-07-12) — SVG construit à la main
+   (aucune bibliothèque de graphique dans cette app vanilla JS). */
+.graphique-globale {
+  width: 100%;
+  height: auto;
+  margin-top: 1rem;
+}
+
+.graphique-barre-gain {
+  fill: var(--couleur-accent);
+}
+
+.graphique-barre-perte {
+  fill: var(--couleur-erreur);
+}
+
+.graphique-courbe-cumul {
+  fill: none;
+  stroke: var(--couleur-texte);
+  stroke-width: 2;
+}
+
+.graphique-axe-zero {
+  stroke: var(--couleur-bordure);
+  stroke-width: 1;
+}
+
 /* Les tableaux larges défilent horizontalement plutôt que de casser la mise
    en page sur petit écran (cf. L018 §12). */
 .tableau-scroll {

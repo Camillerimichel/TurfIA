@@ -176,8 +176,12 @@ async function chargerModeles() {
   }
 }
 
-chargerSectionSimple("/statistiques/globale", "section-globale", [
-  { libelle: "Date de calcul", cle: "date_calcul" },
+// Bloc "Globale" : segmenté par jour de course (retour utilisateur,
+// 2026-07-12 : « segmente ce tableau par jour avec une consolidation
+// totale »), avec une ligne "Total" consolidée en bas, puis un graphique
+// barre (profit du jour) + courbe (profit cumulé) sous le tableau.
+const COLONNES_GLOBALE_JOUR = [
+  { libelle: "Jour", cle: "jour" },
   { libelle: "Courses", cle: "nb_courses" },
   { libelle: "Jouées", cle: "nb_jouees" },
   { libelle: "Ignorées", cle: "nb_ignorees" },
@@ -186,7 +190,138 @@ chargerSectionSimple("/statistiques/globale", "section-globale", [
   { libelle: "Profit €", cle: "profit", montant: true },
   { libelle: "ROI %", cle: "roi" },
   { libelle: "Taux réussite (courses) %", cle: "taux_reussite" },
-]);
+];
+
+function construireLigneGlobale(ligne, colonnes) {
+  const tr = document.createElement("tr");
+  for (const colonne of colonnes) {
+    const cellule = document.createElement("td");
+    const brut = ligne[colonne.cle];
+    cellule.textContent = colonne.montant ? formaterMontant(brut) : formaterValeur(brut);
+    tr.appendChild(cellule);
+  }
+  return tr;
+}
+
+// Graphique barre (profit du jour, vert/rouge) + courbe (profit cumulé) —
+// pas de bibliothèque de graphique dans cette app (vanilla JS sans build) :
+// SVG construit à la main, même principe que les jauges linéaires d'Accueil
+// (positionnement calculé en JS) mais en SVG pour tracer la courbe.
+function construireGraphiqueGlobaleJours(jours) {
+  // `jours` du plus récent au plus ancien (comme le tableau) : le graphique
+  // se lit de gauche à droite dans l'ordre chronologique naturel.
+  const joursChrono = [...jours].reverse();
+  const largeur = 800;
+  const hauteur = 260;
+  const marge = { haut: 10, bas: 24, gauche: 55, droite: 10 };
+  const largeurUtile = largeur - marge.gauche - marge.droite;
+  const hauteurUtile = hauteur - marge.haut - marge.bas;
+
+  let cumul = 0;
+  const points = joursChrono.map((j) => {
+    cumul += j.profit ?? 0;
+    return { jour: j.jour, profit: j.profit ?? 0, cumul };
+  });
+
+  const toutesValeurs = points.flatMap((p) => [p.profit, p.cumul]).concat([0]);
+  const min = Math.min(...toutesValeurs);
+  const max = Math.max(...toutesValeurs);
+  const etendue = max - min || 1;
+  const echelleY = (valeur) => marge.haut + hauteurUtile * (1 - (valeur - min) / etendue);
+  const yZero = echelleY(0);
+
+  const n = points.length;
+  const pasX = largeurUtile / n;
+  const xCentre = (i) => marge.gauche + pasX * (i + 0.5);
+  const largeurBarre = Math.max(2, Math.min(28, pasX * 0.6));
+
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${largeur} ${hauteur}`);
+  svg.setAttribute("class", "graphique-globale");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Profit par jour et profit cumulé");
+
+  const ligneZero = document.createElementNS(svgNS, "line");
+  ligneZero.setAttribute("x1", marge.gauche);
+  ligneZero.setAttribute("x2", largeur - marge.droite);
+  ligneZero.setAttribute("y1", yZero);
+  ligneZero.setAttribute("y2", yZero);
+  ligneZero.setAttribute("class", "graphique-axe-zero");
+  svg.appendChild(ligneZero);
+
+  points.forEach((p, i) => {
+    const y0 = echelleY(0);
+    const y1 = echelleY(p.profit);
+    const rect = document.createElementNS(svgNS, "rect");
+    rect.setAttribute("x", xCentre(i) - largeurBarre / 2);
+    rect.setAttribute("y", Math.min(y0, y1));
+    rect.setAttribute("width", largeurBarre);
+    rect.setAttribute("height", Math.max(1, Math.abs(y1 - y0)));
+    rect.setAttribute("class", p.profit >= 0 ? "graphique-barre-gain" : "graphique-barre-perte");
+    const titre = document.createElementNS(svgNS, "title");
+    titre.textContent = `${p.jour} : profit ${formaterMontant(p.profit)} € (cumul ${formaterMontant(p.cumul)} €)`;
+    rect.appendChild(titre);
+    svg.appendChild(rect);
+  });
+
+  const polyligne = document.createElementNS(svgNS, "polyline");
+  polyligne.setAttribute("points", points.map((p, i) => `${xCentre(i)},${echelleY(p.cumul)}`).join(" "));
+  polyligne.setAttribute("class", "graphique-courbe-cumul");
+  svg.appendChild(polyligne);
+
+  return svg;
+}
+
+async function chargerGlobale() {
+  const conteneurTableau = document.getElementById("section-globale");
+  const conteneurGraphique = document.getElementById("graphique-globale-jours");
+  try {
+    const donnees = await apiFetch("/statistiques/globale/jours");
+    conteneurTableau.innerHTML = "";
+
+    const table = document.createElement("table");
+    const entete = document.createElement("thead");
+    const ligneEntete = document.createElement("tr");
+    for (const colonne of COLONNES_GLOBALE_JOUR) {
+      const cellule = document.createElement("th");
+      cellule.textContent = colonne.libelle;
+      ligneEntete.appendChild(cellule);
+    }
+    entete.appendChild(ligneEntete);
+    table.appendChild(entete);
+
+    const corps = document.createElement("tbody");
+    if (donnees.jours.length === 0) {
+      const ligneVide = document.createElement("tr");
+      const cellule = document.createElement("td");
+      cellule.colSpan = COLONNES_GLOBALE_JOUR.length;
+      cellule.textContent = "Aucune donnée.";
+      ligneVide.appendChild(cellule);
+      corps.appendChild(ligneVide);
+    }
+    for (const jour of donnees.jours) {
+      corps.appendChild(construireLigneGlobale(jour, COLONNES_GLOBALE_JOUR));
+    }
+    const ligneTotal = construireLigneGlobale(
+      { ...donnees.total, jour: "Total" },
+      COLONNES_GLOBALE_JOUR,
+    );
+    ligneTotal.className = "ligne-total";
+    corps.appendChild(ligneTotal);
+    table.appendChild(corps);
+    conteneurTableau.appendChild(table);
+
+    conteneurGraphique.innerHTML = "";
+    if (donnees.jours.length > 0) {
+      conteneurGraphique.appendChild(construireGraphiqueGlobaleJours(donnees.jours));
+    }
+  } catch (erreur) {
+    conteneurTableau.textContent = `Erreur : ${erreur.message}`;
+  }
+}
+
+chargerGlobale();
 
 chargerSectionSimple("/statistiques/scores", "section-scores", [
   { libelle: "Score min", cle: "score_min" },

@@ -14,6 +14,7 @@ from src.algorithms.score import SEUILS_DECISION_PAR_DEFAUT
 from src.models.statistique import (
     StatistiqueDiscipline,
     StatistiqueGlobale,
+    StatistiqueGlobaleJour,
     StatistiqueHippodrome,
     StatistiqueModele,
     StatistiquePari,
@@ -32,7 +33,21 @@ def _ratio_pourcentage(numerateur: float, denominateur: float) -> float | None:
 # ligne par version dès qu'une course devenait éligible, gonflant nb_courses/
 # mises/gains d'autant. `a` doit être l'alias de la table `analyses` dans la
 # requête où ce filtre est inséré.
-_DERNIERE_VERSION_COURSE = "a.version = (SELECT MAX(a2.version) FROM analyses a2 WHERE a2.course_id = a.course_id)"
+#
+# Mis à jour le 2026-07-12 (gap réel trouvé en implémentant la sélection
+# manuelle de l'analyse retenue, cf. `analyse_selection`/
+# `AnalyseRepository.get_analyse_selectionnee_id`) : ce filtre ne suivait
+# jusqu'ici QUE la dernière version (MAX(version)), jamais une sélection
+# manuelle — un utilisateur choisissant explicitement une ancienne version
+# pour l'historique/ROI d'une course la voyait ignorée ici, incohérence
+# silencieuse entre l'Historique et les Statistiques. Même motif COALESCE
+# que `historique_repository.py`/`analyse_repository.list_analyses_sans_
+# controle_roi` : sélection manuelle si elle existe, sinon MAX(version)
+# (rétrocompatible pour toute course jamais sélectionnée).
+_ANALYSE_RETENUE_COURSE = """a.id = COALESCE(
+    (SELECT sel.analyse_id FROM analyse_selection sel WHERE sel.course_id = a.course_id),
+    (SELECT a2.id FROM analyses a2 WHERE a2.course_id = a.course_id ORDER BY a2.version DESC LIMIT 1)
+)"""
 
 
 class StatistiqueRepository:
@@ -54,7 +69,7 @@ class StatistiqueRepository:
             cur.execute(
                 f"""
                 SELECT COUNT(DISTINCT course_id) FROM analyses a
-                WHERE budget > 0 AND {_DERNIERE_VERSION_COURSE}
+                WHERE budget > 0 AND {_ANALYSE_RETENUE_COURSE}
                 """
             )
             (nb_jouees,) = cur.fetchone()
@@ -63,7 +78,7 @@ class StatistiqueRepository:
                 SELECT COALESCE(SUM(cr.mise), 0), COALESCE(SUM(cr.gains), 0), COUNT(*), COUNT(*) FILTER (WHERE cr.valide)
                 FROM controle_roi cr
                 JOIN analyses a ON a.id = cr.analyse_id
-                WHERE {_DERNIERE_VERSION_COURSE}
+                WHERE {_ANALYSE_RETENUE_COURSE}
                 """
             )
             mises, gains, nb_controles, nb_valides = cur.fetchone()
@@ -103,6 +118,53 @@ class StatistiqueRepository:
             )
             return cur.fetchone()
 
+    def calculer_globale_par_jour(self) -> list[StatistiqueGlobaleJour]:
+        """Comme `calculer_globale`, mais un agrégat par jour de course
+        (`reunion.date`, pas la date de calcul de l'analyse) au lieu d'un
+        total unique — cf. bloc "Globale" de la page Statistiques (retour
+        utilisateur, 2026-07-12 : « segmente ce tableau par jour avec une
+        consolidation totale » + graphique barre/courbe). Le jour le plus
+        récent en premier ; le total consolidé reste `calculer_globale()`
+        (même filtre `_ANALYSE_RETENUE_COURSE`, donc les deux se recoupent)."""
+        with self._conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT re.date,
+                       COUNT(DISTINCT c.id),
+                       COUNT(DISTINCT c.id) FILTER (WHERE a.budget > 0),
+                       COALESCE(SUM(cr.mise), 0),
+                       COALESCE(SUM(cr.gains), 0),
+                       COUNT(cr.id),
+                       COUNT(cr.id) FILTER (WHERE cr.valide)
+                FROM course c
+                JOIN reunion re ON re.id = c.reunion_id
+                JOIN analyses a ON a.course_id = c.id AND {_ANALYSE_RETENUE_COURSE}
+                LEFT JOIN controle_roi cr ON cr.analyse_id = a.id
+                GROUP BY re.date
+                ORDER BY re.date DESC
+                """
+            )
+            lignes = cur.fetchall()
+
+        resultats = []
+        for jour, nb_courses, nb_jouees, mises, gains, nb_controles, nb_valides in lignes:
+            mises, gains = float(mises), float(gains)
+            profit = gains - mises
+            resultats.append(
+                StatistiqueGlobaleJour(
+                    jour=jour,
+                    nb_courses=nb_courses,
+                    nb_jouees=nb_jouees,
+                    nb_ignorees=nb_courses - nb_jouees,
+                    mises=mises,
+                    gains=gains,
+                    profit=profit,
+                    roi=_ratio_pourcentage(profit, mises),
+                    taux_reussite=_ratio_pourcentage(nb_valides, nb_controles),
+                )
+            )
+        return resultats
+
     def calculer_scores(self) -> list[StatistiqueScore]:
         seuil_prudent, seuil_normal, seuil_opportunite = SEUILS_DECISION_PAR_DEFAUT
         tranches = [
@@ -122,7 +184,7 @@ class StatistiqueRepository:
                     FROM controle_roi cr
                     JOIN analyses a ON a.id = cr.analyse_id
                     WHERE a.score_confiance >= %s AND a.score_confiance {operateur_max} %s
-                      AND {_DERNIERE_VERSION_COURSE}
+                      AND {_ANALYSE_RETENUE_COURSE}
                     """,
                     (score_min, score_max),
                 )
@@ -161,7 +223,7 @@ class StatistiqueRepository:
                 JOIN analyses a ON a.id = cr.analyse_id
                 JOIN course c ON c.id = a.course_id
                 JOIN reunion re ON re.id = c.reunion_id
-                WHERE {_DERNIERE_VERSION_COURSE}
+                WHERE {_ANALYSE_RETENUE_COURSE}
                 GROUP BY re.hippodrome_id
                 """
             )
@@ -211,7 +273,7 @@ class StatistiqueRepository:
                 FROM controle_roi cr
                 JOIN analyses a ON a.id = cr.analyse_id
                 JOIN course c ON c.id = a.course_id
-                WHERE c.discipline_id IS NOT NULL AND {_DERNIERE_VERSION_COURSE}
+                WHERE c.discipline_id IS NOT NULL AND {_ANALYSE_RETENUE_COURSE}
                 GROUP BY c.discipline_id
                 """
             )
@@ -253,7 +315,7 @@ class StatistiqueRepository:
                 FROM controle_roi_pari crp
                 JOIN pari p ON p.id = crp.pari_id
                 JOIN analyses a ON a.id = p.analyse_id
-                WHERE {_DERNIERE_VERSION_COURSE}
+                WHERE {_ANALYSE_RETENUE_COURSE}
                 GROUP BY p.type_pari
                 """
             )
@@ -292,7 +354,7 @@ class StatistiqueRepository:
         alimentent la même table avec des sémantiques différentes, à ne pas
         confondre en lisant `GET /statistiques/modeles` (limite documentée,
         cf. PROJECT_STATE.md, non corrigée ici, hors périmètre). Le filtre
-        `_DERNIERE_VERSION_COURSE` (cf. plus haut) reste appliqué même ici :
+        `_ANALYSE_RETENUE_COURSE` (cf. plus haut) reste appliqué même ici :
         sans lui, une course réanalysée plusieurs fois comptait plusieurs fois
         (une fois par ancienne version), gonflant plusieurs des buckets
         `a.version` simultanément — la confusion Pré/Finale vs jeu de
@@ -307,7 +369,7 @@ class StatistiqueRepository:
                 JOIN analyses a ON a.id = cr.analyse_id
                 JOIN course c ON c.id = a.course_id
                 JOIN reunion re ON re.id = c.reunion_id
-                WHERE {_DERNIERE_VERSION_COURSE}
+                WHERE {_ANALYSE_RETENUE_COURSE}
                 GROUP BY a.version
                 """
             )
