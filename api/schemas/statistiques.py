@@ -92,3 +92,5 @@ class StatistiqueModeleOut(BaseModel):
     stabilite: float | None = None
     parametres: str | None = None
     commentaire: str | None = None
+    source: str = "automatique"
+    cree_le: datetime | None = None

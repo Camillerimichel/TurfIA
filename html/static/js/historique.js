@@ -9,6 +9,18 @@ function formaterValeur(valeur) {
   return valeur;
 }
 
+// Retour utilisateur : « classer par ordre chronologique inversé avec
+// l'heure au format HH:MM » — le tri (c.heure_depart, cf. HistoriqueRepository)
+// était déjà correct, mais l'heure elle-même n'était jamais affichée (seule
+// la date, sans heure) : impossible de voir sur quoi le tri se basait.
+function formaterHeure(valeurIso) {
+  if (!valeurIso) return "—";
+  const date = new Date(valeurIso);
+  if (Number.isNaN(date.getTime())) return "—";
+  const deuxChiffres = (n) => String(n).padStart(2, "0");
+  return `${deuxChiffres(date.getHours())}:${deuxChiffres(date.getMinutes())}`;
+}
+
 function construireTableau(lignes, colonnes) {
   const table = document.createElement("table");
   const entete = document.createElement("thead");
@@ -32,6 +44,11 @@ function construireTableau(lignes, colonnes) {
   }
   for (const ligne of lignes) {
     const tr = document.createElement("tr");
+    // Retour utilisateur : fond coloré selon le contrôle ROI réel — vert
+    // clair pour un gain net, rouge clair pour une perte nette, rien tant
+    // que `valide` n'est pas encore connu (pari sans contrôle calculé).
+    if (ligne.valide === true) tr.classList.add("ligne-gain");
+    else if (ligne.valide === false) tr.classList.add("ligne-perte");
     for (const colonne of colonnes) {
       const cellule = document.createElement("td");
       if (colonne.cle === "course_nom") {
@@ -45,6 +62,8 @@ function construireTableau(lignes, colonnes) {
       } else if (colonne.entier) {
         const brut = ligne[colonne.cle];
         cellule.textContent = brut === null || brut === undefined ? "—" : String(Math.round(brut));
+      } else if (colonne.heure) {
+        cellule.textContent = formaterHeure(ligne[colonne.cle]);
       } else {
         cellule.textContent = formaterValeur(ligne[colonne.cle]);
       }
@@ -67,6 +86,7 @@ function decisionsSelectionnees() {
 
 const COLONNES = [
   { libelle: "Date", cle: "date" },
+  { libelle: "Heure", cle: "heure_depart", heure: true },
   { libelle: "Hippodrome", cle: "hippodrome_nom" },
   { libelle: "Course", cle: "course_nom" },
   { libelle: "Analysée le", cle: "date_calcul" },
@@ -97,13 +117,31 @@ async function chargerHippodromes() {
   }
 }
 
+// Liste déroulante des dates réellement présentes (retour utilisateur :
+// « proposer dans une liste déroulante le choix de la date en fonction des
+// dates présentes ») — évite de pouvoir choisir une date sans aucune donnée
+// via un calendrier libre.
+async function chargerDatesDisponibles() {
+  const select = document.getElementById("filtre-date");
+  try {
+    const dates = await apiFetch("/reunions/dates");
+    for (const jour of dates) {
+      const option = document.createElement("option");
+      option.value = jour;
+      option.textContent = jour;
+      select.appendChild(option);
+    }
+  } catch (erreur) {
+    // Filtre non bloquant : la recherche reste utilisable sans la liste des dates.
+  }
+}
+
 async function rechercherHistorique() {
   const conteneur = document.getElementById("section-historique");
   conteneur.textContent = "Chargement…";
 
   const parametres = new URLSearchParams();
-  const dateDebut = document.getElementById("filtre-date-debut").value;
-  const dateFin = document.getElementById("filtre-date-fin").value;
+  const date = document.getElementById("filtre-date").value;
   const hippodromeId = document.getElementById("filtre-hippodrome").value;
   const typePari = document.getElementById("filtre-type-pari").value;
   const decisions = decisionsSelectionnees();
@@ -113,8 +151,10 @@ async function rechercherHistorique() {
     conteneur.appendChild(construireTableau([], COLONNES));
     return;
   }
-  if (dateDebut) parametres.set("date_debut", dateDebut);
-  if (dateFin) parametres.set("date_fin", dateFin);
+  if (date) {
+    parametres.set("date_debut", date);
+    parametres.set("date_fin", date);
+  }
   if (hippodromeId) parametres.set("hippodrome_id", hippodromeId);
   if (typePari) parametres.set("type_pari", typePari);
   // Toutes les décisions cochées = pas de filtrage réel (cf. accueil.js) :
@@ -139,4 +179,5 @@ document.getElementById("formulaire-filtres").addEventListener("submit", (evenem
 });
 
 chargerHippodromes();
+chargerDatesDisponibles();
 rechercherHistorique();

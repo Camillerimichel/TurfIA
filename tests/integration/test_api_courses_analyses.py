@@ -298,6 +298,19 @@ def test_list_reunions_date_sans_reunion_est_vide(client):
     assert reponse.json()["data"] == []
 
 
+def test_list_dates_reunions_retourne_les_dates_distinctes_triees_desc(client):
+    """cf. page Historique — retour utilisateur : « proposer dans une liste
+    déroulante le choix de la date en fonction des dates présentes »."""
+    client.post("/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": 1, "numero": 1})
+    client.post("/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": 1, "numero": 2})
+    client.post("/api/v1/reunions", json={"date": "2026-07-09", "hippodrome_id": 1, "numero": 1})
+
+    reponse = client.get("/api/v1/reunions/dates")
+
+    assert reponse.status_code == 200
+    assert reponse.json()["data"] == ["2026-07-09", "2026-07-07"]
+
+
 def test_list_reunions_sans_date_utilise_aujourdhui(client):
     reponse = client.get("/api/v1/reunions")
     assert reponse.status_code == 200

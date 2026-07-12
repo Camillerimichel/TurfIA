@@ -12,3 +12,11 @@ class HippodromeOut(BaseModel):
     nom: str
     ville: str | None = None
     pays: str | None = None
+
+
+class DisciplineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    libelle: str
+    description: str | None = None

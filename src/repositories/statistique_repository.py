@@ -40,6 +40,14 @@ class StatistiqueRepository:
         self._conn = conn
 
     def calculer_globale(self) -> StatistiqueGlobale:
+        """`taux_reussite` = % de courses (pas de paris individuels) dont le
+        profit combiné de tous les paris est positif (`controle_roi.valide`,
+        un agrégat par analyse) — même granularité que `calculer_scores`, mais
+        différente de `calculer_paris` (`controle_roi_pari`, une ligne par
+        pari) qui mesure le % de paris individuels gagnants. Même libellé
+        « Taux de réussite » aux deux granularités, distingué côté affichage
+        depuis le 2026-07-12 (« Taux de réussite (courses) » vs « (paris) »,
+        retour utilisateur) — pas un bug, une ambiguïté de nommage clarifiée."""
         with self._conn.cursor() as cur:
             cur.execute("SELECT COUNT(DISTINCT course_id) FROM analyses")
             (nb_courses,) = cur.fetchone()
@@ -311,6 +319,7 @@ class StatistiqueRepository:
                 StatistiqueModele(
                     version_modele=str(version), date_debut=date_debut, date_fin=date_fin, nb_courses=nb_courses,
                     roi=_ratio_pourcentage(gains - mises, mises), taux_reussite=_ratio_pourcentage(nb_valides, nb_courses),
+                    source="automatique",
                 )
             )
         return resultats
@@ -322,11 +331,11 @@ class StatistiqueRepository:
                 INSERT INTO statistique_modele
                     (version_modele, date_debut, date_fin, nb_courses, roi, taux_reussite,
                      roi_par_score, roi_par_hippodrome, roi_par_type_pari, drawdown, stabilite,
-                     parametres, commentaire)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     parametres, commentaire, source)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id, version_modele, date_debut, date_fin, nb_courses, roi, taux_reussite,
                           roi_par_score, roi_par_hippodrome, roi_par_type_pari, drawdown, stabilite,
-                          parametres, commentaire
+                          parametres, commentaire, source, cree_le
                 """,
                 (
                     stat.version_modele,
@@ -342,6 +351,7 @@ class StatistiqueRepository:
                     stat.stabilite,
                     stat.parametres,
                     stat.commentaire,
+                    stat.source,
                 ),
             )
             return cur.fetchone()
@@ -392,9 +402,19 @@ class StatistiqueRepository:
         )
 
     def list_modeles(self) -> list[StatistiqueModele]:
+        # Vrai bug trouvé et corrigé (2026-07-12) : ne sélectionnait pas
+        # roi_par_score/roi_par_hippodrome/roi_par_type_pari/drawdown/
+        # stabilite/parametres/source/cree_le — un rejeu réel
+        # (scripts/rejouer_versions.py) les renseigne pourtant tous, mais
+        # `GET /statistiques/modeles` ne les a jamais renvoyés : le détail
+        # par tranche de score/hippodrome/type de pari de la page
+        # Statistiques était donc systématiquement vide ("Non disponible
+        # pour cette ligne"), quel que soit le contenu réel en base.
         return self._list_dernier_par_groupe(
             "statistique_modele", StatistiqueModele,
-            "id, version_modele, date_debut, date_fin, nb_courses, roi, taux_reussite, commentaire",
+            "id, version_modele, date_debut, date_fin, nb_courses, roi, taux_reussite, commentaire, "
+            "roi_par_score, roi_par_hippodrome, roi_par_type_pari, drawdown, stabilite, parametres, "
+            "source, cree_le",
             "version_modele", "cree_le",
         )
 

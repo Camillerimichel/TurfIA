@@ -78,5 +78,12 @@ CREATE TABLE IF NOT EXISTS statistique_modele (
     stabilite            DECIMAL(8,2),
     parametres           TEXT,
     commentaire          TEXT,
-    cree_le              TIMESTAMP NOT NULL DEFAULT now()
+    -- "automatique" (StatistiqueRepository.calculer_modeles, agrégation
+    -- Pré/Finale par analyses.version) ou "rejeu" (scripts/rejouer_versions.py,
+    -- vrai backtest à poids différents) — cf. PROJECT_STATE.md, retour
+    -- utilisateur (2026-07-12) : les deux alimentaient la même table sans
+    -- distinction possible pour l'utilisateur.
+    source               VARCHAR(20) NOT NULL DEFAULT 'automatique',
+    cree_le              TIMESTAMP NOT NULL DEFAULT now(),
+    CONSTRAINT ck_statistique_modele_source CHECK (source IN ('automatique', 'rejeu'))
 );

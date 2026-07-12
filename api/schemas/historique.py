@@ -16,6 +16,7 @@ class HistoriqueLigneOut(BaseModel):
     course_id: int
     course_numero: int
     course_nom: str
+    heure_depart: datetime | None = None
     analyse_id: int
     version: int
     date_calcul: datetime | None = None
@@ -46,3 +47,20 @@ class ParisEnCoursLigneOut(BaseModel):
     decision: str | None = None
     score_confiance: float | None = None
     budget: float
+
+
+class GainRecentLigneOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    course_id: int
+    course_numero: int
+    course_nom: str
+    heure_depart: datetime | None = None
+    hippodrome_nom: str
+    analyse_id: int
+    decision: str | None = None
+    mise: float
+    gains: float
+    profit: float | None = None
+    roi: float | None = None
+    valide: bool

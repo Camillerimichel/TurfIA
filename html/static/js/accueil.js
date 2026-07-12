@@ -70,7 +70,12 @@ function construireJaugeTauxReussite(taux) {
   }
 
   return construireBlocJauge(
-    `Taux de réussite : ${typeof taux === "number" ? taux.toFixed(2) + " %" : "n/a"}`,
+    // "(courses)" : ce taux mesure le % de courses entières profitables (tous
+    // les paris combinés), pas le % de paris individuels gagnants — retour
+    // utilisateur (2026-07-12), pour éviter la confusion avec le "Taux
+    // réussite (paris) %" du bloc "Par type de pari" (Statistiques), qui
+    // mesure autre chose sous le même nom.
+    `% de réussite (courses) : ${typeof taux === "number" ? taux.toFixed(2) + " %" : "n/a"}`,
     piste
   );
 }
@@ -180,6 +185,70 @@ async function chargerParisEnCours() {
     infos.appendChild(construireBadgeJeu(ligne.decision, ligne.score_confiance));
     bouton.appendChild(infos);
 
+    // Paris proposés (type, combinaison lisible, mise) — pas seulement le
+    // budget global, retour utilisateur : « tu n'as pas mis les paris
+    // proposés dans les lignes des courses ». `ligne.analyse_id` est déjà la
+    // dernière version (cf. HistoriqueRepository.list_paris_en_cours), un
+    // seul appel suffit, pas besoin de rechercher la dernière analyse.
+    try {
+      const detail = await apiFetch(`/analyses/${ligne.analyse_id}`);
+      bouton.appendChild(construireListeParis(detail.paris));
+    } catch (erreur) {
+      const erreurParis = document.createElement("p");
+      erreurParis.className = "note";
+      erreurParis.textContent = `Paris indisponibles : ${erreur.message}`;
+      bouton.appendChild(erreurParis);
+    }
+
+    conteneur.appendChild(bouton);
+  }
+}
+
+// Gains réels des courses arrivées récemment (24 h) — retour utilisateur :
+// « il faut implémenter la récupération des gains dans Accueil ». Une seule
+// ligne par course (`GainRecentLigne` vient d'un JOIN sur `controle_roi`, un
+// agrégat par analyse déjà unique par construction, cf. contrainte SQL
+// `uk_controle_roi_analyse`) — jamais de doublon possible.
+async function chargerGainsRecents() {
+  const conteneur = document.getElementById("widget-gains-recents");
+  let lignes;
+  try {
+    lignes = await apiFetch("/historique/gains-recents");
+  } catch (erreur) {
+    conteneur.textContent = `Erreur (gains récents) : ${erreur.message}`;
+    return;
+  }
+
+  conteneur.innerHTML = "";
+
+  if (lignes.length === 0) {
+    const vide = document.createElement("p");
+    vide.className = "note";
+    vide.textContent = "Aucun gain récent (courses arrivées dans les dernières 24 h avec un contrôle ROI déjà calculé).";
+    conteneur.appendChild(vide);
+    return;
+  }
+
+  for (const ligne of lignes) {
+    const bouton = document.createElement("a");
+    bouton.className = "bouton-pari-en-cours";
+    bouton.href = `/course.html?id=${ligne.course_id}`;
+
+    const titreLigne = document.createElement("div");
+    titreLigne.className = "bouton-pari-en-cours-titre";
+    titreLigne.textContent = `C${ligne.course_numero} — ${ligne.course_nom} (${ligne.hippodrome_nom})`;
+    bouton.appendChild(titreLigne);
+
+    const infos = document.createElement("div");
+    infos.className = "bouton-pari-en-cours-infos";
+    if (ligne.heure_depart) {
+      infos.appendChild(construireBadgeDepart(ligne.heure_depart));
+    }
+    infos.appendChild(construireBadgeBudget(ligne.mise));
+    infos.appendChild(construireBadgeGain(ligne.gains, ligne.profit));
+    infos.appendChild(construireBadgeJeu(ligne.decision, null));
+    bouton.appendChild(infos);
+
     conteneur.appendChild(bouton);
   }
 }
@@ -239,6 +308,41 @@ async function chargerDerniereAnalyse(courseId) {
   return apiFetch(`/analyses/${derniere.id}`);
 }
 
+// Un Quinté Flexi joue plusieurs combinaisons de 5 chevaux à la fois (cf.
+// L031.6 §5) — le pool de chevaux seul ne montre pas les tickets réellement
+// joués. Extrait de `construireBlocParis` pour être réutilisé tel quel par
+// le bloc « Paris en cours à surveiller » (Accueil), qui n'a pas besoin du
+// rappel décision/score/budget déjà affiché par ses propres badges.
+function construireListeParis(paris) {
+  if (paris.length === 0) {
+    const vide = document.createElement("p");
+    vide.textContent = "Aucun pari proposé (budget nul ou aucune catégorie constructible).";
+    return vide;
+  }
+
+  const liste = document.createElement("ul");
+  liste.className = "liste-paris";
+  for (const pari of paris) {
+    const item = document.createElement("li");
+    const selection = pari.combinaison_lisible ?? pari.combinaison ?? "—";
+    item.textContent = `${pari.type_pari} — ${selection} — mise ${formaterMontant(pari.mise)} €`;
+
+    if (pari.sous_combinaisons) {
+      const sousListe = document.createElement("ul");
+      sousListe.className = "liste-paris";
+      for (const combinaison of pari.sous_combinaisons) {
+        const sousItem = document.createElement("li");
+        sousItem.textContent = `${combinaison} — ${formaterMontant(pari.mise_par_combinaison)} €`;
+        sousListe.appendChild(sousItem);
+      }
+      item.appendChild(sousListe);
+    }
+
+    liste.appendChild(item);
+  }
+  return liste;
+}
+
 function construireBlocParis(detail) {
   const bloc = document.createElement("div");
   bloc.className = "bloc-paris";
@@ -254,36 +358,7 @@ function construireBlocParis(detail) {
   miseAJour.textContent = `Analysée le : ${detail.analyse.date_calcul ? formaterDateHeure(detail.analyse.date_calcul) : "n/a"}`;
   bloc.appendChild(miseAJour);
 
-  if (detail.paris.length === 0) {
-    const vide = document.createElement("p");
-    vide.textContent = "Aucun pari proposé (budget nul ou aucune catégorie constructible).";
-    bloc.appendChild(vide);
-    return bloc;
-  }
-
-  const liste = document.createElement("ul");
-  liste.className = "liste-paris";
-  for (const pari of detail.paris) {
-    const item = document.createElement("li");
-    const selection = pari.combinaison_lisible ?? pari.combinaison ?? "—";
-    item.textContent = `${pari.type_pari} — ${selection} — mise ${formaterMontant(pari.mise)} €`;
-
-    // Un Quinté Flexi joue plusieurs combinaisons de 5 chevaux à la fois (cf.
-    // L031.6 §5) — le pool de chevaux seul ne montre pas les tickets réellement joués.
-    if (pari.sous_combinaisons) {
-      const sousListe = document.createElement("ul");
-      sousListe.className = "liste-paris";
-      for (const combinaison of pari.sous_combinaisons) {
-        const sousItem = document.createElement("li");
-        sousItem.textContent = `${combinaison} — ${formaterMontant(pari.mise_par_combinaison)} €`;
-        sousListe.appendChild(sousItem);
-      }
-      item.appendChild(sousListe);
-    }
-
-    liste.appendChild(item);
-  }
-  bloc.appendChild(liste);
+  bloc.appendChild(construireListeParis(detail.paris));
   return bloc;
 }
 
@@ -417,7 +492,54 @@ boutonCoursesImminentes.addEventListener("click", () => {
   chargerReunions(selecteurDate.value);
 });
 
+// -- Actions d'automatisation (copie des boutons Administration) ------------
+// Retour utilisateur : « mets une copie des boutons Collecte/Analyser/
+// Calculer les statistiques dans le bloc ROI » puis « il faut implémenter la
+// récupération des gains » — accès rapide depuis l'Accueil, sans naviguer
+// vers Administration. Mêmes routes que administration.js, mais recharge le
+// ROI global, les paris en cours et les gains récents après coup (impactés
+// par ces actions) plutôt que le tableau des tâches.
+async function declencherAutomatisationAccueil(chemin, libelleConfirmation) {
+  const message = document.getElementById("message-automatisation-accueil");
+  message.hidden = true;
+  message.textContent = "";
+  if (!window.confirm(libelleConfirmation)) return;
+
+  try {
+    const resultat = await apiFetch(chemin, { method: "POST" });
+    message.className = "message-succes";
+    message.textContent =
+      resultat.erreurs && resultat.erreurs.length > 0
+        ? `Terminé, ${resultat.erreurs.length} erreur(s) — voir Administration pour le détail.`
+        : "Terminé.";
+  } catch (erreur) {
+    message.className = "message-erreur";
+    message.textContent = `Erreur : ${erreur.message}`;
+  }
+  message.hidden = false;
+  await chargerRoiGlobal();
+  await chargerParisEnCours();
+  await chargerGainsRecents();
+}
+
+document.getElementById("bouton-collecte-accueil").addEventListener("click", () =>
+  declencherAutomatisationAccueil("/administration/automatisations/collecte", "Collecter le programme du jour ?")
+);
+document.getElementById("bouton-analyse-jour-accueil").addEventListener("click", () =>
+  declencherAutomatisationAccueil(
+    "/administration/automatisations/analyse-jour",
+    "Analyser toutes les courses du jour ?"
+  )
+);
+document.getElementById("bouton-gains-accueil").addEventListener("click", () =>
+  declencherAutomatisationAccueil("/administration/automatisations/gains", "Récupérer les gains réels des courses arrivées ?")
+);
+document.getElementById("bouton-statistiques-accueil").addEventListener("click", () =>
+  declencherAutomatisationAccueil("/administration/automatisations/statistiques", "Recalculer les statistiques ?")
+);
+
 chargerRoiGlobal();
 chargerParisEnCours();
+chargerGainsRecents();
 chargerHippodromes();
 chargerReunions(selecteurDate.value);

@@ -1479,6 +1479,277 @@ Tests : `tests/integration/test_api_statistiques.py::test_list_globale_ne_montre
   - Vérifié : `pytest` (401 passed, aucune régression backend — changement
     HTML/CSS/JS pur), `node --check`, réponses HTTP réelles confirmant que
     le serveur sert bien le nouveau HTML/CSS/JS.
+- **Paris proposés manquants dans « Paris en cours à surveiller » corrigé
+  (2026-07-12, retour utilisateur)** : chaque bouton n'affichait que les
+  badges départ/budget/jeu (résumé), pas le détail des paris réellement
+  proposés (type, combinaison lisible, mise, sous-combinaisons Quinté Flexi)
+  — `GET /historique/paris-en-cours` ne renvoie que le résumé par course, pas
+  la liste des paris. Corrigé côté client : `chargerParisEnCours` appelle
+  désormais `GET /analyses/{ligne.analyse_id}` par course (déjà la dernière
+  version, aucune recherche supplémentaire nécessaire) et affiche la liste
+  via `construireListeParis`, extrait de `construireBlocParis` (utilisé par
+  ailleurs pour « Réunions et paris du jour ») pour éviter toute
+  duplication — n'affiche que la liste, pas le rappel décision/score/budget
+  déjà couvert par les badges de ce bloc. Vérifié : `pytest` (401 passed),
+  `node --check`, et vérifié contre PostgreSQL réel (23 courses en cours,
+  chacune avec au moins un pari réel retrouvé via son `analyse_id`).
+- **Copie des 3 boutons d'automatisation dans le bloc « ROI global »
+  (Accueil, 2026-07-12, retour utilisateur)** : « Collecter le programme du
+  jour »/« Analyser les courses du jour »/« Calculer les statistiques »,
+  jusqu'ici uniquement sur la page Administration, sont désormais aussi
+  accessibles depuis l'Accueil (bloc collant, donc toujours visible) — mêmes
+  3 routes (`/administration/automatisations/collecte`/`analyse-jour`/
+  `statistiques`, réservées au rôle `ADMINISTRATION`, inchangé), nouvelle
+  fonction `declencherAutomatisationAccueil` dans `accueil.js` (confirmation
+  + appel API, comme `administration.js`), mais recharge le ROI global et
+  les paris en cours après coup plutôt que le tableau des tâches (pas
+  présent sur cette page). Pas de changement backend, uniquement HTML/JS.
+  Vérifié : `pytest` (401 passed), `node --check`, réponse HTTP réelle
+  confirmant que les 3 boutons sont bien servis.
+- **Page Statistiques : blocs 2 à 6 en accordéon fermé par défaut
+  (2026-07-12, retour utilisateur)** : « Par tranche de score »/« Par
+  hippodrome »/« Par discipline »/« Par type de pari »/« Comparaison de
+  versions de modèle » deviennent des `<details class="carte">` (même
+  mécanisme natif déjà utilisé par Administration/Accueil, aucun CSS/JS
+  nouveau). Le premier bloc « Globale » reste une `<section>` normale,
+  non repliable. Pas de changement JS (mêmes ID de conteneurs, `statistiques.js`
+  inchangé — un `<details>` fermé garde son contenu chargé, juste masqué).
+  Vérifié : `pytest` (401 passed), réponse HTTP réelle (5 `<details
+  class="carte">` confirmés).
+- **Blocs « Par hippodrome »/« Par discipline » (Statistiques) : noms au lieu
+  des identifiants (2026-07-12, retour utilisateur)** : `hippodrome_id`/
+  `discipline_id` bruts n'étaient jamais résolus dans ces deux tableaux
+  (contrairement à d'autres pages déjà corrigées, ex. Accueil). Nouvelle
+  route `GET /disciplines` (`api/routes/referentiels.py`, même routeur que
+  `/hippodromes` — celui-ci n'avait jusqu'ici qu'un préfixe fixe `/hippodromes`,
+  retiré au profit d'un chemin explicite par route pour permettre d'en
+  ajouter un second ; `ReferentielRepository.list_disciplines` existait déjà,
+  jamais exposée) + `DisciplineOut`. `statistiques.js` charge désormais les
+  deux référentiels une fois (`chargerCarteReferentiel`, `Map` id -> nom) et
+  résout la colonne concernée (repli sur `hippodrome #N`/`discipline #N` si
+  l'identifiant est absent de la carte, jamais une case vide). Vérifié :
+  `pytest` (403 passed, 2 nouveaux tests `test_api_referentiels.py`),
+  `node --check`, vérifié contre PostgreSQL réel (6 disciplines réelles
+  listées : Plat/Trot Attelé/Trot Monté/Haies/Steeple/Cross), route confirmée
+  câblée (401 sans jeton). Périmètre volontairement limité aux 2 blocs
+  demandés initialement.
+- **Suite immédiate (2026-07-12, même retour utilisateur)** : le
+  sous-tableau « Par hippodrome » niché dans « Comparaison de versions de
+  modèle » utilise désormais la même carte `nomHippodrome` (chargée en
+  parallèle de `/statistiques/modeles` via `Promise.all`, `chargerModeles`
+  ne dépendait pas encore de `chargerCarteReferentiel`). Vérifié : `pytest`
+  (403 passed), `node --check`.
+
+- **Refonte du bloc « Comparaison de versions de modèle » (2026-07-12, retour
+  utilisateur : « l'ergonomie est à chier... on ne sait pas à quoi
+  correspondent les différentes versions, on ne sait pas quand elles ont été
+  remplies, on ne peut pas lancer pour les jours précédents »)**. Les 3
+  réparations demandées, toutes faites :
+  1. **Distinction automatique/rejeu** : nouvelle colonne `source` sur
+     `statistique_modele` (`'automatique'` ou `'rejeu'`, `CHECK` en base) —
+     migration `sql/migrations/20260712_1000_source_stat_modele.sql`
+     (`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, cf. convention L013 §7,
+     appliquée réellement avec le rôle `turfia_migration` — `turfia_app` n'a
+     pas le droit d'altérer le schéma). Vérifié réellement : les 38 lignes
+     déjà en base sont bien toutes `'automatique'` (aucun rejeu manuel
+     n'avait encore tourné). `calculer_modeles()` (agrégation Pré/Finale)
+     pose désormais `source="automatique"` explicitement ; `create_modele`
+     accepte et persiste `source`.
+  2. **Horodatage affiché** : `cree_le` existait déjà en base (`DEFAULT
+     now()`) mais n'était jamais sélectionné ni exposé — ajouté à
+     `StatistiqueModele`/`StatistiqueModeleOut`. **Vrai bug trouvé et corrigé
+     en creusant** : `StatistiqueRepository.list_modeles()` (donc `GET
+     /statistiques/modeles`) ne sélectionnait que `id, version_modele,
+     date_debut, date_fin, nb_courses, roi, taux_reussite, commentaire` —
+     ni `roi_par_score`/`roi_par_hippodrome`/`roi_par_type_pari`/`drawdown`/
+     `stabilite`/`parametres` ni `source`/`cree_le`. Un vrai rejeu les
+     renseigne pourtant tous : le détail « par tranche de score/hippodrome/
+     type de pari » de cette page était donc systématiquement vide (« Non
+     disponible pour cette ligne »), quel que soit le contenu réel en base,
+     depuis l'introduction de ces indicateurs (L031.7 §5, 2026-07-09).
+     Corrigé en sélectionnant toutes les colonnes désormais utiles.
+  3. **Formulaire de rejeu dans l'interface** : jusqu'ici seul le CLI
+     `scripts/rejouer_versions.py` permettait de lancer un rejeu (aucun
+     moyen de le faire pour une période passée sans terminal). Logique
+     extraite dans un nouveau service réutilisable `RejeuService`
+     (`src/services/rejeu_service.py`, méthode `rejouer(...)`) — le script
+     CLI n'est plus qu'un fin wrapper autour de ce service (même principe
+     que les 3 autres automatisations déjà exposées en script + route, L033
+     ADR-002 : aucune logique dupliquée). Nouvelle route `POST
+     /administration/rejeu` (`RejeuIn`/`StatistiqueModeleOut`, rôle
+     `ADMINISTRATION`, suivi dans `tache` catégorie `"rejeu"` comme les 3
+     autres automatisations) + formulaire HTML dans le bloc « Comparaison de
+     versions de modèle » (nom de version, dates, poids score/risque en JSON
+     optionnel, commentaire).
+  4. **En plus, non demandé mais nécessaire pour que 1 ait un sens** : le
+     bloc « Comparaison de versions de modèle » ne montre désormais que les
+     lignes `source="rejeu"` (`chargerModeles` filtre côté client) —
+     l'agrégation automatique Pré/Finale continue d'exister en base (le 3ᵉ
+     temps de l'automatisation horaire ne change pas) mais n'est plus
+     affichée dans ce bloc, cohérent avec l'option choisie par l'utilisateur
+     (« l'automatique n'est pas une vraie comparaison de modèles »).
+  - Vérifié : `pytest` (405 passed, 2 nouveaux tests d'intégration
+    `test_declencher_rejeu_recalcule_et_journalise`/
+    `test_declencher_rejeu_sans_courses_eligibles_renvoie_zero`, + RBAC),
+    `node --check`, migration réellement appliquée (`turfia_migration`),
+    `RejeuService.rejouer` exécuté réellement contre PostgreSQL + l'API PMU
+    réelle (transaction annulée, rien persisté) : termine sans erreur,
+    `source="rejeu"`, `cree_le` peuplé. `list_modeles()` revérifié en réel
+    après le correctif : les 6 lignes automatiques existantes exposent
+    désormais bien `source`/`cree_le`.
+  - Limite assumée : le formulaire ne construit pas d'interface dédiée pour
+    les poids par famille (JSON brut dans un champ texte) — cohérent avec le
+    niveau technique déjà attendu ailleurs (mono-utilisateur, mêmes poids
+    que `parametre.poids_score`/`poids_risque`).
+
+- **Grilles de poids éditables à la place des champs JSON bruts
+  (2026-07-12, retour utilisateur : « fais des grilles avec toutes les
+  familles et leurs poids par défaut que l'on peut modifier dans la grille,
+  je dis bien une grille et pas de liste déroulante ou autre »)** :
+  remplace les deux champs texte JSON du formulaire de rejeu par deux vrais
+  tableaux HTML (`<table>`, une ligne par famille, un `<input type="number">`
+  par ligne) — `FAMILLES_SCORE` (marche/presse/forme/aptitude/
+  professionnels/historique/value/contexte) et `FAMILLES_RISQUE` (marche/
+  presse/course/terrain/historique/contexte/statistiques), mêmes clés/ordre
+  que `PONDERATIONS_PAR_DEFAUT` (`src/algorithms/score.py`/`risque.py`).
+  Grilles pré-remplies avec les poids réellement utilisés en production
+  (`GET /administration/parametres`, filtré sur `poids_score.*`/
+  `poids_risque.*`) plutôt qu'une valeur supposée — repli sur 1.0 si un
+  paramètre est absent. À la soumission, `lireGrillePoids` reconstruit un
+  objet complet à partir de TOUTES les lignes de la grille (jamais un
+  sous-ensemble) : élimine de facto le piège documenté plus haut (« omettre
+  une famille du JSON la met à 0, pas à 1.0 ») puisque la grille affiche et
+  envoie toujours les 8/7 familles. Vérifié : `pytest` (405 passed, aucune
+  régression backend), `node --check`, réponse HTTP réelle confirmant que
+  les grilles et leur CSS (`.champ-poids`) sont bien servies.
+
+- **Page Historique : tri chronologique réel + filtre par date en liste
+  déroulante (2026-07-12, retour utilisateur)** :
+  - `HistoriqueRepository.rechercher` triait par `re.date DESC, c.numero, p.id`
+    — deux courses du même jour n'étaient donc pas ordonnées entre elles
+    selon leur heure réelle, seulement par numéro de course. Corrigé :
+    `ORDER BY c.heure_depart DESC NULLS LAST, c.numero, p.id`. Vérifié
+    contre PostgreSQL réel : l'ordre des numéros de course n'est plus
+    strictement croissant/groupé par date (ex. 10, 8, 9, 9, 7, 8, 6...),
+    confirmant un tri réellement basé sur l'heure. `FakeHistoriqueRepository`
+    reproduit le même ordre en mémoire (clef de tri équivalente).
+  - Nouvelle route `GET /reunions/dates` (`CourseRepository.
+    list_dates_reunions`, `SELECT DISTINCT date FROM reunion ORDER BY date
+    DESC`) — remplace les deux champs de date libres (« Du »/« Au ») du
+    filtre Historique par un unique menu déroulant `#filtre-date`, peuplé
+    des dates réellement présentes en base (option « Toutes les dates » en
+    plus). Sélectionner une date envoie `date_debut=date_fin=<date choisie>`
+    à l'API existante (aucun changement du filtrage lui-même, seulement de
+    la manière de choisir la date). Vérifié : `pytest` (407 passed, 2
+    nouveaux tests : `test_list_dates_reunions_retourne_les_dates_distinctes_
+    triees_desc`, `test_historique_trie_par_heure_depart_descendant`),
+    `node --check`, vérifié contre PostgreSQL réel (dates réelles listées :
+    12/07, 11/07, 10/07/2026, tri décroissant confirmé).
+
+- **Récupération des gains dans Accueil (2026-07-12, retour utilisateur :
+  « il faut implémenter la récupération des gains, attention à ne pas
+  générer de doublons »)** — deux volets, tous deux confirmés par
+  l'utilisateur :
+  1. **Nouveau bouton « Récupérer les gains »** dans le bloc ROI global
+     (Accueil), 4ᵉ bouton à côté de Collecte/Analyser/Statistiques.
+     Nouvelle route `POST /administration/automatisations/gains`
+     (`ADMINISTRATION`, suivi `tache` nom `recuperation_gains`) qui appelle
+     **seulement** `ControleRoiService.calculer_controles_manquants()`
+     (contrairement à « Calculer les statistiques » qui fait aussi les 6
+     tables) — action plus légère pour rafraîchir les gains sans attendre le
+     recalcul complet. **Garantie anti-doublon, déjà assurée par la
+     conception existante, pas une nouveauté** : `calculer_controles_
+     manquants` ne retraite que les analyses sans `controle_roi` (`LEFT JOIN
+     ... WHERE cr.id IS NULL`) et la contrainte SQL `uk_controle_roi_analyse`
+     (UNIQUE sur `analyse_id`) empêche structurellement toute ligne double
+     même en cas d'appel concurrent — documenté explicitement dans la
+     docstring de la route plutôt que simplement supposé.
+  2. **Nouveau bloc « Gains récents »** (Accueil, accordéon ouvert par
+     défaut) : une ligne par course arrivée dans les dernières 24 h dont le
+     gain réel est déjà connu. Nouveau modèle `GainRecentLigne`
+     (`src/models/historique.py`), méthode `HistoriqueRepository.
+     list_gains_recents(heures=24)` — `JOIN controle_roi` (pas `LEFT JOIN`) :
+     une course sans contrôle calculé n'apparaît simplement pas, jamais un
+     état intermédiaire ambigu. Nouvelle route `GET /historique/gains-
+     recents`. Unicité par construction : `controle_roi` est déjà un agrégat
+     UNIQUE par analyse (`uk_controle_roi_analyse`), restreint à la dernière
+     version de chaque course (même filtre que `list_paris_en_cours`) — une
+     course ne peut donc apparaître qu'une seule fois, vérifié explicitement
+     par un test dédié et par une assertion `len(ids) == len(set(ids))`
+     contre les 24 lignes réelles retournées en base (fenêtre 48 h, aucun
+     doublon). Affichage : même format « bouton pleine largeur » que « Paris
+     en cours », nouveau badge `construireBadgeGain` (vert si profit ≥ 0,
+     rouge sinon, même logique de couleur que la jauge Gains du ROI global).
+  - Vérifié : `pytest` (401 passed, 6 nouveaux tests : RBAC + `recuperation_
+    gains` + 3× `gains_recents` incluant l'exclusion hors-fenêtre et
+    sans-contrôle), `node --check`, vérifié contre PostgreSQL réel (24
+    courses réelles sur 48 h, aucun doublon confirmé), routes confirmées
+    câblées (401 sans jeton), réponse HTTP réelle confirmant que le 4ᵉ
+    bouton et le nouveau bloc sont bien servis.
+
+- **Deux clarifications demandées (2026-07-12, mêmes échanges)** :
+  1. Libellés « Taux de réussite » désambiguïsés partout où ils apparaissent
+     — vérification contre PostgreSQL réel (calcul manuel indépendant :
+     12 courses profitables / 25 contrôlées = 48,00 %, identique au recalcul
+     en direct, formule confirmée correcte) a aussi montré que le bloc
+     « Globale »/« Par tranche de score » mesure le **% de courses entières
+     profitables** (`controle_roi.valide`, agrégat par analyse) alors que
+     « Par type de pari » mesure le **% de paris individuels gagnants**
+     (`controle_roi_pari.valide`) — même nom, deux granularités
+     différentes. Renommé en « Taux de réussite (courses) » / « (paris) »
+     dans `accueil.js` (jauge ROI global) et les 5 occurrences de
+     `statistiques.js` (Globale, Par tranche de score ×2 dont le détail
+     rejeu, Par type de pari ×2 dont le détail rejeu) ; docstring ajoutée à
+     `StatistiqueRepository.calculer_globale` (n'en avait aucune) précisant
+     cette distinction. Pas un bug — une ambiguïté de nommage.
+  2. **« Le clic sur Calculer les statistiques n'a pas changé le chiffre »**
+     — vérifié via le journal des tâches : le clic signalé a bien trouvé
+     `0 contrôle(s) ROI` à calculer (le run précédent, 26 secondes plus tôt,
+     avait déjà tout traité) ; les deux calculs consécutifs ont donc produit
+     des chiffres rigoureusement identiques faute de toute nouvelle donnée
+     entre les deux — pas un bug de rafraîchissement.
+  3. **Colonne « Heure » ajoutée au tableau Historique (même échange)** : le
+     tri par `c.heure_depart` (corrigé plus haut) n'était jusqu'ici visible
+     nulle part — `heure_depart` absent de `HistoriqueLigne`/
+     `HistoriqueLigneOut`/`_COLONNES`, seule la date (sans heure) était
+     affichée, rendant le tri invisible/incompréhensible pour l'utilisateur.
+     Ajouté aux deux + nouvelle colonne « Heure » (format `HH:MM`,
+     `formaterHeure` dans `historique.js`, nouvel attribut de colonne
+     `heure: true`). Vérifié : `pytest` (401 passed), `node --check` (cas
+     limites : heure normale, `null`, date sans heure), vérifié contre
+     PostgreSQL réel (heures réelles cohérentes avec l'ordre de tri :
+     20:22, 20:06, 19:50, 19:50, 19:34...).
+
+- **Correction du tri Historique (2026-07-12, retour utilisateur : « oups,
+  il faut mettre la dernière date en premier et les courses par ordre
+  chronologique sur les heures/minutes »)** : le tri précédent
+  (`ORDER BY c.heure_depart DESC`) triait sur l'horodatage complet en un
+  seul bloc, mélangeant les jours entre eux selon l'heure de la journée
+  (ex. une course de 20h hier pouvait passer avant une course de 9h
+  aujourd'hui). Corrigé en tri à deux niveaux : `ORDER BY re.date DESC,
+  c.heure_depart ASC NULLS LAST, c.numero, p.id` — la date la plus récente
+  d'abord (regroupement par jour), puis à l'intérieur d'une même date les
+  courses dans l'ordre chronologique naturel (la première du matin avant
+  la dernière du soir, pas l'inverse). `FakeHistoriqueRepository` reproduit
+  la même clé de tri. Test existant réécrit (3 courses sur 2 dates :
+  vérifie explicitement date récente d'abord ET heures croissantes à
+  l'intérieur de la date). Au passage, libellé de la jauge ROI global
+  changé de « Taux de réussite (courses) » à « % de réussite (courses) »
+  (même demande). Vérifié : `pytest` (401 passed), vérifié contre
+  PostgreSQL réel (12/07 en tête, heures croissantes confirmées : 10:15,
+  10:45, 11:15, 11:45, 12:00...).
+
+- **Lignes du tableau Historique colorées selon le contrôle ROI réel
+  (2026-07-12, retour utilisateur)** : fond vert clair (`.ligne-gain`,
+  `var(--couleur-accent-clair)`) pour une ligne dont le contrôle réel est
+  positif (`valide === true`), fond rouge clair (`.ligne-perte`, nouvelle
+  variable `--couleur-erreur-clair: #fbe4e2`) pour une perte
+  (`valide === false`) — rien tant que le contrôle n'est pas encore calculé
+  (`valide` `null`, cf. « Récupérer les gains »). Vérifié contre PostgreSQL
+  réel : `valide` correspond exactement au signe de `profit_reel` sur 15
+  lignes réelles (True ⟺ profit positif, False ⟺ profit négatif, `None` ⟺
+  pas encore contrôlé). `pytest` (401 passed, changement HTML/CSS/JS pur),
+  `node --check`.
 ## Prochaine étape
 
 L'essentiel de la surface API, l'authentification/RBAC réelle, une deuxième

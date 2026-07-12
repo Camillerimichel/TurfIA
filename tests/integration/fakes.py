@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from src.core.exceptions import BusinessRuleError, ImportationError
 from src.models.audit import Audit
-from src.models.historique import HistoriqueLigne, ParisEnCoursLigne
+from src.models.historique import GainRecentLigne, HistoriqueLigne, ParisEnCoursLigne
 from src.models.referentiels import Discipline, Distance, EtatPiste, Hippodrome, Surface
 from src.models.technique import Journal, Tache
 from src.services.collecte_service import RapportCollecte
@@ -56,6 +56,9 @@ class FakeReferentielRepository:
 
     def get_discipline(self, discipline_id: int):
         return self.disciplines.get(discipline_id)
+
+    def list_disciplines(self):
+        return list(self.disciplines.values())
 
     def seed_type_course(self, type_course) -> object:
         type_course = dataclasses.replace(type_course, id=self._ids.next())
@@ -178,6 +181,9 @@ class FakeCourseRepository:
             if r.date == jour and (hippodrome_id is None or r.hippodrome_id == hippodrome_id)
         )
         return [self._avec_hippodrome_nom(r) for r in sorted(reunions, key=lambda r: r.numero)]
+
+    def list_dates_reunions(self):
+        return sorted({r.date for r in self.reunions.values()}, reverse=True)
 
     def update_reunion(self, reunion_id: int, champs: dict):
         return self._appliquer_patch(self.reunions, reunion_id, champs)
@@ -676,7 +682,7 @@ class FakeStatistiqueRepository:
         return self.a_calculer_modeles
 
     def create_modele(self, stat):
-        stat = dataclasses.replace(stat, id=self._ids.next())
+        stat = dataclasses.replace(stat, id=self._ids.next(), cree_le=stat.cree_le or datetime.now(timezone.utc))
         self.modeles.append(stat)
         return stat
 
@@ -748,6 +754,7 @@ class FakeHistoriqueRepository:
                 base = dict(
                     date=reunion.date, hippodrome_id=reunion.hippodrome_id, hippodrome_nom=hippodrome_nom,
                     course_id=course.id, course_numero=course.numero, course_nom=course.nom,
+                    heure_depart=course.heure_depart,
                     analyse_id=analyse.id, version=analyse.version, date_calcul=analyse.date_calcul,
                     decision=analyse.decision,
                     score_confiance=analyse.score_confiance, risque=analyse.risque, budget=analyse.budget,
@@ -770,7 +777,23 @@ class FakeHistoriqueRepository:
                         profit_reel=controle.profit if controle else None,
                         valide=controle.valide if controle else None,
                     ))
-        lignes.sort(key=lambda l: (l.date, l.course_numero, l.version), reverse=True)
+        def clef_tri(ligne: HistoriqueLigne):
+            # Même ordre que le SQL réel (`ORDER BY re.date DESC, c.heure_depart
+            # ASC NULLS LAST, c.numero, p.id`) : date décroissante (proxy négatif
+            # pour trier tout en ascendant avec un seul `sort`), puis heure_depart
+            # croissante (ordre chronologique naturel dans la journée), None
+            # toujours après une vraie heure.
+            heure_depart = self._courses.get_course(ligne.course_id).heure_depart
+            a_une_heure = heure_depart is not None
+            return (
+                -ligne.date.toordinal(),
+                not a_une_heure,
+                heure_depart.timestamp() if a_une_heure else 0.0,
+                ligne.course_numero,
+                ligne.version,
+            )
+
+        lignes.sort(key=clef_tri)
         return lignes[: filtres.limite]
 
     def list_paris_en_cours(self) -> list[ParisEnCoursLigne]:
@@ -799,6 +822,33 @@ class FakeHistoriqueRepository:
                     score_confiance=analyse.score_confiance, budget=analyse.budget,
                 ))
         lignes.sort(key=lambda l: (l.heure_depart is None, l.heure_depart))
+        return lignes
+
+    def list_gains_recents(self, heures: int = 24) -> list[GainRecentLigne]:
+        maintenant = datetime.now()
+        borne_basse = maintenant - timedelta(hours=heures)
+        lignes: list[GainRecentLigne] = []
+        for reunion in self._courses.reunions.values():
+            hippodrome = self._referentiels.hippodromes.get(reunion.hippodrome_id)
+            hippodrome_nom = hippodrome.nom if hippodrome is not None else "?"
+            for course in self._courses.list_courses_by_reunion(reunion.id):
+                if course.heure_depart is None or not (borne_basse <= course.heure_depart <= maintenant):
+                    continue
+                analyses_course = self._analyses.list_analyses_by_course(course.id)
+                if not analyses_course:
+                    continue
+                analyse = max(analyses_course, key=lambda a: a.version)
+                controle = self._analyses.controle_rois.get(analyse.id)
+                if controle is None:
+                    continue
+                lignes.append(GainRecentLigne(
+                    course_id=course.id, course_numero=course.numero, course_nom=course.nom,
+                    heure_depart=course.heure_depart, hippodrome_nom=hippodrome_nom,
+                    analyse_id=analyse.id, decision=analyse.decision,
+                    mise=controle.mise, gains=controle.gains, profit=controle.profit,
+                    roi=controle.roi, valide=controle.valide,
+                ))
+        lignes.sort(key=lambda l: l.heure_depart, reverse=True)
         return lignes
 
 

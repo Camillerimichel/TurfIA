@@ -10,6 +10,7 @@
   --couleur-accent-clair: #e6f2ec;
   --couleur-bordure: #d9dde3;
   --couleur-erreur: #b3261e;
+  --couleur-erreur-clair: #fbe4e2;
 }
 
 * {
@@ -167,6 +168,18 @@ th, td {
 
 th {
   background: var(--couleur-accent-clair);
+}
+
+/* Lignes du tableau Historique (cf. L018 §8) — retour utilisateur : fond
+   coloré selon le contrôle ROI réel de la ligne (`valide`), vert clair pour
+   un gain net, rouge clair pour une perte nette. Pas de couleur tant que le
+   contrôle n'est pas encore calculé (`valide` absent/`null`). */
+.ligne-gain {
+  background: var(--couleur-accent-clair);
+}
+
+.ligne-perte {
+  background: var(--couleur-erreur-clair);
 }
 
 /* Les tableaux larges défilent horizontalement plutôt que de casser la mise
@@ -396,6 +409,14 @@ form select {
   border: 1px solid var(--couleur-bordure);
   border-radius: 4px;
   font-size: 1rem;
+}
+
+/* Grilles de poids (rejeu, Statistiques) — un input étroit par famille dans
+   un tableau, pas la pleine largeur du formulaire (retour utilisateur : « je
+   dis bien une grille, pas de liste déroulante ou autre »). */
+form input.champ-poids {
+  max-width: 90px;
+  margin-top: 0;
 }
 
 .message-succes {

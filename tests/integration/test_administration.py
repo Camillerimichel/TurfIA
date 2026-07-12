@@ -8,7 +8,8 @@ from pathlib import Path
 
 from api.dependencies.auth import get_utilisateur_courant
 from api.main import app
-from src.models.course import Cheval, Cote, Course, Partant, Reunion
+from src.models.analyse import ControleRoi
+from src.models.course import Cheval, Cote, Course, Partant, Resultat, Reunion
 from src.models.statistique import StatistiqueGlobale
 from src.models.technique import Parametre, Version
 from src.models.utilisateur import Role, Utilisateur
@@ -24,8 +25,16 @@ def test_toutes_les_routes_administration_refusent_role_non_administrateur(clien
     assert client.get("/api/v1/administration/parametres").status_code == 403
     assert client.get("/api/v1/administration/supervision").status_code == 403
     assert client.post("/api/v1/administration/automatisations/collecte").status_code == 403
+    assert client.post("/api/v1/administration/automatisations/gains").status_code == 403
     assert client.get("/api/v1/administration/cron").status_code == 403
     assert client.get("/api/v1/administration/cron/journal").status_code == 403
+    assert (
+        client.post(
+            "/api/v1/administration/rejeu",
+            json={"version_modele": "x", "date_debut": "2026-01-01", "date_fin": "2026-01-01"},
+        ).status_code
+        == 403
+    )
 
 
 # -- Tableau de bord Cron ---------------------------------------------------------
@@ -174,6 +183,17 @@ def test_declencher_analyse_jour_ignore_les_courses_deja_parties(client, repos):
     assert corps["nb_erreurs"] == 0
 
 
+def test_declencher_recuperation_gains_calcule_et_journalise(client, repos):
+    repos["controle_roi"].controles = [ControleRoi(analyse_id=1, mise=10.0, gains=15.0, profit=5.0, roi=50.0, valide=True)]
+
+    reponse = client.post("/api/v1/administration/automatisations/gains")
+
+    assert reponse.status_code == 200
+    assert reponse.json()["data"] == {"nb_controles_roi": 1}
+    taches = repos["tache"].lister(categorie="automatisation")
+    assert any(t.nom == "recuperation_gains" and t.statut == "succes" for t in taches)
+
+
 def test_declencher_statistiques_recalcule_et_journalise(client, repos):
     repos["statistiques"].a_calculer_globale = StatistiqueGlobale(nb_courses=0, nb_jouees=0)
 
@@ -182,6 +202,70 @@ def test_declencher_statistiques_recalcule_et_journalise(client, repos):
     assert reponse.status_code == 200
     taches = repos["tache"].lister(categorie="automatisation")
     assert any(t.nom == "calcul_statistiques" and t.statut == "succes" for t in taches)
+
+
+# -- Rejeu (moteur de backtesting, L031.7 §4) --------------------------------------
+
+# cf. tests/fixtures/reference_analyse_non_regression.json — même scénario figé
+# (partant n°1 = Base, score le plus haut) : réutilisé ici pour un rejeu réel.
+_RAPPORTS_PARTANT_1_GAGNANT = [
+    {"typePari": "SIMPLE_GAGNANT", "rembourse": False, "rapports": [{"combinaison": "1", "dividendePourUnEuro": 140}]},
+    {"typePari": "SIMPLE_PLACE", "rembourse": False, "rapports": [{"combinaison": "1", "dividendePourUnEuro": 130}]},
+]
+
+
+def _preparer_course_rejouable(course_repo, jour=date(2026, 1, 1)):
+    reunion = course_repo.create_reunion(Reunion(date=jour, hippodrome_id=1, numero=1))
+    course = course_repo.create_course(Course(reunion_id=reunion.id, numero=1, nom="Course Test Rejeu"))
+    partants_config = [("Cheval Alpha", 2.5, "1p2p1p", 1), ("Cheval Beta", 4.0, "3p4p2p", 2), ("Cheval Gamma", 12.0, "7p8p9p", 3)]
+    dernier_partant = None
+    for nom, cote, musique, numero in partants_config:
+        cheval = course_repo.create_cheval(Cheval(nom=nom))
+        partant = course_repo.create_partant(
+            Partant(course_id=course.id, cheval_id=cheval.id, numero=numero, musique=musique)
+        )
+        course_repo.create_cote(Cote(partant_id=partant.id, operateur="PMU", cote=cote))
+        dernier_partant = partant
+    course_repo.get_or_create_resultat(Resultat(course_id=course.id, partant_id=dernier_partant.id, classement=3))
+    return course
+
+
+def test_declencher_rejeu_recalcule_et_journalise(client, repos):
+    course = _preparer_course_rejouable(repos["course"])
+    repos["pmu_rejeu"].rapports_par_course[(1, 1)] = _RAPPORTS_PARTANT_1_GAGNANT
+
+    reponse = client.post(
+        "/api/v1/administration/rejeu",
+        json={
+            "version_modele": "test-rejeu",
+            "date_debut": "2026-01-01",
+            "date_fin": "2026-01-01",
+            "commentaire": "Test intégration",
+        },
+    )
+
+    assert reponse.status_code == 200
+    corps = reponse.json()["data"]
+    assert corps["version_modele"] == "test-rejeu"
+    assert corps["source"] == "rejeu"
+    assert corps["nb_courses"] == 1
+    assert corps["roi"] is not None
+    assert corps["cree_le"] is not None
+
+    taches = repos["tache"].lister(categorie="rejeu")
+    assert any(t.nom == "rejeu_versions" and t.statut == "succes" for t in taches)
+
+
+def test_declencher_rejeu_sans_courses_eligibles_renvoie_zero(client, repos):
+    reponse = client.post(
+        "/api/v1/administration/rejeu",
+        json={"version_modele": "vide", "date_debut": "2020-01-01", "date_fin": "2020-01-02"},
+    )
+
+    assert reponse.status_code == 200
+    corps = reponse.json()["data"]
+    assert corps["nb_courses"] == 0
+    assert corps["source"] == "rejeu"
 
 
 # -- Sauvegardes ------------------------------------------------------------------

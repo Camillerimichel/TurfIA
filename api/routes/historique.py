@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Query
 from api.dependencies.auth import LECTURE, exiger_roles
 from api.dependencies.db import get_historique_repository
 from api.schemas.common import Enveloppe
-from api.schemas.historique import HistoriqueLigneOut, ParisEnCoursLigneOut
+from api.schemas.historique import GainRecentLigneOut, HistoriqueLigneOut, ParisEnCoursLigneOut
 from src.models.historique import HistoriqueFiltres
 from src.models.utilisateur import Utilisateur
 from src.repositories.historique_repository import HistoriqueRepository
@@ -51,3 +51,14 @@ def paris_en_cours(
     """Courses à budget engagé pas encore parties — cf. page Accueil, bloc
     « ROI global » (liste des paris à surveiller avant leur course)."""
     return Enveloppe(data=[ParisEnCoursLigneOut.model_validate(l) for l in repo.list_paris_en_cours()])
+
+
+@router.get("/gains-recents", response_model=Enveloppe[list[GainRecentLigneOut]])
+def gains_recents(
+    heures: int = 24,
+    repo: HistoriqueRepository = Depends(get_historique_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
+) -> Enveloppe[list[GainRecentLigneOut]]:
+    """Courses arrivées récemment dont le gain réel est déjà connu — cf. page
+    Accueil (retour utilisateur : « implémenter la récupération des gains »)."""
+    return Enveloppe(data=[GainRecentLigneOut.model_validate(l) for l in repo.list_gains_recents(heures)])

@@ -117,6 +117,17 @@ function construireBadgeBudget(montant) {
   return badge;
 }
 
+// Gain réel (Accueil, bloc "Gains récents") — vert si le gain couvre au
+// moins la mise (profit >= 0), rouge sinon, même principe de couleur que
+// construireJaugeGains (accueil.js).
+function construireBadgeGain(gains, profit) {
+  const badge = document.createElement("span");
+  badge.className = "badge-pilule badge-gain";
+  badge.textContent = `Gain : ${formaterMontant(gains)} €`;
+  badge.style.backgroundColor = typeof profit === "number" && profit < 0 ? "var(--couleur-erreur)" : "var(--couleur-accent)";
+  return badge;
+}
+
 // Un seul intervalle global (30s suffit, pas besoin d'une précision à la
 // seconde comme le compte à rebours Cron) : ne fait rien si aucun badge
 // n'est présent sur la page courante.

@@ -28,31 +28,58 @@
       <a class="bouton-lien" href="/historique.html">Voir les courses jouées</a>
     </section>
 
-    <section class="carte">
-      <h2>Par tranche de score</h2>
+    <details class="carte">
+      <summary><h2>Par tranche de score</h2></summary>
       <div class="tableau-scroll" id="section-scores"></div>
-    </section>
+    </details>
 
-    <section class="carte">
-      <h2>Par hippodrome</h2>
+    <details class="carte">
+      <summary><h2>Par hippodrome</h2></summary>
       <div class="tableau-scroll" id="section-hippodromes"></div>
-    </section>
+    </details>
 
-    <section class="carte">
-      <h2>Par discipline</h2>
+    <details class="carte">
+      <summary><h2>Par discipline</h2></summary>
       <div class="tableau-scroll" id="section-disciplines"></div>
-    </section>
+    </details>
 
-    <section class="carte">
-      <h2>Par type de pari</h2>
+    <details class="carte">
+      <summary><h2>Par type de pari</h2></summary>
       <div class="tableau-scroll" id="section-paris"></div>
-    </section>
+    </details>
 
-    <section class="carte">
-      <h2>Comparaison de versions de modèle</h2>
-      <p class="note">Alimenté par <code>scripts/calculer_statistiques.py</code> (agrégation par statut Pré/Finale) et par <code>scripts/rejouer_versions.py</code> (rejeu multi-versions, cf. L031.7 §4-5) — deux sémantiques différentes de « version ».</p>
+    <details class="carte">
+      <summary><h2>Comparaison de versions de modèle</h2></summary>
+      <p class="note">Rejeu manuel d'un historique de courses déjà arrivées avec un jeu de poids différent (cf. L031.7 §4) — persiste une ligne de synthèse par exécution, ne modifie jamais les vraies analyses/paris/contrôles ROI. N'affiche ici que les rejeux réels ; l'agrégation automatique par statut Pré/Finale (<code>scripts/calculer_statistiques.py</code>) n'est pas une comparaison de modèles et n'est plus montrée dans ce bloc.</p>
+      <form id="formulaire-rejeu">
+        <label for="rejeu-version">Nom de la version</label>
+        <input type="text" id="rejeu-version" required placeholder="ex. v2-marche-boost" />
+
+        <label for="rejeu-date-debut">Du</label>
+        <input type="date" id="rejeu-date-debut" required />
+
+        <label for="rejeu-date-fin">Au</label>
+        <input type="date" id="rejeu-date-fin" required />
+
+        <div class="colonnes-deux">
+          <div>
+            <p><strong>Poids score</strong> — familles du Score TurfIA (cf. L031.2 §6)</p>
+            <div id="grille-poids-score">Chargement…</div>
+          </div>
+          <div>
+            <p><strong>Poids risque</strong> — familles du Risque global (cf. L031.3 §5)</p>
+            <div id="grille-poids-risque">Chargement…</div>
+          </div>
+        </div>
+
+        <label for="rejeu-commentaire">Commentaire (optionnel)</label>
+        <input type="text" id="rejeu-commentaire" />
+
+        <button type="submit">Lancer le rejeu</button>
+      </form>
+      <div id="message-rejeu" hidden></div>
       <div class="tableau-scroll" id="section-modeles"></div>
-    </section>
+    </details>
   </main>
 
   <script src="/static/js/api.js"></script>

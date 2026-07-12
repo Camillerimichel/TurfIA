@@ -29,6 +29,7 @@ from api.dependencies.services import (  # noqa: E402
     get_collecte_service,
     get_controle_roi_service,
     get_preparation_service,
+    get_rejeu_service,
     get_statistique_service,
     get_supervision_service,
 )
@@ -39,6 +40,7 @@ from src.services.analyse_service import AnalyseService  # noqa: E402
 from src.services.auth_service import AuthService  # noqa: E402
 from src.services.automatisation_service import AutomatisationService  # noqa: E402
 from src.services.preparation_service import PreparationDonneesService  # noqa: E402
+from src.services.rejeu_service import RejeuService  # noqa: E402
 from src.services.statistique_service import StatistiqueService  # noqa: E402
 from tests.integration.fakes import (  # noqa: E402
     FakeAnalyseRepository,
@@ -50,6 +52,7 @@ from tests.integration.fakes import (  # noqa: E402
     FakeHistoriqueRepository,
     FakeJournalRepository,
     FakeParametreRepository,
+    FakePMUClient,
     FakeReferentielRepository,
     FakeStatistiqueRepository,
     FakeSupervisionService,
@@ -77,6 +80,7 @@ def repos():
     collecte_service = FakeCollecteService()
     controle_roi_service = FakeControleRoiService()
     supervision_service = FakeSupervisionService()
+    pmu_rejeu = FakePMUClient()
     return {
         "referentiel": referentiel_repo,
         "course": course_repo,
@@ -93,6 +97,7 @@ def repos():
         "collecte": collecte_service,
         "controle_roi": controle_roi_service,
         "supervision": supervision_service,
+        "pmu_rejeu": pmu_rejeu,
     }
 
 
@@ -124,6 +129,9 @@ def client(repos):
         AnalyseService(repos["analyse"]),
     )
     app.dependency_overrides[get_statistique_service] = lambda: StatistiqueService(repos["statistiques"])
+    app.dependency_overrides[get_rejeu_service] = lambda: RejeuService(
+        repos["pmu_rejeu"], repos["course"], repos["analyse"], repos["statistiques"]
+    )
     role_admin = Role(id=1, nom="Administrateur")
     utilisateur_test = Utilisateur(id=1, login="test", mot_de_passe="", role_id=1)
     app.dependency_overrides[get_utilisateur_courant] = lambda: (utilisateur_test, role_admin)

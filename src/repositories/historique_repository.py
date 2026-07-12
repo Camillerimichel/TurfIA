@@ -9,11 +9,11 @@ from __future__ import annotations
 import psycopg
 from psycopg.rows import class_row
 
-from src.models.historique import HistoriqueFiltres, HistoriqueLigne, ParisEnCoursLigne
+from src.models.historique import GainRecentLigne, HistoriqueFiltres, HistoriqueLigne, ParisEnCoursLigne
 
 _COLONNES = """
     re.date AS date, re.hippodrome_id AS hippodrome_id, h.nom AS hippodrome_nom,
-    c.id AS course_id, c.numero AS course_numero, c.nom AS course_nom,
+    c.id AS course_id, c.numero AS course_numero, c.nom AS course_nom, c.heure_depart AS heure_depart,
     a.id AS analyse_id, a.version AS version, a.date_calcul AS date_calcul, a.decision AS decision,
     a.score_confiance AS score_confiance, a.risque AS risque, a.budget AS budget,
     p.id AS pari_id, p.type_pari AS type_pari, p.mise AS mise,
@@ -64,7 +64,16 @@ class HistoriqueRepository:
                 LEFT JOIN pari p ON p.analyse_id = a.id
                 LEFT JOIN controle_roi_pari crp ON crp.pari_id = p.id
                 {clause_where}
-                ORDER BY re.date DESC, c.numero, p.id
+                -- Retour utilisateur (2026-07-12, correction du tri initial) :
+                -- la date la plus récente en premier (re.date DESC), puis à
+                -- l'intérieur d'une même date les courses dans l'ordre
+                -- chronologique naturel de la journée (c.heure_depart ASC,
+                -- la première course du matin avant la dernière du soir) —
+                -- pas un tri global unique sur l'horodatage complet, qui
+                -- mélangeait les jours entre eux par heure de la journée.
+                -- NULLS LAST : une course sans heure connue (donnée pas
+                -- encore collectée) passe après celles qui en ont une.
+                ORDER BY re.date DESC, c.heure_depart ASC NULLS LAST, c.numero, p.id
                 LIMIT %s
                 """,
                 valeurs,
@@ -94,5 +103,40 @@ class HistoriqueRepository:
                   AND (c.heure_depart IS NULL OR c.heure_depart > now())
                 ORDER BY c.heure_depart NULLS LAST
                 """
+            )
+            return cur.fetchall()
+
+    def list_gains_recents(self, heures: int = 24) -> list[GainRecentLigne]:
+        """Courses arrivées dans les `heures` dernières heures (défaut 24,
+        borne assumée pour un widget d'accueil — pas d'historique complet,
+        cf. page Historique pour ça) dont le gain réel est déjà connu
+        (`controle_roi`, calculé par `ControleRoiService.
+        calculer_controles_manquants`) — cf. page Accueil, bloc « Gains
+        récents » (retour utilisateur : « implémenter la récupération des
+        gains dans Accueil »). `JOIN controle_roi` (pas `LEFT JOIN`) : une
+        course sans contrôle pas encore calculé n'apparaît simplement pas
+        ici, elle reste dans « Paris en cours » tant que son départ est
+        futur, ou disparaît des deux tant que son contrôle n'est pas encore
+        fait — pas d'état intermédiaire à afficher. Restreint à la dernière
+        version de chaque course, même raison que `list_paris_en_cours`."""
+        with self._conn.cursor(row_factory=class_row(GainRecentLigne)) as cur:
+            cur.execute(
+                """
+                SELECT c.id AS course_id, c.numero AS course_numero, c.nom AS course_nom,
+                       c.heure_depart AS heure_depart, h.nom AS hippodrome_nom,
+                       a.id AS analyse_id, a.decision AS decision,
+                       cr.mise AS mise, cr.gains AS gains, cr.profit AS profit, cr.roi AS roi, cr.valide AS valide
+                FROM course c
+                JOIN reunion re ON re.id = c.reunion_id
+                JOIN hippodrome h ON h.id = re.hippodrome_id
+                JOIN analyses a ON a.course_id = c.id
+                    AND a.version = (SELECT MAX(a2.version) FROM analyses a2 WHERE a2.course_id = c.id)
+                JOIN controle_roi cr ON cr.analyse_id = a.id
+                WHERE c.heure_depart IS NOT NULL
+                  AND c.heure_depart <= now()
+                  AND c.heure_depart >= now() - (%s * INTERVAL '1 hour')
+                ORDER BY c.heure_depart DESC
+                """,
+                (heures,),
             )
             return cur.fetchall()

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
 
@@ -67,6 +67,19 @@ class EtatSupervisionOut(BaseModel):
     taches_en_echec_24h: int
     demarrage_processus: datetime
     uptime_secondes: float
+
+
+class RejeuIn(BaseModel):
+    """Payload du moteur de rejeu (cf. L031.7 §4, `RejeuService.rejouer`) —
+    déclenché depuis l'interface HTML (Statistiques) au lieu du seul CLI
+    `scripts/rejouer_versions.py` (retour utilisateur, 2026-07-12)."""
+
+    version_modele: str
+    date_debut: date
+    date_fin: date
+    poids_score: dict[str, float] | None = None
+    poids_risque: dict[str, float] | None = None
+    commentaire: str | None = None
 
 
 class ErreurCourseOut(BaseModel):

@@ -35,6 +35,7 @@ from src.services.collecte_service import CollecteService
 from src.services.consensus_presse_service import ConsensusPresseService
 from src.services.controle_roi_service import ControleRoiService
 from src.services.preparation_service import PreparationDonneesService
+from src.services.rejeu_service import RejeuService
 from src.services.statistique_service import StatistiqueService
 from src.services.supervision_service import SupervisionService
 from src.repositories.statistique_repository import StatistiqueRepository
@@ -103,6 +104,15 @@ def get_statistique_service(
     repo: StatistiqueRepository = Depends(get_statistique_repository),
 ) -> StatistiqueService:
     return StatistiqueService(repo)
+
+
+def get_rejeu_service(
+    course_repo: CourseRepository = Depends(get_course_repository),
+    analyse_repo: AnalyseRepository = Depends(get_analyse_repository),
+    statistique_repo: StatistiqueRepository = Depends(get_statistique_repository),
+) -> Generator[RejeuService, None, None]:
+    with PMUClient() as pmu_client:
+        yield RejeuService(pmu_client, course_repo, analyse_repo, statistique_repo)
 
 
 def get_supervision_service(
