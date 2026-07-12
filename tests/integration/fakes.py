@@ -430,7 +430,9 @@ class FakeAnalyseRepository:
         return self.analyses.get(analyse_id)
 
     def list_analyses_by_course(self, course_id: int):
-        return [a for a in self.analyses.values() if a.course_id == course_id]
+        # Version la plus récente en premier (cf. AnalyseRepository.list_analyses_by_course).
+        analyses = [a for a in self.analyses.values() if a.course_id == course_id]
+        return sorted(analyses, key=lambda a: a.version, reverse=True)
 
     def get_derniere_version(self, course_id: int) -> int:
         versions = [a.version for a in self.analyses.values() if a.course_id == course_id]
