@@ -133,30 +133,24 @@ async function chargerRoiGlobal() {
     }
   } catch (erreur) {
     conteneur.textContent = `Erreur : ${erreur.message}`;
-    return;
   }
-  await chargerParisEnCours(conteneur);
 }
 
 // Paris déjà engagés (budget > 0) sur des courses pas encore parties — retour
 // utilisateur : « il faut afficher la liste des paris en cours à surveiller
-// avant leur course, avec un lien vers la course ». Rattaché au bloc ROI
-// global (même carte) plutôt qu'un bloc séparé : c'est le même sujet
-// (« où en est mon argent engagé »).
-async function chargerParisEnCours(conteneur) {
+// avant leur course, avec un lien vers la course ». Bloc accordéon séparé du
+// ROI global (celui-ci doit rester visible en permanence, pas ce bloc).
+async function chargerParisEnCours() {
+  const conteneur = document.getElementById("widget-paris-en-cours");
   let lignes;
   try {
     lignes = await apiFetch("/historique/paris-en-cours");
   } catch (erreur) {
-    const erreurParis = document.createElement("p");
-    erreurParis.textContent = `Erreur (paris en cours) : ${erreur.message}`;
-    conteneur.appendChild(erreurParis);
+    conteneur.textContent = `Erreur (paris en cours) : ${erreur.message}`;
     return;
   }
 
-  const titre = document.createElement("h3");
-  titre.textContent = "Paris en cours à surveiller";
-  conteneur.appendChild(titre);
+  conteneur.innerHTML = "";
 
   if (lignes.length === 0) {
     const vide = document.createElement("p");
@@ -181,8 +175,9 @@ async function chargerParisEnCours(conteneur) {
     if (ligne.heure_depart) {
       infos.appendChild(construireBadgeDepart(ligne.heure_depart));
     }
-    infos.appendChild(construireBadgeJeu(ligne.decision, ligne.score_confiance));
+    // Le jeu actuel choisi (décision) juste après la mise (budget), pas avant.
     infos.appendChild(construireBadgeBudget(ligne.budget));
+    infos.appendChild(construireBadgeJeu(ligne.decision, ligne.score_confiance));
     bouton.appendChild(infos);
 
     conteneur.appendChild(bouton);
@@ -423,5 +418,6 @@ boutonCoursesImminentes.addEventListener("click", () => {
 });
 
 chargerRoiGlobal();
+chargerParisEnCours();
 chargerHippodromes();
 chargerReunions(selecteurDate.value);

@@ -1454,6 +1454,31 @@ Tests : `tests/integration/test_api_statistiques.py::test_list_globale_ne_montre
   courses jouées, sans paramètre d'URL nécessaire ; chaque ligne y donne
   accès au score/décision/mise/gain réel/profit réel et un lien vers la
   fiche course. Pas de changement JS/backend, uniquement HTML/CSS.
+- **Page Accueil fragmentée en 3 blocs indépendants (2026-07-12, retour
+  utilisateur)** : jusqu'ici « ROI global » (jauges) et « Paris en cours à
+  surveiller » partageaient la même carte, alimentés en cascade
+  (`chargerRoiGlobal` appelait `chargerParisEnCours` à la fin) — désormais
+  deux fonctions et deux conteneurs indépendants (`#widget-roi-global` /
+  `#widget-paris-en-cours`), chargés en parallèle au démarrage de la page.
+  - « ROI global » (jauges) reste une `<section class="carte carte-sticky">`
+    non repliable — nouvelle classe CSS `position: sticky; top: 0` : reste
+    visible en permanence même en faisant défiler les blocs en dessous.
+  - « Paris en cours à surveiller » devient un `<details class="carte"
+    open>` — bloc accordéon ouvert par défaut, repliable en cliquant
+    n'importe où sur la ligne de titre (même mécanisme natif `<details>/
+    <summary>` déjà utilisé par la page Administration, aucun CSS/JS
+    nouveau nécessaire pour le pliage lui-même).
+  - « Réunions et paris du jour » devient un `<details class="carte">`
+    (sans `open`) — même mécanisme, mais fermé par défaut. Le contenu
+    (filtres, liste des réunions) reste chargé normalement même replié (un
+    `<details>` fermé garde son contenu dans le DOM, juste masqué
+    visuellement — même précédent que l'Administration).
+  - Dans chaque bouton « Paris en cours », le badge de décision (« le jeu
+    actuel choisi ») est désormais affiché juste après le badge de budget
+    (« la mise »), plus avant — ordre : départ, budget, jeu.
+  - Vérifié : `pytest` (401 passed, aucune régression backend — changement
+    HTML/CSS/JS pur), `node --check`, réponses HTTP réelles confirmant que
+    le serveur sert bien le nouveau HTML/CSS/JS.
 ## Prochaine étape
 
 L'essentiel de la surface API, l'authentification/RBAC réelle, une deuxième
