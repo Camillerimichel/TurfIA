@@ -22,13 +22,18 @@
   </header>
 
   <main>
-    <section class="carte">
+    <section class="carte carte-sticky">
       <h2>ROI global</h2>
       <div id="widget-roi-global">Chargement…</div>
     </section>
 
-    <section class="carte">
-      <h2>Réunions et paris du jour</h2>
+    <details class="carte" open>
+      <summary><h2>Paris en cours à surveiller</h2></summary>
+      <div id="widget-paris-en-cours">Chargement…</div>
+    </details>
+
+    <details class="carte">
+      <summary><h2>Réunions et paris du jour</h2></summary>
       <form id="formulaire-filtres-accueil">
         <label for="selecteur-date">Date</label>
         <input type="date" id="selecteur-date" />
@@ -48,7 +53,7 @@
       </form>
       <button type="button" id="bouton-courses-imminentes">Courses à jouer dans l'heure</button>
       <div id="liste-reunions">Chargement…</div>
-    </section>
+    </details>
   </main>
 
   <script src="/static/js/api.js"></script>

@@ -104,6 +104,15 @@ main {
   padding: 1.25rem 1.5rem;
 }
 
+/* Bloc "ROI global" (Accueil) — retour utilisateur : doit rester visible en
+   permanence, y compris pendant le défilement des blocs repliables en
+   dessous (Paris en cours / Réunions du jour). */
+.carte-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
 .carte h2 {
   margin-top: 0;
   font-size: 1.1rem;
