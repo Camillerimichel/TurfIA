@@ -55,12 +55,17 @@ class HistoriqueRepository:
                 FROM reunion re
                 JOIN course c ON c.reunion_id = re.id
                 JOIN hippodrome h ON h.id = re.hippodrome_id
-                -- Seule la dernière version d'analyse de chaque course (cf.
-                -- L033 : la réanalyse horaire crée une nouvelle version à
-                -- chaque passage, sans quoi une même course apparaîtrait une
-                -- fois par version calculée dans la journée).
+                -- Seule l'analyse RETENUE de chaque course (cf. L033 : la
+                -- réanalyse horaire crée une nouvelle version à chaque
+                -- passage, sans quoi une même course apparaîtrait une fois
+                -- par version calculée dans la journée) — la sélection
+                -- manuelle si elle existe (retour utilisateur, 2026-07-12),
+                -- sinon la dernière version (comportement historique).
                 JOIN analyses a ON a.course_id = c.id
-                    AND a.version = (SELECT MAX(a2.version) FROM analyses a2 WHERE a2.course_id = c.id)
+                    AND a.id = COALESCE(
+                        (SELECT sel.analyse_id FROM analyse_selection sel WHERE sel.course_id = c.id),
+                        (SELECT a2.id FROM analyses a2 WHERE a2.course_id = c.id ORDER BY a2.version DESC LIMIT 1)
+                    )
                 LEFT JOIN pari p ON p.analyse_id = a.id
                 LEFT JOIN controle_roi_pari crp ON crp.pari_id = p.id
                 {clause_where}
@@ -85,8 +90,9 @@ class HistoriqueRepository:
         mais qui ne sont pas encore parties — cf. page Accueil, bloc « ROI
         global » (retour utilisateur : « mets la liste des paris en cours à
         surveiller avant leur course avec un lien... vers la course »).
-        Restreint à la dernière version de chaque course, même raison que
-        `rechercher` (cf. L033, réanalyse horaire à version croissante)."""
+        Restreint à l'analyse retenue de chaque course, même raison que
+        `rechercher` (sélection manuelle sinon dernière version, cf. L033,
+        réanalyse horaire à version croissante)."""
         with self._conn.cursor(row_factory=class_row(ParisEnCoursLigne)) as cur:
             cur.execute(
                 """
@@ -98,7 +104,10 @@ class HistoriqueRepository:
                 JOIN reunion re ON re.id = c.reunion_id
                 JOIN hippodrome h ON h.id = re.hippodrome_id
                 JOIN analyses a ON a.course_id = c.id
-                    AND a.version = (SELECT MAX(a2.version) FROM analyses a2 WHERE a2.course_id = c.id)
+                    AND a.id = COALESCE(
+                        (SELECT sel.analyse_id FROM analyse_selection sel WHERE sel.course_id = c.id),
+                        (SELECT a2.id FROM analyses a2 WHERE a2.course_id = c.id ORDER BY a2.version DESC LIMIT 1)
+                    )
                 WHERE a.budget > 0
                   AND (c.heure_depart IS NULL OR c.heure_depart > now())
                 ORDER BY c.heure_depart NULLS LAST
@@ -117,8 +126,8 @@ class HistoriqueRepository:
         course sans contrôle pas encore calculé n'apparaît simplement pas
         ici, elle reste dans « Paris en cours » tant que son départ est
         futur, ou disparaît des deux tant que son contrôle n'est pas encore
-        fait — pas d'état intermédiaire à afficher. Restreint à la dernière
-        version de chaque course, même raison que `list_paris_en_cours`."""
+        fait — pas d'état intermédiaire à afficher. Restreint à l'analyse
+        retenue de chaque course, même raison que `list_paris_en_cours`."""
         with self._conn.cursor(row_factory=class_row(GainRecentLigne)) as cur:
             cur.execute(
                 """
@@ -130,7 +139,10 @@ class HistoriqueRepository:
                 JOIN reunion re ON re.id = c.reunion_id
                 JOIN hippodrome h ON h.id = re.hippodrome_id
                 JOIN analyses a ON a.course_id = c.id
-                    AND a.version = (SELECT MAX(a2.version) FROM analyses a2 WHERE a2.course_id = c.id)
+                    AND a.id = COALESCE(
+                        (SELECT sel.analyse_id FROM analyse_selection sel WHERE sel.course_id = c.id),
+                        (SELECT a2.id FROM analyses a2 WHERE a2.course_id = c.id ORDER BY a2.version DESC LIMIT 1)
+                    )
                 JOIN controle_roi cr ON cr.analyse_id = a.id
                 WHERE c.heure_depart IS NOT NULL
                   AND c.heure_depart <= now()

@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.core.exceptions import (
+    AnalysisError,
     ApplicationError,
     BusinessRuleError,
     ConfigurationError,
@@ -31,6 +32,7 @@ _CODE_MAP: dict[type[ApplicationError], tuple[int, str]] = {
     BusinessRuleError: (409, "BUSINESS_RULE_ERROR"),
     DatabaseError: (500, "DATABASE_ERROR"),
     ConfigurationError: (500, "CONFIGURATION_ERROR"),
+    AnalysisError: (422, "ANALYSE_ERROR"),
 }
 
 

@@ -1,0 +1,11 @@
+-- Permet de choisir manuellement quelle version d'analyse compte pour
+-- l'historique/ROI d'une course (retour utilisateur, 2026-07-12), au lieu du
+-- calcul automatique MAX(version) partout (historique_repository.py,
+-- analyse_repository.list_analyses_sans_controle_roi). `analyse_selection`
+-- est un pointeur mutable séparé : `analyses` reste immuable après création
+-- (ADR-002 de L001). Aucune ligne n'existe encore pour aucune course : le
+-- comportement (COALESCE côté application) retombe donc exactement sur
+-- MAX(version) pour toutes les courses déjà en base, sans backfill.
+
+-- INCLUDE: ../schema/03_analyses.sql
+-- INCLUDE: ../schema/06_grants.sql

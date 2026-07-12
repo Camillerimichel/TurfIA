@@ -28,6 +28,7 @@ from api.dependencies.services import (  # noqa: E402
     get_automatisation_service,
     get_collecte_service,
     get_controle_roi_service,
+    get_ia_analyse_service,
     get_preparation_service,
     get_rejeu_service,
     get_statistique_service,
@@ -50,6 +51,7 @@ from tests.integration.fakes import (  # noqa: E402
     FakeControleRoiService,
     FakeCourseRepository,
     FakeHistoriqueRepository,
+    FakeIaAnalyseService,
     FakeJournalRepository,
     FakeParametreRepository,
     FakePMUClient,
@@ -81,6 +83,7 @@ def repos():
     controle_roi_service = FakeControleRoiService()
     supervision_service = FakeSupervisionService()
     pmu_rejeu = FakePMUClient()
+    ia_analyse_service = FakeIaAnalyseService()
     return {
         "referentiel": referentiel_repo,
         "course": course_repo,
@@ -98,6 +101,7 @@ def repos():
         "controle_roi": controle_roi_service,
         "supervision": supervision_service,
         "pmu_rejeu": pmu_rejeu,
+        "ia": ia_analyse_service,
     }
 
 
@@ -132,6 +136,7 @@ def client(repos):
     app.dependency_overrides[get_rejeu_service] = lambda: RejeuService(
         repos["pmu_rejeu"], repos["course"], repos["analyse"], repos["statistiques"]
     )
+    app.dependency_overrides[get_ia_analyse_service] = lambda: repos["ia"]
     role_admin = Role(id=1, nom="Administrateur")
     utilisateur_test = Utilisateur(id=1, login="test", mot_de_passe="", role_id=1)
     app.dependency_overrides[get_utilisateur_courant] = lambda: (utilisateur_test, role_admin)

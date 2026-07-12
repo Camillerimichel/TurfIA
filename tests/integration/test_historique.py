@@ -180,6 +180,32 @@ def test_historique_ne_montre_que_la_derniere_version_par_course(client):
     assert {l["version"] for l in lignes} == {2}
 
 
+def test_historique_reflete_la_selection_manuelle(client):
+    """Non-régression (retour utilisateur, 2026-07-12) : sélectionner
+    manuellement une ancienne version d'analyse pour une course doit faire
+    remonter CETTE version dans l'historique, pas systématiquement la
+    dernière (cf. `POST .../analyses/{id}/selectionner`)."""
+    reunion, course, detail_v1 = _creer_course_avec_analyse_et_pari(client, version=1)
+    partant_id = int(detail_v1["paris"][0]["combinaison"]) if detail_v1["paris"] else None
+    client.post(
+        f"/api/v1/courses/{course['id']}/analyses",
+        json={
+            "version": 2,
+            "partants": [{"partant_id": partant_id, "sous_scores": {"marche": 90}, "cote": 3.0}],
+            "sous_risques_course": {"marche": 20},
+            "mise_reference": 10,
+        },
+    )
+
+    selection = client.post(f"/api/v1/courses/{course['id']}/analyses/{detail_v1['analyse']['id']}/selectionner")
+    assert selection.status_code == 200
+
+    reponse = client.get("/api/v1/historique")
+    lignes = [l for l in reponse.json()["data"] if l["course_id"] == course["id"]]
+    assert {l["analyse_id"] for l in lignes} == {detail_v1["analyse"]["id"]}
+    assert {l["version"] for l in lignes} == {1}
+
+
 def _creer_reunion_et_course(client, heure_depart=None, numero_reunion=1):
     reunion = client.post(
         "/api/v1/reunions", json={"date": "2026-07-07", "hippodrome_id": 1, "numero": numero_reunion}

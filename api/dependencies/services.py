@@ -34,6 +34,7 @@ from src.services.automatisation_service import AutomatisationService
 from src.services.collecte_service import CollecteService
 from src.services.consensus_presse_service import ConsensusPresseService
 from src.services.controle_roi_service import ControleRoiService
+from src.services.ia_analyse_service import IaAnalyseService
 from src.services.preparation_service import PreparationDonneesService
 from src.services.rejeu_service import RejeuService
 from src.services.statistique_service import StatistiqueService
@@ -98,6 +99,13 @@ def get_controle_roi_service(
 ) -> Generator[ControleRoiService, None, None]:
     with PMUClient() as pmu_client:
         yield ControleRoiService(pmu_client, analyse_repo, course_repo)
+
+
+def get_ia_analyse_service() -> IaAnalyseService:
+    """Aucune sous-dépendance : construit son propre `anthropic.Anthropic()`
+    (clé lue automatiquement depuis `ANTHROPIC_API_KEY` par le SDK, jamais
+    passée manuellement, cf. `.env.example`)."""
+    return IaAnalyseService()
 
 
 def get_statistique_service(

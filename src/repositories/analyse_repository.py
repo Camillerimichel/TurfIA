@@ -34,11 +34,11 @@ class AnalyseRepository:
                         """
                         INSERT INTO analyses (
                             course_id, version, score_confiance, risque, roi_theorique,
-                            decision, budget, commentaire
+                            decision, budget, commentaire, source
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                         RETURNING id, course_id, version, date_calcul, score_confiance, risque,
-                                  roi_theorique, decision, budget, commentaire
+                                  roi_theorique, decision, budget, commentaire, source
                         """,
                         (
                             analyse.course_id,
@@ -49,6 +49,7 @@ class AnalyseRepository:
                             analyse.decision,
                             analyse.budget,
                             analyse.commentaire,
+                            analyse.source,
                         ),
                     )
                     return cur.fetchone()
@@ -72,7 +73,7 @@ class AnalyseRepository:
             cur.execute(
                 """
                 SELECT id, course_id, version, date_calcul, score_confiance, risque,
-                       roi_theorique, decision, budget, commentaire
+                       roi_theorique, decision, budget, commentaire, source
                 FROM analyses WHERE id = %s
                 """,
                 (analyse_id,),
@@ -84,12 +85,56 @@ class AnalyseRepository:
             cur.execute(
                 """
                 SELECT id, course_id, version, date_calcul, score_confiance, risque,
-                       roi_theorique, decision, budget, commentaire
+                       roi_theorique, decision, budget, commentaire, source
                 FROM analyses WHERE course_id = %s ORDER BY version
                 """,
                 (course_id,),
             )
             return cur.fetchall()
+
+    def definir_selection(self, course_id: int, analyse_id: int) -> None:
+        """Fige manuellement quelle analyse compte pour l'historique/ROI de
+        cette course (retour utilisateur, 2026-07-12), remplaçant le calcul
+        automatique MAX(version) tant qu'aucune sélection n'existe (cf.
+        `get_analyse_selectionnee_id`, COALESCE côté lecture)."""
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO analyse_selection (course_id, analyse_id)
+                VALUES (%s, %s)
+                ON CONFLICT (course_id) DO UPDATE SET analyse_id = EXCLUDED.analyse_id, defini_le = now()
+                """,
+                (course_id, analyse_id),
+            )
+
+    def get_analyse_selectionnee_id(self, course_id: int) -> int | None:
+        """Id de l'analyse qui compte pour cette course : la sélection
+        manuelle si elle existe (`analyse_selection`), sinon la version la
+        plus élevée (comportement historique, inchangé pour toute course
+        n'ayant jamais eu de sélection explicite)."""
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COALESCE(
+                    (SELECT sel.analyse_id FROM analyse_selection sel WHERE sel.course_id = %s),
+                    (SELECT a.id FROM analyses a WHERE a.course_id = %s ORDER BY a.version DESC LIMIT 1)
+                )
+                """,
+                (course_id, course_id),
+            )
+            row = cur.fetchone()
+            return row[0] if row else None
+
+    def get_controle_roi_by_analyse(self, analyse_id: int) -> ControleRoi | None:
+        with self._conn.cursor(row_factory=class_row(ControleRoi)) as cur:
+            cur.execute(
+                """
+                SELECT id, analyse_id, mise, gains, profit, roi, valide, commentaire
+                FROM controle_roi WHERE analyse_id = %s
+                """,
+                (analyse_id,),
+            )
+            return cur.fetchone()
 
     def create_analyse_partant(self, ap: AnalysePartant) -> AnalysePartant:
         with self._conn.cursor(row_factory=class_row(AnalysePartant)) as cur:
@@ -179,24 +224,32 @@ class AnalyseRepository:
         """Analyses ayant au moins un pari (donc une mise réellement engagée) mais
         pas encore de `controle_roi` — cf. `ControleRoiService`.
 
-        Restreint à la DERNIÈRE version de chaque course (`a.version = MAX(...)`) :
-        sans ce filtre, une course réanalysée plusieurs fois avant son départ
-        (cf. L033, automatisation horaire à version croissante) recevait un
-        `controle_roi` distinct pour CHACUNE de ses anciennes versions dès
-        qu'elle devenait éligible (départ + marge d'homologation) — bug réel
-        corrigé le 2026-07-10 (cf. PROJECT_STATE.md) : vérifié en base, une
-        course réanalysée 4 fois avant son départ comptait pour 4 dans
-        `statistique_globale`/`statistique_score`/etc. au lieu d'une seule."""
+        Restreint à l'analyse RETENUE de chaque course (sélection manuelle si
+        elle existe, sinon la dernière version, même motif COALESCE que
+        `get_analyse_selectionnee_id`) : sans ce filtre, une course réanalysée
+        plusieurs fois avant son départ (cf. L033, automatisation horaire à
+        version croissante) recevait un `controle_roi` distinct pour CHACUNE
+        de ses anciennes versions dès qu'elle devenait éligible (départ +
+        marge d'homologation) — bug réel corrigé le 2026-07-10 (cf.
+        PROJECT_STATE.md) : vérifié en base, une course réanalysée 4 fois
+        avant son départ comptait pour 4 dans `statistique_globale`/
+        `statistique_score`/etc. au lieu d'une seule. Le passage de
+        `MAX(version)` à ce COALESCE (2026-07-12) préserve ce comportement
+        pour toute course sans sélection manuelle, et permet en plus de
+        calculer le ROI d'une ancienne version explicitement choisie."""
         with self._conn.cursor(row_factory=class_row(Analyse)) as cur:
             cur.execute(
                 """
                 SELECT a.id, a.course_id, a.version, a.date_calcul, a.score_confiance, a.risque,
-                       a.roi_theorique, a.decision, a.budget, a.commentaire
+                       a.roi_theorique, a.decision, a.budget, a.commentaire, a.source
                 FROM analyses a
                 LEFT JOIN controle_roi cr ON cr.analyse_id = a.id
                 WHERE cr.id IS NULL
                   AND EXISTS (SELECT 1 FROM pari p WHERE p.analyse_id = a.id)
-                  AND a.version = (SELECT MAX(a2.version) FROM analyses a2 WHERE a2.course_id = a.course_id)
+                  AND a.id = COALESCE(
+                        (SELECT sel.analyse_id FROM analyse_selection sel WHERE sel.course_id = a.course_id),
+                        (SELECT a2.id FROM analyses a2 WHERE a2.course_id = a.course_id ORDER BY a2.version DESC LIMIT 1)
+                      )
                 ORDER BY a.id
                 """
             )

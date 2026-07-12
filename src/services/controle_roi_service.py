@@ -89,6 +89,29 @@ class ControleRoiService:
                 controles.append(controle)
         return controles
 
+    def calculer_controle_pour_analyse(self, analyse_id: int, maintenant: datetime | None = None) -> ControleRoi | None:
+        """Calcule et persiste le contrôle ROI d'UNE analyse précise, sans
+        rescanner tout l'organisme (contrairement à
+        `calculer_controles_manquants`) — utilisé quand l'utilisateur
+        sélectionne manuellement une ancienne version d'analyse pour une
+        course déjà arrivée (retour utilisateur, 2026-07-12) : la version
+        choisie n'a peut-être encore jamais eu de contrôle ROI (seule la
+        dernière version en recevait un jusqu'ici, cf.
+        `list_analyses_sans_controle_roi`). Réutilise `_calculer_un_controle`
+        tel quel — mêmes règles d'éligibilité (course arrivée + marge
+        d'homologation) et de dérivation (`mise_totale == 0` -> `None`, pas de
+        vérification `EXISTS pari` séparée nécessaire)."""
+        maintenant = maintenant if maintenant is not None else datetime.now()
+        analyse = self._analyses.get_analyse(analyse_id)
+        if analyse is None or self._analyses.get_controle_roi_by_analyse(analyse_id) is not None:
+            return None
+        course = self._courses.get_course(analyse.course_id)
+        if course is None or course.heure_depart is None or (
+            course.heure_depart + timedelta(minutes=MARGE_HOMOLOGATION_MINUTES) > maintenant
+        ):
+            return None
+        return self._calculer_un_controle(analyse, course)
+
     def _calculer_un_controle(self, analyse: Analyse, course: Course) -> ControleRoi | None:
         reunion = self._courses.get_reunion(course.reunion_id)
 

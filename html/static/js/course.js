@@ -143,25 +143,27 @@ function construireTableauParis(detail) {
   return conteneur;
 }
 
-// Dernière analyse d'une course (version la plus élevée = la plus récente) et
-// ses paris — `null` si pas encore analysée (cf. accueil.js, même logique).
-async function chargerDerniereAnalyse() {
+// Analyse retenue pour cette course (sélection manuelle si elle existe,
+// sinon dernière version — cf. `AnalyseRepository.get_analyse_selectionnee_id`,
+// champ `selectionnee` renvoyé par `GET /courses/{id}/analyses`) et ses paris
+// — `null` si pas encore analysée (cf. accueil.js, même logique).
+async function chargerAnalyseSelectionnee() {
   const analyses = await apiFetch(`/courses/${idCourse}/analyses`);
   if (analyses.length === 0) return null;
-  const derniere = [...analyses].sort((a, b) => b.version - a.version)[0];
-  return apiFetch(`/analyses/${derniere.id}`);
+  const selectionnee = analyses.find((a) => a.selectionnee) ?? analyses[analyses.length - 1];
+  return apiFetch(`/analyses/${selectionnee.id}`);
 }
 
-// Bloc "Pari" : toujours la dernière analyse connue, sans avoir à cliquer
-// dans "Analyses" — c'est l'information la plus directement actionnable de
-// la fiche course (retour utilisateur, cf. PROJECT_STATE.md).
+// Bloc "Pari" : toujours l'analyse retenue, sans avoir à cliquer dans
+// "Analyses" — c'est l'information la plus directement actionnable de la
+// fiche course (retour utilisateur, cf. PROJECT_STATE.md).
 async function chargerPari() {
   const conteneur = document.getElementById("section-pari");
   conteneur.textContent = "Chargement…";
   try {
-    const detail = await chargerDerniereAnalyse();
+    const detail = await chargerAnalyseSelectionnee();
     if (detail === null) {
-      conteneur.textContent = "Pas encore analysée — déclencher une analyse ci-dessous.";
+      conteneur.textContent = "Pas encore analysée — déclencher une analyse ci-dessus.";
       return;
     }
     conteneur.innerHTML = "";
@@ -174,10 +176,18 @@ async function chargerPari() {
 
     const miseAJour = document.createElement("p");
     miseAJour.className = "note";
-    miseAJour.textContent = `Analyse #${detail.analyse.id} (v${detail.analyse.version}) — calculée le ${
+    const badgeIa = detail.analyse.source === "ia" ? " [IA]" : "";
+    miseAJour.textContent = `Analyse #${detail.analyse.id} (v${detail.analyse.version})${badgeIa} — calculée le ${
       detail.analyse.date_calcul ? formaterDateHeure(detail.analyse.date_calcul) : "n/a"
     }`;
     conteneur.appendChild(miseAJour);
+
+    if (detail.analyse.commentaire) {
+      const synthese = document.createElement("p");
+      synthese.className = "note";
+      synthese.textContent = `Synthèse IA : ${detail.analyse.commentaire}`;
+      conteneur.appendChild(synthese);
+    }
 
     conteneur.appendChild(construireTableauParis(detail));
   } catch (erreur) {
@@ -188,13 +198,21 @@ async function chargerPari() {
 function formaterDetailAnalyse(detail) {
   const conteneur = document.createElement("div");
   const titre = document.createElement("h3");
-  titre.textContent = `Analyse #${detail.analyse.id} — décision : ${detail.analyse.decision ?? "n/a"}`;
+  const badgeIa = detail.analyse.source === "ia" ? " [IA]" : "";
+  titre.textContent = `Analyse #${detail.analyse.id}${badgeIa} — décision : ${detail.analyse.decision ?? "n/a"}`;
   conteneur.appendChild(titre);
 
   const miseAJour = document.createElement("p");
   miseAJour.className = "note";
   miseAJour.textContent = `Calculée le : ${detail.analyse.date_calcul ? formaterDateHeure(detail.analyse.date_calcul) : "n/a"}`;
   conteneur.appendChild(miseAJour);
+
+  if (detail.analyse.commentaire) {
+    const synthese = document.createElement("p");
+    synthese.className = "note";
+    synthese.textContent = `Synthèse IA : ${detail.analyse.commentaire}`;
+    conteneur.appendChild(synthese);
+  }
 
   const resume = document.createElement("p");
   resume.textContent =
@@ -244,7 +262,8 @@ async function chargerAnalyses() {
     const lien = document.createElement("a");
     lien.href = "#";
     const dateCalcul = analyse.date_calcul ? formaterDateHeure(analyse.date_calcul) : "n/a";
-    lien.textContent = `Analyse #${analyse.id} (v${analyse.version}) — ${analyse.decision ?? "n/a"} — ${dateCalcul}`;
+    const badgeIa = analyse.source === "ia" ? " [IA]" : "";
+    lien.textContent = `Analyse #${analyse.id} (v${analyse.version})${badgeIa} — ${analyse.decision ?? "n/a"} — ${dateCalcul}`;
     lien.addEventListener("click", async (evenement) => {
       evenement.preventDefault();
       const detail = await apiFetch(`/analyses/${analyse.id}`);
@@ -252,6 +271,23 @@ async function chargerAnalyses() {
       detailConteneur.appendChild(formaterDetailAnalyse(detail));
     });
     item.appendChild(lien);
+
+    if (analyse.selectionnee) {
+      const badge = document.createElement("span");
+      badge.className = "badge-pilule";
+      badge.textContent = " ★ Sélectionnée";
+      item.appendChild(badge);
+    } else {
+      const boutonSelectionner = document.createElement("button");
+      boutonSelectionner.type = "button";
+      boutonSelectionner.textContent = "Sélectionner";
+      boutonSelectionner.addEventListener("click", async () => {
+        await apiFetch(`/courses/${idCourse}/analyses/${analyse.id}/selectionner`, { method: "POST" });
+        await chargerAnalyses();
+        await chargerPari();
+      });
+      item.appendChild(boutonSelectionner);
+    }
     liste.appendChild(item);
   }
   conteneur.appendChild(liste);
@@ -262,7 +298,14 @@ document.getElementById("formulaire-analyse").addEventListener("submit", async (
   const message = document.getElementById("message-analyse");
   message.hidden = true;
 
-  if (!window.confirm("Déclencher une nouvelle analyse pour cette course ?")) {
+  // Deux boutons de soumission dans le même formulaire (auto/IA, cf.
+  // retour utilisateur 2026-07-12) — `submitter` indique lequel a été
+  // cliqué pour choisir la route et adapter les messages.
+  const viaIa = evenement.submitter && evenement.submitter.id === "bouton-analyse-ia";
+  const texteConfirmation = viaIa
+    ? "Lancer l'analyse IA (Claude Sonnet 5, coût ≈ 0,02-0,04 $) pour cette course ?"
+    : "Déclencher une nouvelle analyse pour cette course ?";
+  if (!window.confirm(texteConfirmation)) {
     return;
   }
 
@@ -277,11 +320,13 @@ document.getElementById("formulaire-analyse").addEventListener("submit", async (
       perte_precedente: document.getElementById("perte-precedente").checked,
     };
 
-    const detail = await apiFetch(`/courses/${idCourse}/analyses/auto`, {
+    const route = viaIa ? "ia" : "auto";
+    const detail = await apiFetch(`/courses/${idCourse}/analyses/${route}`, {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    message.textContent = `Analyse #${detail.analyse.id} créée — décision : ${detail.analyse.decision ?? "n/a"}.`;
+    const suffixe = viaIa ? " (IA)" : "";
+    message.textContent = `Analyse #${detail.analyse.id} créée${suffixe} — décision : ${detail.analyse.decision ?? "n/a"}.`;
     message.hidden = false;
     await chargerAnalyses();
     await chargerPari();

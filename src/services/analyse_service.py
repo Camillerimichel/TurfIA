@@ -80,6 +80,8 @@ class AnalyseService:
         budget_precedent: float = 0.0,
         perte_precedente: bool = False,
         persister: bool = True,
+        commentaire: str | None = None,
+        source: str = "manuel",
     ) -> ResultatAnalyse:
         if not partants:
             raise ValidationError("Une analyse nécessite au moins un partant.")
@@ -153,6 +155,8 @@ class AnalyseService:
             roi_theorique=round(roi_course, 2),
             decision=decision,
             budget=budget,
+            commentaire=commentaire,
+            source=source,
         )
 
         selections: list[Selection] = []

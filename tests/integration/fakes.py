@@ -405,6 +405,7 @@ class FakeAnalyseRepository:
         self.paris: dict[int, list] = {}
         self.controle_rois: dict[int, object] = {}  # keyed by analyse_id
         self.controle_roi_paris: dict[int, object] = {}  # keyed by pari_id
+        self.selections_manuelles: dict[int, int] = {}  # course_id -> analyse_id
 
     def create_analyse(self, analyse):
         # Reproduit la contrainte UNIQUE(course_id, version) réelle (cf.
@@ -435,6 +436,20 @@ class FakeAnalyseRepository:
         versions = [a.version for a in self.analyses.values() if a.course_id == course_id]
         return max(versions) if versions else 0
 
+    def definir_selection(self, course_id: int, analyse_id: int) -> None:
+        self.selections_manuelles[course_id] = analyse_id
+
+    def get_analyse_selectionnee_id(self, course_id: int) -> int | None:
+        if course_id in self.selections_manuelles:
+            return self.selections_manuelles[course_id]
+        analyses_course = [a for a in self.analyses.values() if a.course_id == course_id]
+        if not analyses_course:
+            return None
+        return max(analyses_course, key=lambda a: a.version).id
+
+    def get_controle_roi_by_analyse(self, analyse_id: int):
+        return self.controle_rois.get(analyse_id)
+
     def create_analyse_partant(self, ap):
         ap = dataclasses.replace(ap, id=self._ids.next())
         self.analyse_partants[ap.analyse_id].append(ap)
@@ -463,7 +478,9 @@ class FakeAnalyseRepository:
         return [
             a
             for a in self.analyses.values()
-            if a.id not in self.controle_rois and self.paris.get(a.id)
+            if a.id not in self.controle_rois
+            and self.paris.get(a.id)
+            and a.id == self.get_analyse_selectionnee_id(a.course_id)
         ]
 
     def create_controle_roi(self, controle):
@@ -613,6 +630,34 @@ class FakeConsensusPresseService:
         return self.classements
 
 
+class FakeIaAnalyseService:
+    """Remplace IaAnalyseService dans les tests d'intégration — aucun appel
+    réseau à l'API Anthropic (même principe que FakeConsensusPresseService).
+    `scores_par_partant`/`synthese` cannés, configurables par le test ; `echec`
+    (optionnel) simule un échec de l'analyse IA (réseau, refus, réponse
+    malformée) sans avoir à réellement casser un client HTTP."""
+
+    def __init__(
+        self,
+        scores_par_partant: dict[int, tuple[float, float]] | None = None,
+        synthese: str = "Synthèse IA de test.",
+        echec: Exception | None = None,
+    ) -> None:
+        self.scores_par_partant = scores_par_partant if scores_par_partant is not None else {}
+        self.synthese = synthese
+        self.echec = echec
+        self.appels: list[tuple] = []  # (contexte_course, contextes_partants) reçus
+
+    def analyser(self, course, partants):
+        self.appels.append((course, partants))
+        if self.echec is not None:
+            raise self.echec
+        from src.services.ia_analyse_service import ResultatIa
+
+        scores = self.scores_par_partant or {p.partant_id: (50.0, 50.0) for p in partants}
+        return ResultatIa(scores_par_partant=scores, synthese=self.synthese)
+
+
 class FakeStatistiqueRepository:
     """Remplace StatistiqueRepository — pas de recalcul d'agrégation en mémoire
     (déjà vérifié contre une instance PostgreSQL réelle, cf. PROJECT_STATE.md) :
@@ -729,6 +774,16 @@ class FakeHistoriqueRepository:
         self._analyses = analyse_repo
         self._referentiels = referentiel_repo
 
+    def _analyse_effective(self, course_id: int):
+        """Analyse qui compte pour cette course : sélection manuelle si elle
+        existe (`AnalyseRepository.get_analyse_selectionnee_id`), sinon la
+        dernière version — même comportement que le COALESCE SQL réel."""
+        analyses_course = self._analyses.list_analyses_by_course(course_id)
+        if not analyses_course:
+            return None
+        selectionnee_id = self._analyses.get_analyse_selectionnee_id(course_id)
+        return self._analyses.get_analyse(selectionnee_id) if selectionnee_id is not None else None
+
     def rechercher(self, filtres) -> list[HistoriqueLigne]:
         lignes: list[HistoriqueLigne] = []
         for reunion in self._courses.reunions.values():
@@ -742,13 +797,13 @@ class FakeHistoriqueRepository:
             hippodrome_nom = hippodrome.nom if hippodrome is not None else "?"
 
             for course in self._courses.list_courses_by_reunion(reunion.id):
-                # Seule la dernière version d'analyse de chaque course (cf.
-                # L033 : la réanalyse horaire crée une nouvelle version à chaque
+                # Seule l'analyse retenue de chaque course (sélection manuelle
+                # si elle existe, sinon dernière version — cf. L033, la
+                # réanalyse horaire crée une nouvelle version à chaque
                 # passage) — même comportement que la requête SQL réelle.
-                analyses_course = self._analyses.list_analyses_by_course(course.id)
-                if not analyses_course:
+                analyse = self._analyse_effective(course.id)
+                if analyse is None:
                     continue
-                analyse = max(analyses_course, key=lambda a: a.version)
                 if filtres.decisions and analyse.decision not in filtres.decisions:
                     continue
                 base = dict(
@@ -807,10 +862,9 @@ class FakeHistoriqueRepository:
             hippodrome = self._referentiels.hippodromes.get(reunion.hippodrome_id)
             hippodrome_nom = hippodrome.nom if hippodrome is not None else "?"
             for course in self._courses.list_courses_by_reunion(reunion.id):
-                analyses_course = self._analyses.list_analyses_by_course(course.id)
-                if not analyses_course:
+                analyse = self._analyse_effective(course.id)
+                if analyse is None:
                     continue
-                analyse = max(analyses_course, key=lambda a: a.version)
                 if analyse.budget <= 0:
                     continue
                 if course.heure_depart is not None and course.heure_depart <= maintenant:
@@ -834,10 +888,9 @@ class FakeHistoriqueRepository:
             for course in self._courses.list_courses_by_reunion(reunion.id):
                 if course.heure_depart is None or not (borne_basse <= course.heure_depart <= maintenant):
                     continue
-                analyses_course = self._analyses.list_analyses_by_course(course.id)
-                if not analyses_course:
+                analyse = self._analyse_effective(course.id)
+                if analyse is None:
                     continue
-                analyse = max(analyses_course, key=lambda a: a.version)
                 controle = self._analyses.controle_rois.get(analyse.id)
                 if controle is None:
                     continue
@@ -981,11 +1034,21 @@ class FakeControleRoiService:
     """Remplace ControleRoiService dans les tests d'intégration — `controles`
     configurable par le test (liste de `ControleRoi` déjà calculés)."""
 
-    def __init__(self, controles: list | None = None) -> None:
+    def __init__(self, controles: list | None = None, controle_pour_analyse: object | None = None) -> None:
         self.controles = controles if controles is not None else []
+        self.controle_pour_analyse = controle_pour_analyse
+        # Enregistre les appels de `POST .../selectionner` (cf.
+        # `api/routes/analyses.py::selectionner_analyse`) pour que les tests
+        # vérifient le câblage sans réimplémenter le calcul ROI (déjà couvert
+        # par test_controle_roi_service.py).
+        self.analyses_controlees: list[int] = []
 
     def calculer_controles_manquants(self):
         return self.controles
+
+    def calculer_controle_pour_analyse(self, analyse_id: int):
+        self.analyses_controlees.append(analyse_id)
+        return self.controle_pour_analyse
 
 
 class FakeSupervisionService:
