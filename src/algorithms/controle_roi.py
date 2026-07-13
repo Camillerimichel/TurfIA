@@ -1,8 +1,13 @@
 """Calcul du ROI réel a posteriori (cf. L011 §8.7 table `controle_roi`, L030.4) —
 fonctions pures (cf. L006 §4.2), aucun accès réseau ou base ici.
 
-Couvre les 6 types de pari construits par `AnalyseService` (cf. L031.6 §5) :
-Simple Gagnant/Placé, Couplé Gagnant/Placé, 2 sur 4, Quinté Flexi.
+Couvre les 6 types de pari que `AnalyseService`/`construire_paris` peuvent
+construire (cf. L031.6 §5) : Simple Gagnant/Placé, Couplé Gagnant/Placé,
+2 sur 4, Quinté Flexi. Depuis le 2026-07-13 (retour utilisateur, structure de
+paris spécifique aux courses Quinté+), les 4 derniers ne sont en réalité
+construits que pour une course Quinté+ (`quinte=True`, cf. `construire_paris`) —
+une analyse de course ordinaire ne produit plus que Simple Gagnant/Placé,
+seuls types réellement offerts par le PMU sur toute course.
 
 Aucune de ces fonctions ne modélise le remboursement réglementaire PMU
 spécifique à un partant devenu non-partant après l'analyse (règles pari-mutuel

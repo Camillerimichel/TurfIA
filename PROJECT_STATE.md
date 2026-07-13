@@ -1847,6 +1847,52 @@ Tests : `tests/integration/test_api_statistiques.py::test_list_globale_ne_montre
   (Un essai éclaté par course a été fait dans la foulée, puis annulé sur
   demande — retour à la segmentation par jour ci-dessus.)
 
+- **Structure de paris spécifique aux courses Quinté+ (2026-07-13, retour
+  utilisateur : « pourquoi ne joues-tu pas plus de combinaisons de jeux sur
+  les Quintés et Quartés ? » puis « mets en place une structure de paris
+  spécifique sur les Quintés »)** : `construire_paris` (`src/algorithms/
+  classement.py`) construisait jusqu'ici les mêmes 6 types de pari (Simple
+  Gagnant/Placé, Couplé Gagnant/Placé, 2 sur 4, Quinté Flexi) sur TOUTE
+  course, sans jamais regarder `Course.quinte`. Or, vérifié réellement le
+  2026-07-08 (déjà documenté) : le PMU n'offre Couplé Gagnant/Placé, 2 sur 4
+  et Quinté Flexi que sur les courses Quinté+ — une course ordinaire
+  n'expose que `COUPLE_ORDRE` (à ordre exigé, un pari différent). Nouveau
+  paramètre `quinte: bool` sur `construire_paris` (défaut `True`,
+  rétrocompatible avec les tests unitaires existants) et
+  `AnalyseService.analyser_course` (défaut `False`, conservateur) : sur une
+  course ordinaire, seuls Simple Gagnant/Placé sont désormais construits,
+  leur budget récupérant automatiquement la part des 4 types exclus (boucle
+  de redistribution proportionnelle déjà existante, inchangée). Propagé aux
+  6 sites d'appel (`api/routes/analyses.py` ×3 — manuel/auto/IA,
+  `rejeu_service.py`, `automatisation_service.py`,
+  `scripts/analyser_course.py`) via `course.quinte`, déjà disponible ou
+  trivialement récupérable à chacun.
+
+  Gap réel confirmé en base au passage : 13 paris "Couplé Placé" bien réels
+  existaient déjà sur des courses ORDINAIRES (`quinte = false`) — exactement
+  la classe de pari fictif que ce correctif élimine pour l'avenir (aucune
+  analyse déjà persistée n'est modifiée rétroactivement, cf. immutabilité).
+
+  Portée volontairement limitée : pas d'ajout de nouveaux types de pari
+  (Quarté+, Multi, Pick5, Mini Multi) — chantier distinct, plus lourd
+  (nouveau parsing de rapports PMU, nouvelles formules de gains), non
+  demandé ici.
+
+  Vérifié : `pytest` (422 passed, +5 nouveaux tests : 2 unitaires
+  `classement.py`, 2 intégration `analyse_service.py`, 1 bout-en-bout via
+  `/courses/{id}/analyses/auto`). Référence figée de non-régression
+  (`tests/fixtures/reference_analyse_non_regression.json`) régénérée
+  explicitement (changement de comportement intentionnel, cf. sa propre
+  note) : le scénario figé est une course ordinaire, son unique « Couplé
+  Placé » disparaît, sa part de budget se redistribue vers Simple
+  Gagnant/Placé. Contre PostgreSQL réel : requête confirmant les 13
+  « Couplé Placé » historiques sur courses ordinaires (aucune sur courses
+  Quinté+, aucun Couplé Gagnant/2 sur 4/Quinté Flexi jamais construit à ce
+  jour, champ de courses trop modeste jusqu'ici) ; re-simulation
+  (`persister=False`, rollback) sur une course temporaire réelle (jamais
+  insérée) confirmant `quinte=True` produit bien Couplé Placé et
+  `quinte=False` ne le produit pas, sur les mêmes données.
+
 ## Prochaine étape
 
 L'essentiel de la surface API, l'authentification/RBAC réelle, une deuxième

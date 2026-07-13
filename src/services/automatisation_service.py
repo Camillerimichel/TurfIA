@@ -78,6 +78,7 @@ class AutomatisationService:
                         version=self._analyse_service.prochaine_version(course.id),
                         partants=donnees_partants,
                         sous_risques_course=sous_risques_course,
+                        quinte=course.quinte,
                     )
                     nb_courses += 1
                 except Exception as exc:  # noqa: BLE001 - isolation volontaire par course, même motif que CollecteService

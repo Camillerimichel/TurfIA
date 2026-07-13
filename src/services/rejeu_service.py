@@ -95,6 +95,7 @@ class RejeuService:
                 partants=donnees_partants,
                 sous_risques_course=sous_risques_course,
                 persister=False,
+                quinte=course.quinte,
             )
             if not resultat.paris:
                 continue
