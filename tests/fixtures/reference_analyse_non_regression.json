@@ -1,5 +1,5 @@
 {
-  "_note": "Référence figée pour tests/integration/test_non_regression_determinisme.py (cf. L020 §8.3). Tout écart doit être expliqué et validé explicitement (nouvelle version de règles, cf. L009 §5.1) avant de régénérer ce fichier — jamais un ajustement silencieux. Régénérée le 2026-07-10 : fix du calcul d'espérance/ROI (AnalyseService.analyser_course) qui utilisait `p.cote` brute comme rapport_estime au lieu de `mise_reference * p.cote` (le gain total attendu pour la mise réellement engagée, cf. L031.4 §5) — l'ancien calcul donnait un ROI presque toujours proche de -90 % quelle que soit la vraie valeur du pari (vérifié réellement sur des analyses en base, cf. PROJECT_STATE.md).",
+  "_note": "Référence figée pour tests/integration/test_non_regression_determinisme.py (cf. L020 §8.3). Tout écart doit être expliqué et validé explicitement (nouvelle version de règles, cf. L009 §5.1) avant de régénérer ce fichier — jamais un ajustement silencieux. Régénérée le 2026-07-10 : fix du calcul d'espérance/ROI (AnalyseService.analyser_course) qui utilisait `p.cote` brute comme rapport_estime au lieu de `mise_reference * p.cote` (le gain total attendu pour la mise réellement engagée, cf. L031.4 §5) — l'ancien calcul donnait un ROI presque toujours proche de -90 % quelle que soit la vraie valeur du pari (vérifié réellement sur des analyses en base, cf. PROJECT_STATE.md). Régénérée le 2026-07-13 (retour utilisateur : structure de paris spécifique aux courses Quinté+, cf. `construire_paris`/`AnalyseService.analyser_course` nouveau paramètre `quinte`) : le scénario figé est une course ordinaire (`Course.quinte` par défaut `False`, non précisé dans `_rejouer_scenario_fige`), et `analyser_course` est appelé sans `quinte` explicite (donc `quinte=False`, nouveau défaut) — Couplé Gagnant/Placé, 2 sur 4 et Quinté Flexi ne sont réellement offerts par le PMU que sur les courses Quinté+ (vérifié réellement le 2026-07-08), donc le pari `Couplé Placé` précédemment généré ici ne peut plus l'être ; sa part de budget (15 %) est redistribuée entre Simple Gagnant/Placé, d'où les nouvelles mises.",
   "analyse": {
     "score_confiance": 90.43,
     "risque": 0.0,
@@ -34,9 +34,8 @@
     }
   },
   "paris": [
-    {"type_pari": "Simple Gagnant", "numeros": [1], "mise": 15.38, "roi_estime": 18.18},
-    {"type_pari": "Simple Placé", "numeros": [1], "mise": 11.54, "roi_estime": 18.18},
-    {"type_pari": "Simple Placé", "numeros": [2], "mise": 11.54, "roi_estime": 43.16},
-    {"type_pari": "Couplé Placé", "numeros": [1, 2], "mise": 11.54, "roi_estime": 30.67}
+    {"type_pari": "Simple Gagnant", "numeros": [1], "mise": 20.0, "roi_estime": 18.18},
+    {"type_pari": "Simple Placé", "numeros": [1], "mise": 15.0, "roi_estime": 18.18},
+    {"type_pari": "Simple Placé", "numeros": [2], "mise": 15.0, "roi_estime": 43.16}
   ]
 }

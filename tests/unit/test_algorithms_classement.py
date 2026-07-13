@@ -141,6 +141,43 @@ def test_construire_paris_avec_toutes_les_categories_disponibles():
     assert {c.partant_id for c in deux_sur_quatre} == {1, 2, 3, 4}
 
 
+def test_construire_paris_hors_quinte_ne_construit_que_simple():
+    """Retour utilisateur (2026-07-13, structure de paris spécifique aux
+    courses Quinté+) : Couplé Gagnant/Placé, 2 sur 4 et Quinté Flexi ne sont
+    réellement offerts par le PMU que sur les courses Quinté+ (vérifié
+    réellement le 2026-07-08) — sur une course ordinaire (`quinte=False`),
+    même avec des catégories qui permettraient normalement les 5 autres
+    types, seuls Simple Gagnant/Placé doivent être construits, et le budget
+    doit être intégralement redistribué entre eux (pas de `KeyError`, pas de
+    part perdue)."""
+    partants = [
+        _partant(1, 90, 1, "Base"),
+        _partant(2, 88, 2, "Base"),
+        _partant(3, 75, 3, "Chance régulière"),
+        _partant(4, 72, 4, "Chance régulière"),
+    ]
+    paris = construire_paris(partants, budget=50.0, quinte=False)
+    types = {type_pari for type_pari, _, _ in paris}
+    assert types == {"Simple Gagnant", "Simple Placé"}
+    mise_totale = sum(mise for _, _, mise in paris)
+    assert mise_totale == pytest.approx(50.0, abs=0.10)
+
+
+def test_construire_paris_quinte_true_explicite_repertoire_complet_inchange():
+    """Non-régression : `quinte=True` (défaut, rétrocompatible) conserve le
+    répertoire complet à 6 types, identique au comportement d'avant
+    l'introduction de ce paramètre."""
+    partants = [
+        _partant(1, 90, 1, "Base"),
+        _partant(2, 88, 2, "Base"),
+        _partant(3, 75, 3, "Chance régulière"),
+        _partant(4, 72, 4, "Chance régulière"),
+    ]
+    paris = construire_paris(partants, budget=50.0, quinte=True)
+    types = {type_pari for type_pari, _, _ in paris}
+    assert types == {"Simple Gagnant", "Simple Placé", "Couplé Gagnant", "Couplé Placé", "2 sur 4"}
+
+
 def test_construire_paris_combinaison_utilise_partant_id():
     partants = [_partant(1, 90, 1, "Base"), _partant(2, 88, 2, "Base")]
     paris = construire_paris(partants, budget=20.0)

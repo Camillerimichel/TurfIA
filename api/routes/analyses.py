@@ -201,7 +201,8 @@ def trigger_analyse(
     audit_repo: AuditRepository = Depends(get_audit_repository),
     utilisateur: Utilisateur = Depends(exiger_roles(*DECLENCHEMENT_ANALYSE)),
 ) -> Enveloppe[AnalyseDetailOut]:
-    if course_repo.get_course(course_id) is None:
+    course = course_repo.get_course(course_id)
+    if course is None:
         raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
 
     donnees = [DonneesPartant(**p.model_dump()) for p in payload.partants]
@@ -214,6 +215,7 @@ def trigger_analyse(
             mise_reference=payload.mise_reference,
             budget_precedent=payload.budget_precedent,
             perte_precedente=payload.perte_precedente,
+            quinte=course.quinte,
         )
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -248,7 +250,8 @@ def trigger_analyse_auto(
     déclenchée à tout moment, y compris après une analyse déjà existante
     (ex. automatisation horaire), sans jamais échouer en conflit de version.
     """
-    if course_repo.get_course(course_id) is None:
+    course = course_repo.get_course(course_id)
+    if course is None:
         raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
 
     try:
@@ -261,6 +264,7 @@ def trigger_analyse_auto(
             mise_reference=payload.mise_reference,
             budget_precedent=payload.budget_precedent,
             perte_precedente=payload.perte_precedente,
+            quinte=course.quinte,
         )
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -295,7 +299,8 @@ def trigger_analyse_ia(
     calculées par aucune autre voie) puis referme la même chaîne que `/auto`.
     Aucune persistance tant que l'IA n'a pas répondu avec succès — cf.
     `IaAnalyseService`, principe "pas de score fabriqué"."""
-    if course_repo.get_course(course_id) is None:
+    course = course_repo.get_course(course_id)
+    if course is None:
         raise HTTPException(status_code=404, detail=f"Course {course_id} introuvable.")
 
     donnees_partants, sous_risques_course = preparation.preparer_donnees_partants(course_id)
@@ -323,6 +328,7 @@ def trigger_analyse_ia(
             perte_precedente=payload.perte_precedente,
             commentaire=resultat_ia.synthese,
             source="ia",
+            quinte=course.quinte,
         )
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

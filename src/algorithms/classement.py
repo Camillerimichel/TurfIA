@@ -182,6 +182,7 @@ def construire_paris(
     partants_classes: list[PartantClasse],
     budget: float,
     repartition: dict[str, float] = REPARTITION_BUDGET_PAR_DEFAUT,
+    quinte: bool = True,
 ) -> list[tuple[str, list[PartantClasse], float]]:
     """Construit les paris à partir des catégories déjà assignées par `categoriser`
     (cf. L031.6 §5) : Simple Gagnant (Base n°1), Simple Placé (Base n°1 et/ou
@@ -190,14 +191,26 @@ def construire_paris(
     Bases + deux Chances régulières), Quinté Flexi (Bases + Chances régulières +
     Outsider principal + Tocard éventuel, cf. `_construire_selection_quinte`).
 
+    `quinte` (retour utilisateur, 2026-07-13 : « structure de paris spécifique
+    sur les Quintés ») gate ces 4 derniers types : vérifié réellement le
+    2026-07-08 contre une vraie course Quinté+ arrivée, le PMU n'expose Couplé
+    Gagnant/Placé, 2 sur 4 et Quinté Flexi que sur les courses Quinté+ (une
+    course ordinaire n'expose que `COUPLE_ORDRE`, à ordre exigé, un pari
+    différent) — un pari de ces 4 types construit sur une course ordinaire ne
+    trouve donc jamais de rapport PMU correspondant (`ControleRoiService` le
+    journalise et l'ignore). `quinte=False` (course ordinaire) ne construit
+    donc que Simple Gagnant/Placé ; `quinte=True` (défaut, courses Quinté+
+    réelles, et rétrocompatible avec les appels existants qui ne précisent pas
+    ce paramètre) conserve le répertoire complet.
+
     `budget` est réparti entre les types réellement constructibles au prorata de
     `repartition` (cf. L031.6 §6) : un type non constructible (catégories
-    insuffisantes) redistribue sa part aux autres, le budget conseillé est donc
-    toujours intégralement utilisé — sauf Quinté Flexi, dont le coût est
-    quantifié par palier Flexi (100/50/25 %) plutôt que librement divisible :
-    si même 25 % dépasse sa part allouée, il est simplement omis (sa part reste
-    non engagée, cas rare). Retourne une liste de
-    `(type_pari, chevaux_impliqués, mise)`.
+    insuffisantes, ou exclu par `quinte=False`) redistribue sa part aux autres,
+    le budget conseillé est donc toujours intégralement utilisé — sauf Quinté
+    Flexi, dont le coût est quantifié par palier Flexi (100/50/25 %) plutôt
+    que librement divisible : si même 25 % dépasse sa part allouée, il est
+    simplement omis (sa part reste non engagée, cas rare). Retourne une liste
+    de `(type_pari, chevaux_impliqués, mise)`.
     """
     if budget <= 0 or not partants_classes:
         return []
@@ -229,15 +242,16 @@ def construire_paris(
         simple_place = [[tete_de_liste]]
     if simple_place:
         groupes["Simple Placé"] = simple_place
-    if len(bases) >= 2:
-        groupes["Couplé Gagnant"] = [[bases[0], bases[1]]]
-    if bases and chances:
-        groupes["Couplé Placé"] = [[bases[0], chances[0]]]
-    if len(bases) >= 2 and len(chances) >= 2:
-        groupes["2 sur 4"] = [[bases[0], bases[1], chances[0], chances[1]]]
-    selection_quinte = _construire_selection_quinte(partants_classes)
-    if len(selection_quinte) >= 5:
-        groupes["Quinté Flexi"] = [selection_quinte]
+    if quinte:
+        if len(bases) >= 2:
+            groupes["Couplé Gagnant"] = [[bases[0], bases[1]]]
+        if bases and chances:
+            groupes["Couplé Placé"] = [[bases[0], chances[0]]]
+        if len(bases) >= 2 and len(chances) >= 2:
+            groupes["2 sur 4"] = [[bases[0], bases[1], chances[0], chances[1]]]
+        selection_quinte = _construire_selection_quinte(partants_classes)
+        if len(selection_quinte) >= 5:
+            groupes["Quinté Flexi"] = [selection_quinte]
 
     poids_total = sum(repartition[type_pari] for type_pari in groupes)
     if poids_total == 0:

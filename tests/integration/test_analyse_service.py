@@ -49,6 +49,37 @@ def test_persister_true_persiste_les_memes_paris():
         assert pari.id is not None
 
 
+PARTANTS_AVEC_BASE_ET_CHANCE = [
+    DonneesPartant(partant_id=1, sous_scores={"marche": 95, "presse": 95}, cote=1.8),
+    DonneesPartant(partant_id=2, sous_scores={"marche": 78, "presse": 78}, cote=4.0),
+    DonneesPartant(partant_id=3, sous_scores={"marche": 40, "presse": 40}, cote=15.0),
+]
+
+
+def test_quinte_false_par_defaut_ne_construit_que_simple():
+    """Retour utilisateur (2026-07-13, structure de paris spécifique aux
+    courses Quinté+) : `analyser_course` sans `quinte` explicite (nouveau
+    défaut `False`) ne doit produire que Simple Gagnant/Placé, même quand
+    les catégories permettraient Couplé Placé (Base + Chance régulière)."""
+    repo = FakeAnalyseRepository()
+    resultat = AnalyseService(repo).analyser_course(
+        course_id=1, version=1, partants=PARTANTS_AVEC_BASE_ET_CHANCE, sous_risques_course=SOUS_RISQUES,
+        persister=False,
+    )
+    types = {pari.type_pari for pari in resultat.paris}
+    assert types == {"Simple Gagnant", "Simple Placé"}
+
+
+def test_quinte_true_conserve_le_repertoire_complet():
+    repo = FakeAnalyseRepository()
+    resultat = AnalyseService(repo).analyser_course(
+        course_id=1, version=1, partants=PARTANTS_AVEC_BASE_ET_CHANCE, sous_risques_course=SOUS_RISQUES,
+        persister=False, quinte=True,
+    )
+    types = {pari.type_pari for pari in resultat.paris}
+    assert "Couplé Placé" in types
+
+
 def test_commentaire_et_source_sont_persistes():
     """Cf. IaAnalyseService (retour utilisateur 2026-07-12) : la synthèse IA et
     l'origine ('manuel'/'ia') doivent être persistées telles quelles."""

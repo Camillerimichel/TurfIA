@@ -27,9 +27,11 @@ def run() -> int:
     args = parser.parse_args()
 
     with CanalturfClient() as canalturf_client, ZoneTurfClient() as zoneturf_client, session() as conn:
+        course_repo = CourseRepository(conn)
         presse = ConsensusPresseService(canalturf_client, zoneturf_client)
-        preparation = PreparationDonneesService(CourseRepository(conn), StatistiqueRepository(conn), presse)
+        preparation = PreparationDonneesService(course_repo, StatistiqueRepository(conn), presse)
         donnees_partants, sous_risques_course = preparation.preparer_donnees_partants(args.course_id)
+        course = course_repo.get_course(args.course_id)
 
         service = AnalyseService(AnalyseRepository(conn))
         resultat = service.analyser_course(
@@ -37,6 +39,7 @@ def run() -> int:
             version=args.version,
             partants=donnees_partants,
             sous_risques_course=sous_risques_course,
+            quinte=course.quinte if course else False,
         )
 
     print(f"Analyse #{resultat.analyse.id} — course {args.course_id}")

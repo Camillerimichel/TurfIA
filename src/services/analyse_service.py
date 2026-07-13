@@ -82,6 +82,7 @@ class AnalyseService:
         persister: bool = True,
         commentaire: str | None = None,
         source: str = "manuel",
+        quinte: bool = False,
     ) -> ResultatAnalyse:
         if not partants:
             raise ValidationError("Une analyse nécessite au moins un partant.")
@@ -188,9 +189,13 @@ class AnalyseService:
 
         # Toujours construits en mémoire (y compris `persister=False`, cf. moteur de
         # rejeu L031.7 §4 qui a besoin des paris sans les persister) ; seule leur
-        # écriture en base est conditionnée par `persister`.
+        # écriture en base est conditionnée par `persister`. `quinte` (retour
+        # utilisateur, 2026-07-13) restreint le répertoire à Simple Gagnant/Placé
+        # sur une course ordinaire — cf. `construire_paris`, Couplé Gagnant/Placé/
+        # 2 sur 4/Quinté Flexi ne sont réellement offerts par le PMU que sur les
+        # courses Quinté+.
         paris: list[Pari] = []
-        for type_pari, chevaux, mise in construire_paris(partants_classes, budget):
+        for type_pari, chevaux, mise in construire_paris(partants_classes, budget, quinte=quinte):
             roi_estime = sum(c.roi_theorique for c in chevaux) / len(chevaux)
             pari = Pari(
                 analyse_id=analyse.id,
