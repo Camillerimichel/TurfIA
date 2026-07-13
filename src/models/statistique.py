@@ -25,6 +25,24 @@ class StatistiqueGlobale:
 
 
 @dataclass(frozen=True)
+class StatistiqueGlobaleJour:
+    """Comme `StatistiqueGlobale`, mais un agrégat par jour de course
+    (`reunion.date`) plutôt qu'un total unique — cf. `StatistiqueRepository.
+    calculer_globale_par_jour`, jamais persisté (calculé à la demande, comme
+    `calculer_globale`)."""
+
+    jour: date
+    nb_courses: int = 0
+    nb_jouees: int = 0
+    nb_ignorees: int = 0
+    mises: float = 0.0
+    gains: float = 0.0
+    profit: float | None = None
+    roi: float | None = None
+    taux_reussite: float | None = None
+
+
+@dataclass(frozen=True)
 class StatistiqueScore:
     score_min: float
     score_max: float

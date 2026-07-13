@@ -26,6 +26,42 @@ class StatistiqueGlobaleOut(BaseModel):
     taux_reussite: float | None = None
 
 
+class StatistiqueGlobaleJourOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    jour: date
+    nb_courses: int
+    nb_jouees: int
+    nb_ignorees: int
+    mises: float
+    gains: float
+    profit: float | None = None
+    roi: float | None = None
+    taux_reussite: float | None = None
+
+
+class StatistiqueGlobaleTotalOut(BaseModel):
+    """Comme `StatistiqueGlobaleJourOut` mais sans `jour` — la ligne de
+    consolidation totale (cf. `StatistiqueRepository.calculer_globale`,
+    même filtre que le détail par jour)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    nb_courses: int
+    nb_jouees: int
+    nb_ignorees: int
+    mises: float
+    gains: float
+    profit: float | None = None
+    roi: float | None = None
+    taux_reussite: float | None = None
+
+
+class StatistiqueGlobaleParJourOut(BaseModel):
+    jours: list[StatistiqueGlobaleJourOut]
+    total: StatistiqueGlobaleTotalOut
+
+
 class StatistiqueScoreOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

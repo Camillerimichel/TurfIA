@@ -13,7 +13,10 @@ from api.dependencies.db import get_statistique_repository
 from api.schemas.common import Enveloppe
 from api.schemas.statistiques import (
     StatistiqueDisciplineOut,
+    StatistiqueGlobaleJourOut,
     StatistiqueGlobaleOut,
+    StatistiqueGlobaleParJourOut,
+    StatistiqueGlobaleTotalOut,
     StatistiqueHippodromeOut,
     StatistiqueModeleOut,
     StatistiquePariOut,
@@ -31,6 +34,22 @@ def list_globale(
     _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
 ) -> Enveloppe[list[StatistiqueGlobaleOut]]:
     return Enveloppe(data=[StatistiqueGlobaleOut.model_validate(s) for s in repo.list_globale()])
+
+
+@router.get("/globale/jours", response_model=Enveloppe[StatistiqueGlobaleParJourOut])
+def globale_par_jour(
+    repo: StatistiqueRepository = Depends(get_statistique_repository),
+    _utilisateur: Utilisateur = Depends(exiger_roles(*LECTURE)),
+) -> Enveloppe[StatistiqueGlobaleParJourOut]:
+    """Détail par jour de course (`reunion.date`) du bloc "Globale" + une
+    ligne de consolidation totale — cf. retour utilisateur 2026-07-12
+    (tableau segmenté par jour + graphique barre/courbe des gains/pertes).
+    Calculé à la demande (comme `calculer_globale`), jamais persisté."""
+    donnees = StatistiqueGlobaleParJourOut(
+        jours=[StatistiqueGlobaleJourOut.model_validate(j) for j in repo.calculer_globale_par_jour()],
+        total=StatistiqueGlobaleTotalOut.model_validate(repo.calculer_globale()),
+    )
+    return Enveloppe(data=donnees)
 
 
 @router.get("/scores", response_model=Enveloppe[list[StatistiqueScoreOut]])

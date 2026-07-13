@@ -1803,6 +1803,50 @@ Tests : `tests/integration/test_api_statistiques.py::test_list_globale_ne_montre
   `ANTHROPIC_API_KEY`) reste à vérifier par l'utilisateur, qui n'a pas
   encore configuré cette clé.
 
+- **Ajustements suite à la sélection manuelle d'analyse (2026-07-12, mêmes
+  échanges)** : liste « Analyses » de `course.html` triée par version
+  décroissante (la plus récente en premier, `ORDER BY version DESC`,
+  repository + fake) et boutons « Sélectionner » restylés (rangées avec
+  bordure, badge/bouton compact aligné à droite, au lieu d'hériter du
+  `button` générique mal placé — retour utilisateur : « les boutons sont
+  moches et mal placés »).
+
+- **Bloc « Globale » segmenté par jour + graphique (2026-07-12, retour
+  utilisateur)** : jusqu'ici, `/statistiques/globale` ne montrait qu'une
+  seule ligne (l'agrégat total sur toute l'historique, sans aucune
+  ventilation temporelle). Nouvelle route `GET /statistiques/globale/jours`
+  (`StatistiqueRepository.calculer_globale_par_jour`, calculée à la demande,
+  jamais persistée) qui regroupe par jour de course (`reunion.date`, pas la
+  date de calcul de l'analyse — confirmé avec l'utilisateur) : le tableau
+  affiche désormais une ligne par jour (la plus récente en premier) puis
+  une ligne « Total » consolidée, et un graphique SVG barre (profit du
+  jour, vert/rouge) + courbe (profit cumulé) apparaît sous le tableau —
+  aucune bibliothèque de graphique dans cette app vanilla JS, SVG construit
+  à la main (même principe que les jauges linéaires d'Accueil).
+
+  Gap réel trouvé et corrigé au passage, à plus large portée que prévu :
+  `_DERNIERE_VERSION_COURSE` (désormais `_ANALYSE_RETENUE_COURSE`), la
+  constante SQL partagée par TOUTES les agrégations de
+  `statistique_repository.py` (Globale, Scores, Hippodromes, Disciplines,
+  Paris, Modèles), suivait encore uniquement `MAX(version)` — jamais une
+  sélection manuelle d'analyse (fonctionnalité livrée plus tôt le même
+  jour, cf. ci-dessus). Une course dont l'utilisateur avait explicitement
+  choisi une ancienne version pour l'historique/ROI restait donc comptée
+  selon sa dernière version dans TOUTE la page Statistiques — incohérence
+  silencieuse entre Historique et Statistiques. Corrigé en un seul endroit
+  (la constante), même motif COALESCE que `historique_repository.py`.
+
+  Vérifié : `pytest` (417 passed), `node --check`. Contre PostgreSQL réel :
+  3 sélections manuelles réelles déjà faites par l'utilisateur en
+  production (courses 1555/1583/1589) — confirmé que la somme des mises/
+  gains des 3 jours renvoyés par `calculer_globale_par_jour()` correspond
+  exactement au total de `calculer_globale()` (923,46 €/797,03 €), preuve
+  que le nouveau détail par jour et le total corrigé sont cohérents entre
+  eux ET respectent bien les sélections manuelles réelles.
+
+  (Un essai éclaté par course a été fait dans la foulée, puis annulé sur
+  demande — retour à la segmentation par jour ci-dessus.)
+
 ## Prochaine étape
 
 L'essentiel de la surface API, l'authentification/RBAC réelle, une deuxième

@@ -3,7 +3,46 @@ Module Statistiques). Les tables sont alimentées uniquement par
 `scripts/calculer_statistiques.py`, jamais via l'API.
 """
 
-from src.models.statistique import StatistiqueGlobale, StatistiqueHippodrome, StatistiqueScore
+from datetime import date
+
+from src.models.statistique import StatistiqueGlobale, StatistiqueGlobaleJour, StatistiqueHippodrome, StatistiqueScore
+
+
+def test_globale_par_jour_vide_par_defaut(client):
+    """Cf. retour utilisateur 2026-07-12 : tableau "Globale" segmenté par jour
+    + consolidation totale, calculé à la demande (jamais persisté)."""
+    reponse = client.get("/api/v1/statistiques/globale/jours")
+    assert reponse.status_code == 200
+    corps = reponse.json()["data"]
+    assert corps["jours"] == []
+    # Le total reste l'agrégat de `calculer_globale()` — zéro par défaut, pas absent.
+    assert corps["total"]["nb_courses"] == 0
+    assert corps["total"]["roi"] is None
+
+
+def test_globale_par_jour_retourne_le_detail_et_le_total(client, repos):
+    repos["statistiques"].a_calculer_globale_par_jour = [
+        StatistiqueGlobaleJour(
+            jour=date(2026, 7, 12), nb_courses=3, nb_jouees=2, nb_ignorees=1,
+            mises=20.0, gains=14.0, profit=-6.0, roi=-30.0, taux_reussite=50.0,
+        ),
+        StatistiqueGlobaleJour(
+            jour=date(2026, 7, 11), nb_courses=2, nb_jouees=1, nb_ignorees=1,
+            mises=10.0, gains=25.0, profit=15.0, roi=150.0, taux_reussite=100.0,
+        ),
+    ]
+    repos["statistiques"].a_calculer_globale = StatistiqueGlobale(
+        nb_courses=5, nb_jouees=3, nb_ignorees=2, mises=30.0, gains=39.0, profit=9.0, roi=30.0, taux_reussite=66.67,
+    )
+
+    reponse = client.get("/api/v1/statistiques/globale/jours")
+    assert reponse.status_code == 200
+    corps = reponse.json()["data"]
+    assert [j["jour"] for j in corps["jours"]] == ["2026-07-12", "2026-07-11"]
+    assert corps["jours"][0]["profit"] == -6.0
+    assert corps["total"]["nb_courses"] == 5
+    assert corps["total"]["profit"] == 9.0
+    assert "jour" not in corps["total"]
 
 
 def test_list_globale_vide_par_defaut(client):
